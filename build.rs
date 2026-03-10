@@ -15,9 +15,8 @@ fn main() {
     names.sort();
 
     let list = names.join(", ");
-    let generated = format!(
-        "// @generated — do not edit, updated by build.rs\nplaygrounds!({list});\n"
-    );
+    let generated =
+        format!("// @generated — do not edit, updated by build.rs\nplaygrounds!({list});\n");
 
     let out = src_dir.join("_playgrounds.rs");
     fs::write(&out, generated).unwrap();

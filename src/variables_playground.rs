@@ -6,14 +6,14 @@ pub fn run() {
     y += x;
 
     println!("x = {x}");
-    println!("y = {y}");
+    println!("y (mutable) = {y}");
 
     // shadowing
     let x = x * 2;
     println!("x (shadowed) = {x}");
 
     // types
-    let pi: f64 = 3.14159;
+    let pi: f64 = std::f64::consts::PI;
     let greeting: &str = "hello";
     println!("{greeting}, pi is approximately {pi}");
 }
