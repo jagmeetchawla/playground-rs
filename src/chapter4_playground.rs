@@ -55,6 +55,21 @@ pub fn run() {
 
     let r7 = &mut s9;
     println!("r7 = {}", r7);
+
+    let s10 = String::from("hello");
+    let s11 = &s10;
+    let s12 = &s10;
+    let s13 = &s11;
+    // drop(s10); // --> can't drop S10 as it is borrowed by s11
+    // let s14 = *s11; // -> dereferncing just moves it seems
+    println!("s11 @ {:p} = {} , s12 @ {:p}= {} , s13 @ {:p} = {}", s11, &s11, s12, &s12, s13, &s13);
+
+    let x = 5;
+    let y = &x;
+    let y1 = &x;
+    let z = *y;
+    println!("x @ {:p} = {}, y @ {:p} = {}, y1 @ {:p} = {}, z @ {:p} = {}", &x, x, &y, y, &y1, y1, &z, z);
+
 }
 
 fn take_ownership(some_string: String) {
