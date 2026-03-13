@@ -46,7 +46,8 @@ pub fn run() {
     }
 
     // for loop on vector
-    let v = vec![10, 20, 30, 40, 50];
+    let mut v = vec![10, 20, 30, 40, 50];
+    v.push(60);
     for item in v.iter() {
         println!("item = {}", item);
     }
