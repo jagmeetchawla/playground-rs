@@ -1,5 +1,3 @@
-use std::arch::aarch64::uint8x8_t;
-
 pub fn run() {
     println!("Chapter 5 playground");
 
@@ -70,7 +68,13 @@ pub fn run() {
         0: 200,
         ..red
     };
+    let r_m = mixed.0;
+    let g_m = mixed.1;
+    let b_m = mixed.2;
+
     println!("{:?}", mixed);
+    println!("{}, {}, {}", r_m, g_m, b_m);
+    println!("{:?}", black);
 
     struct AlwaysEqual;
     let subject = AlwaysEqual;
