@@ -1,3 +1,5 @@
+use std::arch::aarch64::uint8x8_t;
+
 pub fn run() {
     println!("Chapter 5 playground");
 
@@ -33,6 +35,12 @@ pub fn run() {
             let yz = dy * dz;
             2 * (xy + yz + xz)
         }
+
+        fn cube(s:i32) -> Self {
+            let p1 = Point { x: 0, y: 0, z: 0 };
+            let p2 = Point { x: s, y: s, z: s };
+            Self { p1, p2, }
+        }
     }
 
     let p1 = Point { x: 0, y: 0, z: 0 };
@@ -47,5 +55,24 @@ pub fn run() {
     let another_cuboid = cuboid;
     println!("first cuboid: {:?} at {:p}", cuboid, &cuboid);
     println!("second cuboid: {:?} at {:p}", another_cuboid, &another_cuboid);
+    println!("debug cuboid: {:p}", &cuboid);
+    dbg!(&cuboid);
 
+    let cube = Cuboid::cube(20);
+    println!("{:?}", cube);
+
+    #[derive(Debug)]
+    struct Color (u8, u8, u8);
+
+    let black = Color(0, 0, 0);
+    let red = Color(255, 0, 0);
+    let mixed = Color {
+        0: 200,
+        ..red
+    };
+    println!("{:?}", mixed);
+
+    struct AlwaysEqual;
+    let subject = AlwaysEqual;
+    println!("{:p}", &subject);
 }
