@@ -7,7 +7,7 @@ macro_rules! playgrounds {
         fn main() {
             let args: Vec<String> = env::args().collect();
             let module = args.get(1).map(String::as_str).unwrap_or("");
-
+            
             match module {
                 $( stringify!($name) => paste::paste!{ [<$name _playground>]::run() }, )*
                 "" => {
