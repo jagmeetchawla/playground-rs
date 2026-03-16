@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 paste = "1"
+unicode-segmentation = "1.12.0"
