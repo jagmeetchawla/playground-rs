@@ -1,6 +1,9 @@
 pub fn run() {
     let s = "hello world";
 
+    println!("String slices:");
+    string_slices();   
+
     let slice1 = &s[0..5];
     println!("{}", slice1);
     let slice2 = &s[6..11];
@@ -27,4 +30,11 @@ fn second_word(s: &str) -> &str {
     let bytes = s.as_bytes();
     let first_byte_index = bytes.iter().position(|&x| x == b' ').unwrap();
     &s[first_byte_index + 1..]
+}
+
+fn string_slices() {
+    let s = String::from("hello world");
+    let hello = &s[0..5];
+    let world = &s[6..11];
+    println!("{} {}", hello, world);
 }

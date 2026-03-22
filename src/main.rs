@@ -2,19 +2,31 @@ macro_rules! playgrounds {
     ( $( $name:ident ),* ) => {
         $( paste::paste!{ mod [<$name _playground>]; } )*
 
-        use std::env;
+        use clap::Parser;
+        use clap::builder::{PossibleValuesParser, TypedValueParser};
+
+        #[derive(Parser)]
+        #[command(name = "playground", version, about = "Run Rust playground modules")]
+        struct Cli {
+            /// Playground module to run
+            #[arg(
+                value_name = "MODULE",
+                value_parser = PossibleValuesParser::new([ $( stringify!($name), )* ]).map(|s| s.to_string()),
+            )]
+            module: Option<String>,
+        }
 
         fn main() {
-            let args: Vec<String> = env::args().collect();
-            let module = args.get(1).map(String::as_str).unwrap_or("");
-            
-            match module {
-                $( stringify!($name) => paste::paste!{ [<$name _playground>]::run() }, )*
-                "" => {
-                    println!("Usage: cargo run -- <module>\n\nAvailable modules:");
+            let cli = Cli::parse();
+            match cli.module.as_deref() {
+                None => {
+                    println!("Usage: cargo run -- <MODULE>\n\nAvailable modules:");
                     $( println!("  {}", stringify!($name)); )*
                 }
-                other => eprintln!("Unknown module: '{other}'"),
+                Some(module) => match module {
+                    $( stringify!($name) => paste::paste!{ [<$name _playground>]::run() }, )*
+                    _ => unreachable!(),
+                },
             }
         }
     };
