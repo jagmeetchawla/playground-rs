@@ -2,22 +2,72 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 use tauri::ipc::Channel;
 
-/// Returns the project root (where src/bin/ lives).
-/// In dev: current working directory (cargo tauri dev runs from project root).
-/// In production: resolved relative to app resources.
-fn project_root(app: &AppHandle) -> PathBuf {
-    // In dev mode, CARGO_MANIFEST_DIR points to src-tauri/ — go up one level
+// ── Storage ───────────────────────────────────────────────────────────────────
+
+/// Default Cargo.toml written into a fresh workspace.
+const DEFAULT_CARGO_TOML: &str = r#"[package]
+name = "playgrounds"
+version = "0.1.0"
+edition = "2021"
+
+# Add dependencies here — every playground can use them.
+[dependencies]
+"#;
+
+/// Seeded hello.rs written on first launch.
+const DEFAULT_HELLO: &str = r#"fn main() {
+    println!("Hello, world!");
+}
+"#;
+
+/// Returns the Cargo workspace root used by the app.
+///
+/// Dev mode  → project source tree (so `cargo tauri dev` uses src/bin/ as-is)
+/// Production → ~/Library/Application Support/com.playground-rs.app/workspace/
+///              Written by the app, never inside the read-only .app bundle.
+fn workspace_dir(app: &AppHandle) -> PathBuf {
     if cfg!(debug_assertions) {
+        // CARGO_MANIFEST_DIR = src-tauri/ at compile time → parent = project root
         let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         manifest.parent().unwrap().to_path_buf()
     } else {
-        app.path().resource_dir().unwrap()
+        app.path()
+            .app_data_dir()
+            .expect("Could not resolve App Support directory")
+            .join("workspace")
     }
 }
 
 fn bin_dir(app: &AppHandle) -> PathBuf {
-    project_root(app).join("src").join("bin")
+    workspace_dir(app).join("src").join("bin")
 }
+
+/// Ensures the production workspace exists on first launch.
+/// Creates the directory structure, Cargo.toml, and seeds hello.rs.
+/// No-op if the workspace already exists.
+fn ensure_workspace(app: &AppHandle) -> Result<(), String> {
+    if cfg!(debug_assertions) {
+        return Ok(()); // dev mode: project tree already exists
+    }
+
+    let workspace = workspace_dir(app);
+    let bin = bin_dir(app);
+
+    if !bin.exists() {
+        std::fs::create_dir_all(&bin)
+            .map_err(|e| format!("Failed to create workspace: {}", e))?;
+
+        std::fs::write(workspace.join("Cargo.toml"), DEFAULT_CARGO_TOML)
+            .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
+
+        std::fs::write(bin.join("hello.rs"), DEFAULT_HELLO)
+            .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
+    }
+
+    Ok(())
+}
+
+// ── Name validation ───────────────────────────────────────────────────────────
 
 /// Validates a playground name is a safe Rust identifier: [a-z][a-z0-9_]*
 /// Rejects anything that could be used for path traversal (.., /, \, etc.)
@@ -38,29 +88,29 @@ fn validate_name(name: &str) -> Result<(), String> {
             name
         ));
     }
-    // Double-check: resolved path must stay inside bin_dir (defence in depth)
     Ok(())
 }
 
 /// Resolves and verifies the playground path stays inside bin_dir.
-/// Returns the resolved PathBuf or an error.
+/// Two-layer defence: name whitelist + canonicalized path check.
 fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBuf, String> {
     validate_name(name)?;
     let dir = bin_dir(app);
     let path = dir.join(format!("{}.rs", name));
-    // Canonicalize the parent to catch any symlink shenanigans
+    // Canonicalize to catch symlink-based escapes
     let resolved_dir = dir.canonicalize().map_err(|e| e.to_string())?;
-    let resolved_path = path.parent()
+    let resolved_parent = path.parent()
         .and_then(|p| p.canonicalize().ok())
         .unwrap_or_else(|| resolved_dir.clone());
-    if resolved_path != resolved_dir {
+    if resolved_parent != resolved_dir {
         return Err(format!("Path traversal detected for name '{}'", name));
     }
     Ok(path)
 }
 
+// ── Toolchain ─────────────────────────────────────────────────────────────────
+
 fn cargo_path() -> String {
-    // Check common locations in order
     let candidates = vec![
         dirs_next::home_dir()
             .map(|h| h.join(".cargo/bin/cargo"))
@@ -70,7 +120,7 @@ fn cargo_path() -> String {
     for c in candidates.into_iter().flatten() {
         return c.to_string_lossy().to_string();
     }
-    "cargo".to_string() // fallback to PATH
+    "cargo".to_string()
 }
 
 fn which_cargo() -> Option<PathBuf> {
@@ -84,7 +134,7 @@ fn which_cargo() -> Option<PathBuf> {
         })
 }
 
-// ── Commands ─────────────────────────────────────────────────────────────────
+// ── Commands ──────────────────────────────────────────────────────────────────
 
 #[tauri::command]
 fn list_playgrounds(app: AppHandle) -> Vec<String> {
@@ -151,24 +201,31 @@ fn duplicate_playground(name: String, app: AppHandle) -> Result<String, String> 
 }
 
 #[tauri::command]
-async fn run_playground(name: String, on_output: Channel<serde_json::Value>, app: AppHandle) -> Result<(), String> {
+fn workspace_path(app: AppHandle) -> String {
+    workspace_dir(&app).to_string_lossy().to_string()
+}
+
+#[tauri::command]
+async fn run_playground(
+    name: String,
+    on_output: Channel<serde_json::Value>,
+    app: AppHandle,
+) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
 
-    // Validate before touching the filesystem or spawning any process
-    validate_name(&name).map_err(|e| e)?;
+    validate_name(&name)?;
 
     let cargo = cargo_path();
-    let root = project_root(&app);
+    let workspace = workspace_dir(&app);
 
-    // Use a separate target dir so playground builds never block the
-    // cargo lock held by `cargo tauri dev` on the main target/ directory.
-    let playground_target = root.join("target").join("playground-runs");
+    // Separate target dir — never conflicts with cargo tauri dev's lock on target/
+    let playground_target = workspace.join("target").join("playground-runs");
 
     let mut child = Command::new(&cargo)
         .args(["run", "--bin", &name, "--target-dir", playground_target.to_str().unwrap()])
-        .current_dir(&root)
+        .current_dir(&workspace)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -196,7 +253,11 @@ async fn run_playground(name: String, on_output: Channel<serde_json::Value>, app
     let status = child.wait().await.map_err(|e| e.to_string())?;
     let _ = tokio::join!(stdout_task, stderr_task);
 
-    on_output.send(serde_json::json!({ "stream": "complete", "code": status.code().unwrap_or(-1) })).ok();
+    on_output.send(serde_json::json!({
+        "stream": "complete",
+        "code": status.code().unwrap_or(-1)
+    })).ok();
+
     Ok(())
 }
 
@@ -206,6 +267,14 @@ async fn run_playground(name: String, on_output: Channel<serde_json::Value>, app
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            // Initialise the production workspace on first launch.
+            // Creates ~/Library/Application Support/.../workspace/ with
+            // Cargo.toml and a seeded hello.rs if it doesn't exist yet.
+            ensure_workspace(app.handle())
+                .expect("Failed to initialise playground workspace");
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             list_playgrounds,
             load_playground,
@@ -215,6 +284,7 @@ pub fn run() {
             delete_playground,
             duplicate_playground,
             run_playground,
+            workspace_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

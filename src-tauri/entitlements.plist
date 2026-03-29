@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+  <!-- ── Sandbox: explicitly disabled ───────────────────────────────────────
+       This is a developer tool that compiles and runs arbitrary Rust code
+       via cargo/rustc. Sandboxing is incompatible with spawning compiler
+       subprocesses and accessing the user's Cargo registry.
+       Same policy as: Xcode, VS Code, Terminal, iTerm2.          -->
+  <key>com.apple.security.app-sandbox</key>
+  <false/>
+
+  <!-- ── Hardened runtime exceptions ───────────────────────────────────────
+       Required for rustc/cargo: proc macros are compiled as dylibs and
+       loaded at link time. Library validation would block unsigned dylibs
+       produced by the user's own cargo builds.                    -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+
+  <!-- rustc uses LLVM which requires writable+executable memory for JIT  -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- Allow DYLD environment variables (needed by some cargo tooling)    -->
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+
+  <!-- ── Network access ────────────────────────────────────────────────────
+       cargo needs outbound network to download crates from crates.io     -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+
+</dict>
+</plist>
