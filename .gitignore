@@ -1,2 +1,5 @@
 /target
 /playground-rs-alt
+/ui/node_modules
+/ui/dist
+/target/playground-runs
