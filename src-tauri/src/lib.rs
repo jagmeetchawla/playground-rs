@@ -19,6 +19,46 @@ fn bin_dir(app: &AppHandle) -> PathBuf {
     project_root(app).join("src").join("bin")
 }
 
+/// Validates a playground name is a safe Rust identifier: [a-z][a-z0-9_]*
+/// Rejects anything that could be used for path traversal (.., /, \, etc.)
+fn validate_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Playground name cannot be empty".into());
+    }
+    if name.len() > 64 {
+        return Err("Playground name too long (max 64 chars)".into());
+    }
+    let valid = name.chars().enumerate().all(|(i, c)| {
+        if i == 0 { c.is_ascii_lowercase() }
+        else { c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' }
+    });
+    if !valid {
+        return Err(format!(
+            "'{}' is not a valid name — use lowercase letters, digits, and underscores only",
+            name
+        ));
+    }
+    // Double-check: resolved path must stay inside bin_dir (defence in depth)
+    Ok(())
+}
+
+/// Resolves and verifies the playground path stays inside bin_dir.
+/// Returns the resolved PathBuf or an error.
+fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBuf, String> {
+    validate_name(name)?;
+    let dir = bin_dir(app);
+    let path = dir.join(format!("{}.rs", name));
+    // Canonicalize the parent to catch any symlink shenanigans
+    let resolved_dir = dir.canonicalize().map_err(|e| e.to_string())?;
+    let resolved_path = path.parent()
+        .and_then(|p| p.canonicalize().ok())
+        .unwrap_or_else(|| resolved_dir.clone());
+    if resolved_path != resolved_dir {
+        return Err(format!("Path traversal detected for name '{}'", name));
+    }
+    Ok(path)
+}
+
 fn cargo_path() -> String {
     // Check common locations in order
     let candidates = vec![
@@ -62,19 +102,19 @@ fn list_playgrounds(app: AppHandle) -> Vec<String> {
 
 #[tauri::command]
 fn load_playground(name: String, app: AppHandle) -> Result<String, String> {
-    let path = bin_dir(&app).join(format!("{}.rs", name));
+    let path = safe_playground_path(&name, &app)?;
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn save_playground(name: String, content: String, app: AppHandle) -> Result<(), String> {
-    let path = bin_dir(&app).join(format!("{}.rs", name));
+    let path = safe_playground_path(&name, &app)?;
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn new_playground(name: String, app: AppHandle) -> Result<(), String> {
-    let path = bin_dir(&app).join(format!("{}.rs", name));
+    let path = safe_playground_path(&name, &app)?;
     if path.exists() {
         return Err(format!("'{}' already exists", name));
     }
@@ -87,8 +127,8 @@ fn new_playground(name: String, app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn rename_playground(old_name: String, new_name: String, app: AppHandle) -> Result<(), String> {
-    let old_path = bin_dir(&app).join(format!("{}.rs", old_name));
-    let new_path = bin_dir(&app).join(format!("{}.rs", new_name));
+    let old_path = safe_playground_path(&old_name, &app)?;
+    let new_path = safe_playground_path(&new_name, &app)?;
     if new_path.exists() {
         return Err(format!("'{}' already exists", new_name));
     }
@@ -97,15 +137,15 @@ fn rename_playground(old_name: String, new_name: String, app: AppHandle) -> Resu
 
 #[tauri::command]
 fn delete_playground(name: String, app: AppHandle) -> Result<(), String> {
-    let path = bin_dir(&app).join(format!("{}.rs", name));
+    let path = safe_playground_path(&name, &app)?;
     std::fs::remove_file(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn duplicate_playground(name: String, app: AppHandle) -> Result<String, String> {
-    let src = bin_dir(&app).join(format!("{}.rs", name));
+    let src = safe_playground_path(&name, &app)?;
     let new_name = format!("{}_copy", name);
-    let dst = bin_dir(&app).join(format!("{}.rs", new_name));
+    let dst = safe_playground_path(&new_name, &app)?;
     std::fs::copy(&src, &dst).map_err(|e| e.to_string())?;
     Ok(new_name)
 }
@@ -116,12 +156,11 @@ async fn run_playground(name: String, on_output: Channel<serde_json::Value>, app
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
 
+    // Validate before touching the filesystem or spawning any process
+    validate_name(&name).map_err(|e| e)?;
+
     let cargo = cargo_path();
     let root = project_root(&app);
-
-    // Confirm channel works and show what paths are being used
-    on_output.send(serde_json::json!({ "stream": "info", "line": format!("cargo: {}", cargo) })).ok();
-    on_output.send(serde_json::json!({ "stream": "info", "line": format!("root:  {:?}", root) })).ok();
 
     // Use a separate target dir so playground builds never block the
     // cargo lock held by `cargo tauri dev` on the main target/ directory.
