@@ -88,3 +88,30 @@ Tauri Rust backend
 - [apple/containerization on GitHub](https://github.com/apple/containerization)
 - [apple/container on GitHub](https://github.com/apple/container)
 - [Technical comparison with Docker — The New Stack](https://thenewstack.io/apple-containers-on-macos-a-technical-comparison-with-docker/)
+
+---
+
+### Full native rewrite — Swift + SwiftUI
+
+**The idea:** Once the container backend is solid and the feature set is stable, rewrite the entire app in Swift and SwiftUI — no Tauri, no web stack, no JavaScript.
+
+**Why it makes sense at that point:**
+- The Tauri + Svelte approach was the right call to move fast and iterate. The web stack made the editor (Monaco), streaming output, and complex UI state easy to prototype.
+- But Swift/SwiftUI is the natural home for a Mac-first developer tool. Native rendering, native animations, native controls — no WebView bridge, no JS runtime overhead.
+- The container backend (`apple/containerization`) is already a Swift package. A native app talks to it directly with no FFI layer in between.
+- SwiftUI's `NavigationSplitView` maps directly to our three-panel layout (sidebar / editor / console). The tab model maps to `TabView` or a custom `HStack` of tab buttons — identical concept, native implementation.
+- A fully native app is smaller, faster to launch, uses less RAM, and passes App Store review more cleanly.
+
+**What carries over:**
+- All the product thinking, UX decisions, keyboard shortcuts, and feature set
+- The Rust backend logic (playground CRUD, `cargo run` streaming, path validation) — this moves to Swift, calling the same underlying `cargo` binary or the container runtime
+- The overall three-panel layout and interaction model
+
+**What gets replaced:**
+- Tauri → pure SwiftUI app target
+- Monaco Editor → [CodeEditKit](https://github.com/CodeEditApp/CodeEditKit) or a custom `NSTextView`-backed editor with Tree-sitter for Rust syntax
+- Svelte components → SwiftUI views
+- TypeScript state management → `@Observable` / `@State` / SwiftData
+
+**When to consider this:**
+When the container path (above) is working and the v2.x feature set is complete. At that point the product is proven, the scope is known, and a native rewrite is a well-scoped project rather than a moving target.
