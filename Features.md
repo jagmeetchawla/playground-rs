@@ -118,6 +118,32 @@ When the container path (above) is working and the v2.x feature set is complete.
 
 ---
 
+## Separate project — AI session knowledge graph
+
+**Discussed:** 2026-03-30, during playground-rs session
+
+A structured graph to track work done across AI chat sessions — nodes for decisions,
+features, files, sessions, motivations; edges for `motivated_by`, `implemented_in`,
+`replaced_by`, `depends_on`. Solves the context loss problem when sessions expire.
+
+Key insight from discussion: today's AI memory tools (ChatGPT memory, Cursor rules,
+project knowledge) are all "store text, retrieve text." A graph is model-oriented —
+the graph is the source of truth, documents are projections of it. A PRD generator
+asks *"what should we write down?"* A knowledge graph asks *"what do we actually
+know, and how does it connect?"*
+
+AI-specific angle: instead of pasting a 3,000-word summary to resume a session, an
+AI agent queries the subgraph relevant to the current task — precise, structured,
+minimal context. Population must be automatic (AI writes it during sessions) or it
+won't survive contact with real use.
+
+Connects to: craft.ai (previous project by Jagmeet — document-oriented PRD/spec
+generation). This idea is the evolution: from document-oriented to model-oriented.
+
+**Tracking:** continuing in a separate project/chat.
+
+---
+
 ## v4.0 — Multi-language support (systems languages without good playgrounds)
 
 **The vision:** Expand beyond Rust to cover the languages that have no decent interactive playground or notebook — the ones where the only option today is "open a terminal, create a file, compile, run, repeat."
