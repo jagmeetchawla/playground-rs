@@ -7,6 +7,32 @@ Status
 
 ---
 
+Visual Reference
+
+Primary UI reference: Apple Swift Playgrounds (macOS)
+Image: specs/assets/swift-playgrounds-reference.png
+
+![Swift Playgrounds reference](assets/swift-playgrounds-reference.png)
+
+Key UI elements observed in the reference screenshot:
+- Sidebar (left): dark panel (#2c2c2e), file list with Swift file icons, active item
+  highlighted with solid blue pill (system blue), "Find in Source Files" search at top,
+  app/project name as section header above file list
+- Editor (centre): file tabs at top of editor pane (not window chrome) — each tab shows
+  file icon + name, active tab visually distinct; line numbers; syntax highlighting with
+  pink keywords, cyan types, matching our 'playground-dark' Monaco theme
+- App Preview (right): labelled "App Preview" in the panel header (not "Output" or
+  "Console") — shows live rendered output of the running app
+- Toolbar (top): play ▶ button, stop ■ button, settings/filter icons, run destination
+  picker — all in the window chrome above the three panels
+- Tab bar sits between the toolbar and the editor — not part of the OS window titlebar
+
+This screenshot was shared on 2026-03-30 and directly motivated the v1.1 UI redesign:
+the macOS dark colour system, blue pill sidebar selection, file tabs, RS badge style,
+and the 'playground-dark' Monaco theme are all derived from this reference.
+
+---
+
 Product
 
 What
