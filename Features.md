@@ -115,3 +115,75 @@ Tauri Rust backend
 
 **When to consider this:**
 When the container path (above) is working and the v2.x feature set is complete. At that point the product is proven, the scope is known, and a native rewrite is a well-scoped project rather than a moving target.
+
+---
+
+## v4.0 — Multi-language support (systems languages without good playgrounds)
+
+**The vision:** Expand beyond Rust to cover the languages that have no decent interactive playground or notebook — the ones where the only option today is "open a terminal, create a file, compile, run, repeat."
+
+Python has Jupyter. JavaScript has every browser devtools and countless REPLs. Swift has Swift Playgrounds. Rust will have us. But a whole tier of systems-level languages are completely underserved.
+
+### Target languages
+
+| Language | Current state | Why it belongs here |
+|---|---|---|
+| **C** | Nothing. `cat > foo.c && clang foo.c && ./a.out` | The foundation of computing, taught everywhere, zero interactive tooling |
+| **C++** | Compiler Explorer (web-only, assembly-focused) | Same gap as C; the language has grown enormously but playground tooling hasn't |
+| **Zig** | Basic web playground only | New systems language with a lot of momentum; the tooling ecosystem is still young |
+| **Ada** | Essentially nothing | Safety-critical systems language; used in aerospace/defence; completely ignored by the tooling world |
+| **Fortran** | Nothing modern | Still actively used in scientific computing (climate models, physics simulations); Fortran 2023 is a real language |
+| **D** | Nothing desktop | Statically typed, GC optional, fast — deserves better |
+| **Nim** | Nothing desktop | Compiles to C, interesting language, small community, no playground |
+| **Assembly (ARM/x86)** | Compiler Explorer (web) | Learning assembly on Apple Silicon with live output would be genuinely useful |
+
+### Why the container backend makes this tractable
+
+Without containers, adding each language means: detect the compiler on the host, handle different install paths, manage `PATH`, deal with missing toolchains. It's a support nightmare.
+
+With the `apple/containerization` backend (v3.x), adding a language is:
+1. Build or pull a container image that has the compiler installed
+2. Mount the source file
+3. Run the compile + execute command
+4. Stream output back
+
+The app's core plumbing — tab management, output panel, file storage, Channel streaming — stays identical. Each language is just a different image and a different build command.
+
+### Language-specific considerations
+
+**C / C++**
+- Compiler: `clang` / `clang++` (ships with Apple Command Line Tools; also in the container image)
+- Single-file model works well for a playground
+- Live error checking via `libclang` — this is how most C/C++ IDEs do it
+- File extensions: `.c` / `.cpp` — the tab badge changes from `RS` to `C` / `C++`
+
+**Zig**
+- `zig run file.zig` — single command, no separate compile step
+- Excellent error messages; live checking via `zig ast-check`
+- The Zig toolchain is self-contained and easy to install in a container
+
+**Ada**
+- `gnat` (GCC Ada frontend) in the container
+- Verbose syntax but highly structured — actually well suited to a playground that shows you compiler output
+- Badge: `ADA`
+
+**Fortran**
+- `gfortran` in the container
+- Target scientific computing learners who are used to notebooks (Jupyter + Fortran kernel exists but is painful to set up)
+- Badge: `F90` or `F`
+
+### UI changes needed
+
+- Language selector per playground (set at creation time, changeable)
+- Tab badge reflects the language (`RS`, `C`, `C++`, `ZIG`, `ADA`, `F`)
+- Monaco already has syntax highlighting for C, C++, and most of these — just set the `language` option
+- File extension stored with the playground metadata
+- Build command and container image resolved from a language config table
+
+### App name / positioning
+
+At v4.0 the app is no longer a Rust playground — it's a **systems language playground**. The name and branding should reflect that. Working title: **Systems Playground** or just **Playground** (reclaiming the generic name because nothing else does this well).
+
+### What this is not
+
+This is deliberately **not** trying to cover Python, JavaScript, Ruby, or any language that already has excellent interactive tooling. The focus is the gap: compiled, systems-level languages where the feedback loop today is entirely manual.
