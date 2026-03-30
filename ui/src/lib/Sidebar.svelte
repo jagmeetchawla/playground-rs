@@ -3,13 +3,22 @@
 
   const dispatch = createEventDispatcher()
 
-  let { playgrounds, selected, dirty }: {
-    playgrounds: string[]; selected: string | null; dirty: boolean
+  let { playgrounds, selected, dirtyTabs }: {
+    playgrounds: string[]
+    selected: string | null
+    dirtyTabs: string[]
   } = $props()
 
   let contextMenu: { x: number; y: number; name: string } | null = $state(null)
   let renamingName: string | null = $state(null)
   let renameValue: string = $state('')
+  let searchQuery: string = $state('')
+
+  let filtered = $derived(
+    searchQuery.trim() === ''
+      ? playgrounds
+      : playgrounds.filter(n => n.toLowerCase().includes(searchQuery.toLowerCase()))
+  )
 
   function openContext(e: MouseEvent, name: string) {
     e.preventDefault()
@@ -40,13 +49,42 @@
 <svelte:window onclick={closeContext} />
 
 <aside class="sidebar">
+  <!-- Header -->
   <div class="sidebar-header">
-    <span class="sidebar-title">PLAYGROUNDS</span>
-    <button class="new-btn" title="New playground (⌘N)" onclick={() => dispatch('new')}>+</button>
+    <span class="sidebar-title">Playgrounds</span>
+    <button
+      class="icon-btn"
+      title="New playground (⌘N)"
+      onclick={() => dispatch('new')}
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </button>
   </div>
 
+  <!-- Search -->
+  <div class="search-wrap">
+    <svg class="search-icon" width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>
+    <input
+      class="search-input"
+      type="search"
+      placeholder="Filter"
+      bind:value={searchQuery}
+      onclick={(e) => e.stopPropagation()}
+    />
+    {#if searchQuery}
+      <button class="search-clear" onclick={() => searchQuery = ''}>×</button>
+    {/if}
+  </div>
+
+  <!-- Playground list -->
   <ul class="playground-list">
-    {#each playgrounds as name (name)}
+    {#each filtered as name (name)}
+      {@const isDirty = dirtyTabs.includes(name)}
       <li
         class="playground-item"
         class:active={selected === name}
@@ -63,16 +101,20 @@
             autofocus
           />
         {:else}
+          <!-- RS file icon -->
+          <span class="file-icon">RS</span>
           <span class="name">{name}</span>
-          {#if selected === name && dirty}
+          {#if isDirty}
             <span class="dirty-dot" title="Unsaved changes">●</span>
           {/if}
         {/if}
       </li>
     {/each}
 
-    {#if playgrounds.length === 0}
-      <li class="empty-hint">No playgrounds yet</li>
+    {#if filtered.length === 0}
+      <li class="empty-hint">
+        {searchQuery ? 'No matches' : 'No playgrounds yet'}
+      </li>
     {/if}
   </ul>
 </aside>
@@ -81,8 +123,10 @@
 {#if contextMenu}
   <div
     class="context-menu"
+    role="menu"
     style="left: {contextMenu.x}px; top: {contextMenu.y}px"
     onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.key === 'Escape' && closeContext()}
   >
     <button onclick={() => startRename(contextMenu!.name)}>Rename</button>
     <button onclick={() => { dispatch('duplicate', contextMenu!.name); contextMenu = null }}>Duplicate</button>
@@ -93,61 +137,199 @@
 
 <style>
   .sidebar {
-    width: 200px; flex-shrink: 0;
-    background: var(--bg-panel); border-right: 1px solid var(--border);
-    display: flex; flex-direction: column; overflow: hidden;
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
+  /* ── Header ── */
   .sidebar-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 12px 6px;
-    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px 8px;
   }
 
   .sidebar-title {
-    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
-    color: var(--text-dim); text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: -0.01em;
   }
 
-  .new-btn {
-    background: none; color: var(--text-dim); font-size: 18px;
-    line-height: 1; padding: 0 2px; width: 22px; height: 22px;
-    display: flex; align-items: center; justify-content: center;
+  .icon-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-xs);
+    color: var(--text-tertiary);
+    transition: background 0.12s, color 0.12s;
   }
-  .new-btn:hover { color: var(--text); background: var(--bg-hover); border-radius: 3px; }
+  .icon-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
 
-  .playground-list { list-style: none; overflow-y: auto; flex: 1; padding: 4px 0; }
+  /* ── Search ── */
+  .search-wrap {
+    display: flex;
+    align-items: center;
+    margin: 0 8px 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 5px 8px;
+    gap: 6px;
+  }
+
+  .search-icon {
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+
+  .search-input {
+    flex: 1;
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    font-size: 12px;
+    color: var(--text);
+    outline: none;
+    min-width: 0;
+    /* Remove browser search input decorations */
+    -webkit-appearance: none;
+  }
+  .search-input::-webkit-search-cancel-button { display: none; }
+  .search-input::placeholder { color: var(--text-tertiary); }
+
+  .search-clear {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .search-clear:hover { color: var(--text); }
+
+  /* ── List ── */
+  .playground-list {
+    list-style: none;
+    overflow-y: auto;
+    flex: 1;
+    padding: 2px 6px 8px;
+  }
 
   .playground-item {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 5px 12px; cursor: pointer; border-radius: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    cursor: pointer;
     user-select: none;
+    transition: background 0.1s;
   }
-  .playground-item:hover  { background: var(--bg-hover); }
-  .playground-item.active { background: var(--bg-active); color: white; }
 
-  .name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .playground-item:hover:not(.active) {
+    background: var(--bg-hover);
+  }
 
-  .dirty-dot { color: var(--accent); font-size: 10px; margin-left: 4px; flex-shrink: 0; }
+  /* Blue pill — Apple style */
+  .playground-item.active {
+    background: var(--accent);
+  }
+  .playground-item.active .name { color: #fff; }
+  .playground-item.active .file-icon {
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+  }
+  .playground-item.active .dirty-dot {
+    color: rgba(255,255,255,0.7);
+  }
 
-  .empty-hint { padding: 8px 12px; color: var(--text-dim2); font-size: 12px; font-style: italic; }
+  .file-icon {
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    background: var(--rust-orange);
+    color: #fff;
+    border-radius: 3px;
+    padding: 2px 3px;
+    flex-shrink: 0;
+    line-height: 1.3;
+    min-width: 18px;
+    text-align: center;
+  }
 
-  .rename-input { flex: 1; font-size: 13px; }
+  .name {
+    flex: 1;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-secondary);
+  }
 
-  /* Context menu */
+  .dirty-dot {
+    color: var(--accent);
+    font-size: 8px;
+    flex-shrink: 0;
+  }
+
+  .empty-hint {
+    padding: 8px 8px;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    font-style: italic;
+  }
+
+  .rename-input {
+    flex: 1;
+    font-size: 13px;
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+  }
+
+  /* ── Context menu ── */
   .context-menu {
-    position: fixed; z-index: 1000;
-    background: var(--bg-panel); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 4px 0;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-    min-width: 140px;
+    position: fixed;
+    z-index: 1000;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 4px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+    min-width: 150px;
   }
+
   .context-menu button {
-    display: block; width: 100%; text-align: left;
-    background: none; color: var(--text); padding: 6px 14px; font-size: 13px;
-    border-radius: 0;
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: var(--radius-xs);
+    color: var(--text);
   }
-  .context-menu button:hover { background: var(--bg-active); }
+  .context-menu button:hover { background: var(--accent); color: #fff; }
   .context-menu button.danger { color: var(--red); }
-  .context-menu hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+  .context-menu button.danger:hover { background: var(--red); color: #fff; }
+
+  .context-menu hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 4px 0;
+  }
 </style>
