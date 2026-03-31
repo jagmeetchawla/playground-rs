@@ -55,15 +55,57 @@ cargo tauri build      # production .app + .dmg in src-tauri/target/release/bund
 The app manages a self-contained Cargo workspace at:
 ```
 ~/Library/Application Support/com.playground-rs.app/workspace/
-├── Cargo.toml        ← shared dependencies for all playgrounds
-└── src/bin/
-    ├── hello.rs      ← seeded on first launch
-    └── <your_file>.rs
+├── Cargo.toml           ← shared dependencies for all playgrounds
+├── src/bin/
+│   ├── hello.rs         ← seeded on first launch
+│   └── <your_file>.rs
+└── content/
+    ├── hello/           ← files your hello playground can read at runtime
+    └── <name>/          ← one folder per playground
 ```
 
 Each `.rs` file is a standalone Cargo binary target with a `fn main()`.
 The Tauri backend runs `cargo run --bin <name>` and streams stdout/stderr
 live to the output panel.
+
+## Working with files and assets
+
+Each playground has its own **content folder** — the same concept as Swift
+Playgrounds' assets bundle. Any file you need your playground to read at runtime
+goes there: CSV data, JSON configs, text fixtures, images, whatever.
+
+### Accessing content files from your code
+
+When the app runs your playground it injects a `PLAYGROUND_CONTENT` environment
+variable pointing to that playground's content folder:
+
+```rust
+use std::{env, fs};
+
+fn main() {
+    let dir = env::var("PLAYGROUND_CONTENT").unwrap_or_default();
+
+    // Read a file from the content folder
+    let data = fs::read_to_string(format!("{dir}/data.csv")).unwrap();
+    println!("{data}");
+}
+```
+
+### Managing content files
+
+Use the sidebar to manage each playground's content folder:
+
+| Action | How |
+|--------|-----|
+| See a playground's files | Click the `▸` chevron next to any playground name |
+| Add a new file | Click `[+ Add File]` inside the expanded content section |
+| Import an existing file | Drag a file from Finder onto the playground in the sidebar |
+| Open a text file for editing | Click it — opens as an editor tab |
+| Open an image or binary | Click it — opens with the default macOS app |
+| Rename / Delete / Reveal | Right-click the file |
+
+Any new file you create inside the app is saved to the playground's content
+folder — keeping all the data that belongs to a playground in one place.
 
 ## GUI usage
 
@@ -71,9 +113,12 @@ live to the output panel.
 |--------|-----|
 | Run playground | `▶ Run` button or `Cmd+R` |
 | Stop | `■ Stop` button or `Cmd+.` |
-| Save | `Cmd+S` |
+| Save | `💾 Save` button or `Cmd+S` |
 | New playground | `+` in sidebar or `Cmd+N` |
 | Rename / Delete / Duplicate | Right-click playground in sidebar |
+| Browse content files | Click `▸` next to playground name |
+| Add a content file | `[+ Add File]` in the expanded content section |
+| Import file from Finder | Drag onto playground in sidebar |
 
 ## CLI usage (no GUI)
 
@@ -103,16 +148,18 @@ playground-rs/
 │   ├── main.rs           ← CLI runner (still works)
 │   └── bin/              ← dev-mode playgrounds (used by cargo tauri dev)
 ├── src-tauri/            ← Tauri backend (Rust)
-│   ├── src/lib.rs        ← commands: list, load, save, run, new, rename…
+│   ├── src/lib.rs        ← commands: list, load, save, run, new, rename,
+│   │                        content file CRUD, PLAYGROUND_CONTENT injection
 │   ├── tauri.conf.json
 │   └── entitlements.plist
 ├── ui/                   ← Svelte 5 frontend
 │   └── src/
 │       ├── App.svelte
-│       ├── lib/Sidebar.svelte
-│       ├── lib/Editor.svelte   ← Monaco, language: rust
-│       └── lib/Output.svelte
+│       ├── lib/Sidebar.svelte    ← playground list + content file browser
+│       ├── lib/Editor.svelte     ← Monaco; rust + json + markdown + plaintext
+│       └── lib/Output.svelte     ← block-based run console
 └── specs/                ← architecture, conventions, acceptance criteria
+    └── archive/          ← versioned spec snapshots (v0 → current)
 ```
 
 ## Security model
