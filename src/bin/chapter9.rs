@@ -3,7 +3,7 @@ use std::fs::OpenOptions;
 use std::path::Path;
 //use std::fs::File;
 fn main() {
-    println!("Running chapter 9 playground");
+    println!("Running chapter 9 playground!");
 
     let filename = "content/hello.txt";
 

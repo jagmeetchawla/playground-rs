@@ -1,6 +1,8 @@
 fn main() {
     // --- Rust Book Chapter 3 playground ---
 
+    println!("Rust Book Chapter 3");
+
     // variable shadowing
     let spaces = "   ";
     let spaces = spaces.len();

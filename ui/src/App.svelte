@@ -5,10 +5,16 @@
   import TabBar from './lib/TabBar.svelte'
   import Editor from './lib/Editor.svelte'
   import Output from './lib/Output.svelte'
-  import type { RunBlock, OutputLine } from './lib/Output.svelte'
+  import type { RunBlock } from './lib/Output.svelte'
 
   // ── Constants ────────────────────────────────────────────────────────────────
   const CARGO_TAB = 'Cargo.toml'
+
+  // ── Tab metadata — what kind of file is in each tab ──────────────────────────
+  type TabMeta =
+    | { type: 'playground' }
+    | { type: 'cargo' }
+    | { type: 'content'; playground: string; filename: string }
 
   // ── Playground list ──────────────────────────────────────────────────────────
   let playgrounds: string[] = $state([])
@@ -18,9 +24,29 @@
   let activeTab: string | null          = $state(null)
   let tabCode:   Record<string, string> = $state({})
   let dirtyTabs: string[]               = $state([])
+  let tabMeta:   Record<string, TabMeta> = $state({})
 
-  let currentCode     = $derived(activeTab ? (tabCode[activeTab] ?? '') : '')
-  let editorLanguage  = $derived(activeTab === CARGO_TAB ? 'ini' : 'rust')
+  let currentCode    = $derived(activeTab ? (tabCode[activeTab] ?? '') : '')
+  let currentTabMeta = $derived(activeTab ? (tabMeta[activeTab] ?? { type: 'playground' } as TabMeta) : { type: 'playground' } as TabMeta)
+  let editorLanguage = $derived(languageForTab(activeTab, currentTabMeta))
+
+  // Tab display labels and badge types for TabBar
+  let tabLabels = $derived(
+    Object.fromEntries(openTabs.map(id => {
+      const meta = tabMeta[id]
+      if (meta?.type === 'content') return [id, meta.filename]
+      if (id === CARGO_TAB) return [id, 'Cargo.toml']
+      return [id, id]
+    }))
+  )
+  let tabTypes = $derived(
+    Object.fromEntries(openTabs.map(id => {
+      const meta = tabMeta[id]
+      if (meta?.type === 'content') return [id, 'content' as const]
+      if (id === CARGO_TAB) return [id, 'cargo' as const]
+      return [id, 'rs' as const]
+    }))
+  )
 
   // ── Per-tab run blocks & status ──────────────────────────────────────────────
   let tabRuns:     Record<string, RunBlock[]> = $state({})
@@ -36,21 +62,50 @@
   )
   let isRunning = $derived(currentStatus === 'compiling' || currentStatus === 'running')
 
-  // ── Toolchain + Cargo.toml (sidebar) ─────────────────────────────────────────
-  let cargoToml:     string                              = $state('')
-  let toolchainInfo: { path: string; version: string }  = $state({ path: '', version: '' })
+  // ── Toolchain + Cargo.toml ────────────────────────────────────────────────────
+  let cargoToml:     string                             = $state('')
+  let toolchainInfo: { path: string; version: string } = $state({ path: '', version: '' })
+  let toolchainLabel = $derived(
+    toolchainInfo.version
+      ? (toolchainInfo.version.match(/\d+\.\d+\.\d+/)?.[0] ?? toolchainInfo.version)
+      : '…'
+  )
 
   // ── New playground binding ────────────────────────────────────────────────────
   let creatingNew: boolean = $state(false)
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
   onMount(async () => {
-    playgrounds    = await invoke<string[]>('list_playgrounds')
-    cargoToml      = await invoke<string>('get_cargo_toml').catch(() => '')
-    toolchainInfo  = await invoke<{ path: string; version: string }>('get_toolchain_info')
+    playgrounds   = await invoke<string[]>('list_playgrounds')
+    cargoToml     = await invoke<string>('get_cargo_toml').catch(() => '')
+    toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   })
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  function contentTabId(playground: string, filename: string) {
+    return `content:${playground}:${filename}`
+  }
+
+  function languageForTab(id: string | null, meta: TabMeta): string {
+    if (!id) return 'rust'
+    if (id === CARGO_TAB) return 'ini'
+    if (meta.type === 'content') return languageFromFilename(meta.filename)
+    return 'rust'
+  }
+
+  function languageFromFilename(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+    const map: Record<string, string> = {
+      rs: 'rust', json: 'json', toml: 'ini', md: 'markdown',
+      yaml: 'yaml', yml: 'yaml', html: 'html', xml: 'xml',
+      js: 'javascript', ts: 'typescript', css: 'css',
+      sh: 'shell', bash: 'shell',
+    }
+    return map[ext] ?? 'plaintext'
+  }
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────────
   function handleKey(e: KeyboardEvent) {
@@ -63,12 +118,20 @@
 
   // ── Tab management ───────────────────────────────────────────────────────────
 
-  async function openTab(name: string) {
+  async function openTab(name: string, meta: TabMeta = { type: 'playground' }) {
     if (!openTabs.includes(name)) {
-      const code = name === CARGO_TAB
-        ? await invoke<string>('get_cargo_toml')
-        : await invoke<string>('load_playground', { name })
-      tabCode  = { ...tabCode,  [name]: code }
+      let code: string
+      if (meta.type === 'content') {
+        code = await invoke<string>('read_content_file', {
+          name: meta.playground, filename: meta.filename
+        })
+      } else if (name === CARGO_TAB) {
+        code = await invoke<string>('get_cargo_toml')
+      } else {
+        code = await invoke<string>('load_playground', { name })
+      }
+      tabCode = { ...tabCode,  [name]: code }
+      tabMeta = { ...tabMeta,  [name]: meta }
       openTabs = [...openTabs, name]
     }
     activeTab = name
@@ -76,16 +139,16 @@
 
   function closeTab(name: string | null) {
     if (!name) return
-    // window.confirm() is not rendered in Tauri's WKWebView — always returns false.
-    // Close immediately; the source file stays on disk, only in-editor edits are lost.
     dirtyTabs = dirtyTabs.filter(n => n !== name)
     const idx = openTabs.indexOf(name)
     openTabs = openTabs.filter(n => n !== name)
 
     const { [name]: _c, ...restCode  } = tabCode
+    const { [name]: _m, ...restMeta  } = tabMeta
     const { [name]: _r, ...restRuns  } = tabRuns
     const { [name]: _n, ...restCount } = tabRunCount
     tabCode     = restCode
+    tabMeta     = restMeta
     tabRuns     = restRuns
     tabRunCount = restCount
 
@@ -98,9 +161,17 @@
 
   async function save() {
     if (!activeTab) return
-    if (activeTab === CARGO_TAB) {
-      await invoke('save_cargo_toml', { content: tabCode[CARGO_TAB] })
-      cargoToml = tabCode[CARGO_TAB]
+    const meta = tabMeta[activeTab] ?? { type: 'playground' }
+
+    if (meta.type === 'content') {
+      await invoke('save_content_file', {
+        name: meta.playground,
+        filename: meta.filename,
+        content: tabCode[activeTab],
+      })
+    } else if (meta.type === 'cargo') {
+      await invoke('save_cargo_toml', { content: tabCode[activeTab] })
+      cargoToml = tabCode[activeTab]
     } else {
       await invoke('save_playground', { name: activeTab, content: tabCode[activeTab] })
     }
@@ -128,11 +199,13 @@
   // ── Run / Stop ───────────────────────────────────────────────────────────────
 
   async function run() {
-    if (!activeTab || isRunning || activeTab === CARGO_TAB) return
+    if (!activeTab || isRunning) return
+    // Only run playground tabs
+    const meta = tabMeta[activeTab] ?? { type: 'playground' }
+    if (meta.type !== 'playground') return
     const name = activeTab
     await save()
 
-    // Collapse all previous runs for this tab
     const existing = tabRuns[name] ?? []
     const collapsed = existing.map(r => ({ ...r, collapsed: true }))
 
@@ -145,32 +218,22 @@
     })
 
     const newBlock: RunBlock = {
-      runNum,
-      command: `cargo run --bin ${name}`,
-      startedAt,
-      status: 'compiling',
-      exitCode: null,
-      compilerLines: [],
-      programLines: [],
-      collapsed: false,
-      programStarted: false,
+      runNum, command: `cargo run --bin ${name}`, startedAt,
+      status: 'compiling', exitCode: null,
+      compilerLines: [], programLines: [],
+      collapsed: false, programStarted: false,
     }
-
     tabRuns = { ...tabRuns, [name]: [...collapsed, newBlock] }
 
     const channel = new Channel()
     channel.onmessage = (msg: any) => {
       if (msg.stream === 'complete') {
         updateLastRun(name, r => ({
-          ...r,
-          status: msg.code === 0 ? 'success' : 'error',
-          exitCode: msg.code,
+          ...r, status: msg.code === 0 ? 'success' : 'error', exitCode: msg.code,
         }))
       } else if (msg.stream === 'stdout') {
         updateLastRun(name, r => ({
-          ...r,
-          programStarted: true,
-          status: 'running',
+          ...r, programStarted: true, status: 'running',
           programLines: [...r.programLines, { stream: 'stdout', line: msg.line }],
         }))
       } else if (msg.stream === 'stderr') {
@@ -187,8 +250,7 @@
       await invoke('run_playground', { name, onOutput: channel })
     } catch (e) {
       updateLastRun(name, r => ({
-        ...r,
-        status: 'error',
+        ...r, status: 'error',
         compilerLines: [...r.compilerLines, { stream: 'stderr', line: String(e) }],
       }))
     }
@@ -201,16 +263,14 @@
 
   // ── Playground CRUD ──────────────────────────────────────────────────────────
 
-  function requestNewPlayground() {
-    creatingNew = true
-  }
+  function requestNewPlayground() { creatingNew = true }
 
   async function onNewPlayground(e: CustomEvent<string>) {
     const name = e.detail
     try {
       await invoke('new_playground', { name })
       playgrounds = await invoke<string[]>('list_playgrounds')
-      await openTab(name)
+      await openTab(name, { type: 'playground' })
     } catch (err) {
       console.error('Failed to create playground:', err)
     }
@@ -223,18 +283,35 @@
 
     if (openTabs.includes(oldName)) {
       const { [oldName]: code,  ...restCode  } = tabCode
+      const { [oldName]: meta,  ...restMeta  } = tabMeta
       const { [oldName]: runs,  ...restRuns  } = tabRuns
       const { [oldName]: count, ...restCount } = tabRunCount
 
       tabCode     = { ...restCode,  [newName]: code }
+      tabMeta     = { ...restMeta,  [newName]: meta ?? { type: 'playground' } }
       tabRuns     = { ...restRuns,  [newName]: runs  ?? [] }
       tabRunCount = { ...restCount, [newName]: count ?? 0  }
-
-      openTabs  = openTabs.map(n => n === oldName ? newName : n)
+      openTabs    = openTabs.map(n => n === oldName ? newName : n)
       if (activeTab === oldName) activeTab = newName
       if (dirtyTabs.includes(oldName)) {
         dirtyTabs = [...dirtyTabs.filter(n => n !== oldName), newName]
       }
+    }
+
+    // Re-key any open content tabs that belonged to this playground
+    const contentPrefix = `content:${oldName}:`
+    const affectedIds = openTabs.filter(id => id.startsWith(contentPrefix))
+    for (const oldId of affectedIds) {
+      const newId = oldId.replace(contentPrefix, `content:${newName}:`)
+      const oldContentMeta = tabMeta[oldId] as TabMeta & { type: 'content' }
+      tabCode = { ...tabCode, [newId]: tabCode[oldId] }
+      tabMeta = { ...tabMeta, [newId]: { ...oldContentMeta, playground: newName } }
+      dirtyTabs = dirtyTabs.map(n => n === oldId ? newId : n)
+      openTabs = openTabs.map(n => n === oldId ? newId : n)
+      if (activeTab === oldId) activeTab = newId
+      // Clean up old keys
+      const { [oldId]: _c, ...rc } = tabCode; tabCode = rc
+      const { [oldId]: _m, ...rm } = tabMeta; tabMeta = rm
     }
   }
 
@@ -250,13 +327,23 @@
   async function onDuplicate(e: CustomEvent<string>) {
     const newName = await invoke<string>('duplicate_playground', { name: e.detail })
     playgrounds = await invoke<string[]>('list_playgrounds')
-    await openTab(newName)
+    await openTab(newName, { type: 'playground' })
   }
 
   async function onEditCargo() {
     cargoToml = await invoke<string>('get_cargo_toml').catch(() => cargoToml)
-    await openTab(CARGO_TAB)
+    await openTab(CARGO_TAB, { type: 'cargo' })
   }
+
+  // ── Content file tab opening ─────────────────────────────────────────────────
+
+  async function onOpenContentFile(e: CustomEvent<{ playground: string; filename: string }>) {
+    const { playground, filename } = e.detail
+    const tabId = contentTabId(playground, filename)
+    await openTab(tabId, { type: 'content', playground, filename })
+  }
+
+  // ── Console events ───────────────────────────────────────────────────────────
 
   function onToggle(e: CustomEvent<number>) {
     if (!activeTab) return
@@ -274,12 +361,9 @@
     tabRunCount = { ...tabRunCount, [activeTab]: 0  }
   }
 
-  // ── Toolchain label ───────────────────────────────────────────────────────────
-  // Show just the version string, e.g. "cargo 1.78.0" → "1.78.0"
-  let toolchainLabel = $derived(
-    toolchainInfo.version
-      ? (toolchainInfo.version.match(/\d+\.\d+\.\d+/)?.[0] ?? toolchainInfo.version)
-      : '…'
+  // ── Run-button label ─────────────────────────────────────────────────────────
+  let runDisabled = $derived(
+    !activeTab || isRunning || (tabMeta[activeTab ?? '']?.type ?? 'playground') !== 'playground'
   )
 </script>
 
@@ -292,7 +376,6 @@
     </div>
 
     <div class="toolbar-center">
-      <!-- Toolchain info pill — display only -->
       <span class="toolchain-pill" title={toolchainInfo.path}>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
           <circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/>
@@ -312,7 +395,6 @@
         <span class="status-label error">Build failed</span>
       {/if}
 
-      <!-- Save button — lives on the right alongside Run/Stop -->
       {#if activeTab}
         <button
           class="btn btn-save"
@@ -335,7 +417,7 @@
           Stop
         </button>
       {:else}
-        <button class="btn btn-run" onclick={run} disabled={!activeTab || activeTab === CARGO_TAB}>
+        <button class="btn btn-run" onclick={run} disabled={runDisabled}>
           <svg width="10" height="12" viewBox="0 0 10 12"><polygon points="0,0 10,6 0,12" fill="currentColor"/></svg>
           Run
         </button>
@@ -347,16 +429,17 @@
   <div class="main">
     <Sidebar
       {playgrounds}
-      selected={activeTab}
+      selected={activeTab && tabMeta[activeTab]?.type === 'playground' ? activeTab : null}
       {dirtyTabs}
       bind:creatingNew
       {cargoToml}
-      on:select={(e) => openTab(e.detail)}
+      on:select={(e) => openTab(e.detail, { type: 'playground' })}
       on:new={onNewPlayground}
       on:rename={onRename}
       on:delete={onDelete}
       on:duplicate={onDuplicate}
       on:editcargo={onEditCargo}
+      on:opencontentfile={onOpenContentFile}
     />
 
     <div class="editor-area">
@@ -364,7 +447,9 @@
         tabs={openTabs}
         active={activeTab}
         {dirtyTabs}
-        on:activate={(e) => openTab(e.detail)}
+        {tabLabels}
+        {tabTypes}
+        on:activate={(e) => openTab(e.detail, tabMeta[e.detail] ?? { type: 'playground' })}
         on:close={(e) => closeTab(e.detail)}
       />
 
@@ -416,7 +501,6 @@
     overflow: hidden;
   }
 
-  /* ── Toolbar ── */
   .toolbar {
     display: flex;
     align-items: center;
@@ -430,187 +514,113 @@
   }
 
   .toolbar-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    min-width: 0;
+    display: flex; align-items: center; gap: 8px;
+    flex: 1; min-width: 0;
   }
 
   .toolbar-center {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: flex; align-items: center; gap: 8px;
     flex-shrink: 0;
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+    position: absolute; left: 50%; transform: translateX(-50%);
   }
 
   .toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex: 1;
-    justify-content: flex-end;
-    min-width: 0;
+    display: flex; align-items: center; gap: 10px;
+    flex: 1; justify-content: flex-end; min-width: 0;
   }
 
   .app-badge {
-    font-size: 8px;
-    font-weight: 800;
-    background: var(--rust-orange);
-    color: #fff;
-    border-radius: 3px;
-    padding: 2px 4px;
-    line-height: 1.3;
-    letter-spacing: 0.03em;
+    font-size: 8px; font-weight: 800;
+    background: var(--rust-orange); color: #fff;
+    border-radius: 3px; padding: 2px 4px;
+    line-height: 1.3; letter-spacing: 0.03em;
   }
 
   .app-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    white-space: nowrap;
+    font-size: 13px; font-weight: 600;
+    color: var(--text-secondary); white-space: nowrap;
   }
 
-  .status-label {
-    font-size: 11px;
-    color: var(--text-tertiary);
-    letter-spacing: 0.02em;
-  }
+  .status-label { font-size: 11px; color: var(--text-tertiary); letter-spacing: 0.02em; }
   .status-label.running { color: var(--green); }
   .status-label.error   { color: var(--red); }
 
-  /* ── Toolbar buttons ── */
   .btn {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 12px;
-    font-size: 12px;
-    font-weight: 600;
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 12px; font-size: 12px; font-weight: 600;
     border-radius: var(--radius-sm);
     transition: background 0.12s, opacity 0.12s;
   }
 
   .btn-save {
-    background: rgba(255,255,255,0.08);
-    color: var(--text);
+    background: rgba(255,255,255,0.08); color: var(--text);
     border: 1px solid var(--border-strong);
   }
   .btn-save:hover:not(:disabled) { background: rgba(255,255,255,0.14); }
   .btn-save:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  .btn-run {
-    background: var(--accent);
-    color: #fff;
-  }
+  .btn-run  { background: var(--accent); color: #fff; }
   .btn-run:hover:not(:disabled) { background: var(--accent-hover); }
   .btn-run:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  .btn-stop {
-    background: #3a3a3c;
-    color: var(--text-secondary);
-  }
+  .btn-stop { background: #3a3a3c; color: var(--text-secondary); }
   .btn-stop:hover { background: var(--bg-elevated); }
 
-  /* ── Toolchain pill ── */
   .toolchain-pill {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    font-family: var(--font-mono);
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; font-family: var(--font-mono);
     color: var(--text-tertiary);
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 3px 8px;
-    cursor: default;
-    white-space: nowrap;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 3px 8px;
+    cursor: default; white-space: nowrap;
   }
 
-  /* ── Main 3-panel layout ── */
   .main {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-    position: relative;
+    display: flex; flex: 1; overflow: hidden; position: relative;
   }
 
-  /* ── Editor area ── */
   .editor-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
+    flex: 1; display: flex; flex-direction: column;
+    overflow: hidden; min-width: 0;
   }
 
   .editor-wrap {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
+    flex: 1; display: flex; overflow: hidden;
   }
 
-  /* ── Empty state ── */
   .empty-state {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    color: var(--text-tertiary);
-    padding: 40px;
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 10px; color: var(--text-tertiary); padding: 40px;
   }
 
   .empty-icon { margin-bottom: 6px; }
 
   .empty-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-secondary);
+    font-size: 15px; font-weight: 600; color: var(--text-secondary);
   }
 
   .empty-hint {
-    font-size: 13px;
-    color: var(--text-tertiary);
-    text-align: center;
+    font-size: 13px; color: var(--text-tertiary); text-align: center;
   }
 
   .link-btn {
-    background: none;
-    color: var(--accent);
-    text-decoration: underline;
-    padding: 0;
-    font-size: 13px;
-    display: inline;
+    background: none; color: var(--accent);
+    text-decoration: underline; padding: 0;
+    font-size: 13px; display: inline;
   }
 
   .shortcut-grid {
-    display: grid;
-    grid-template-columns: auto auto;
-    gap: 4px 16px;
-    margin-top: 16px;
-    align-items: center;
+    display: grid; grid-template-columns: auto auto;
+    gap: 4px 16px; margin-top: 16px; align-items: center;
   }
 
   .shortcut-key {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-xs);
-    padding: 2px 7px;
-    color: var(--text-secondary);
-    text-align: center;
-    justify-self: end;
+    font-family: var(--font-mono); font-size: 11px;
+    background: var(--bg-elevated); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-xs); padding: 2px 7px;
+    color: var(--text-secondary); text-align: center; justify-self: end;
   }
 
-  .shortcut-desc {
-    font-size: 12px;
-    color: var(--text-tertiary);
-  }
+  .shortcut-desc { font-size: 12px; color: var(--text-tertiary); }
 </style>

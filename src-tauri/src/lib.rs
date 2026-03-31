@@ -4,7 +4,6 @@ use tauri::ipc::Channel;
 
 // ── Storage ───────────────────────────────────────────────────────────────────
 
-/// Default Cargo.toml written into a fresh workspace.
 const DEFAULT_CARGO_TOML: &str = r#"[package]
 name = "playgrounds"
 version = "0.1.0"
@@ -14,20 +13,21 @@ edition = "2021"
 [dependencies]
 "#;
 
-/// Seeded hello.rs written on first launch.
 const DEFAULT_HELLO: &str = r#"fn main() {
     println!("Hello, world!");
 }
 "#;
 
-/// Returns the Cargo workspace root used by the app.
-///
-/// Dev mode  → project source tree (so `cargo tauri dev` uses src/bin/ as-is)
-/// Production → ~/Library/Application Support/com.playground-rs.app/workspace/
-///              Written by the app, never inside the read-only .app bundle.
+/// New playground template — includes the PLAYGROUND_CONTENT hint.
+fn playground_template(name: &str) -> String {
+    format!(
+        "// Files in your content folder are available via:\n// let dir = std::env::var(\"PLAYGROUND_CONTENT\").unwrap_or_default();\n\nfn main() {{\n    println!(\"Hello from {}!\");\n}}\n",
+        name
+    )
+}
+
 fn workspace_dir(app: &AppHandle) -> PathBuf {
     if cfg!(debug_assertions) {
-        // CARGO_MANIFEST_DIR = src-tauri/ at compile time → parent = project root
         let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         manifest.parent().unwrap().to_path_buf()
     } else {
@@ -42,35 +42,29 @@ fn bin_dir(app: &AppHandle) -> PathBuf {
     workspace_dir(app).join("src").join("bin")
 }
 
-/// Ensures the production workspace exists on first launch.
-/// Creates the directory structure, Cargo.toml, and seeds hello.rs.
-/// No-op if the workspace already exists.
+fn content_dir(name: &str, app: &AppHandle) -> PathBuf {
+    workspace_dir(app).join("content").join(name)
+}
+
 fn ensure_workspace(app: &AppHandle) -> Result<(), String> {
     if cfg!(debug_assertions) {
-        return Ok(()); // dev mode: project tree already exists
+        return Ok(());
     }
-
     let workspace = workspace_dir(app);
     let bin = bin_dir(app);
-
     if !bin.exists() {
         std::fs::create_dir_all(&bin)
             .map_err(|e| format!("Failed to create workspace: {}", e))?;
-
         std::fs::write(workspace.join("Cargo.toml"), DEFAULT_CARGO_TOML)
             .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
-
         std::fs::write(bin.join("hello.rs"), DEFAULT_HELLO)
             .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
     }
-
     Ok(())
 }
 
-// ── Name validation ───────────────────────────────────────────────────────────
+// ── Name / filename validation ────────────────────────────────────────────────
 
-/// Validates a playground name is a safe Rust identifier: [a-z][a-z0-9_]*
-/// Rejects anything that could be used for path traversal (.., /, \, etc.)
 fn validate_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("Playground name cannot be empty".into());
@@ -91,13 +85,24 @@ fn validate_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Resolves and verifies the playground path stays inside bin_dir.
-/// Two-layer defence: name whitelist + canonicalized path check.
+/// Validates a content filename: no path separators, no null bytes, not . or ..
+fn validate_filename(filename: &str) -> Result<(), String> {
+    if filename.is_empty() {
+        return Err("Filename cannot be empty".into());
+    }
+    if filename.contains('/') || filename.contains('\\') || filename.contains('\0') {
+        return Err(format!("'{}' contains invalid characters", filename));
+    }
+    if filename == "." || filename == ".." {
+        return Err("'.' and '..' are not valid filenames".into());
+    }
+    Ok(())
+}
+
 fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBuf, String> {
     validate_name(name)?;
     let dir = bin_dir(app);
     let path = dir.join(format!("{}.rs", name));
-    // Canonicalize to catch symlink-based escapes
     let resolved_dir = dir.canonicalize().map_err(|e| e.to_string())?;
     let resolved_parent = path.parent()
         .and_then(|p| p.canonicalize().ok())
@@ -106,6 +111,36 @@ fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBuf, String> 
         return Err(format!("Path traversal detected for name '{}'", name));
     }
     Ok(path)
+}
+
+/// Returns the content file path. Creates the content dir if needed for writes.
+/// Always validates name + filename to block traversal.
+fn safe_content_path(name: &str, filename: &str, app: &AppHandle) -> Result<PathBuf, String> {
+    validate_name(name)?;
+    validate_filename(filename)?;
+    Ok(content_dir(name, app).join(filename))
+}
+
+// ── Content file helpers ──────────────────────────────────────────────────────
+
+fn is_text_file(filename: &str) -> bool {
+    let ext = std::path::Path::new(filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+    matches!(ext.as_str(),
+        "txt" | "md" | "rs" | "toml" | "yaml" | "yml" | "json" | "xml"
+        | "html" | "htm" | "css" | "js" | "ts" | "csv" | "log" | "sh"
+        | "bash" | "zsh" | "fish" | "conf" | "ini" | "env"
+    )
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct ContentFile {
+    pub filename: String,
+    pub size_bytes: u64,
+    pub is_text: bool,
 }
 
 // ── Toolchain ─────────────────────────────────────────────────────────────────
@@ -134,7 +169,7 @@ fn which_cargo() -> Option<PathBuf> {
         })
 }
 
-// ── Commands ──────────────────────────────────────────────────────────────────
+// ── Playground commands ───────────────────────────────────────────────────────
 
 #[tauri::command]
 fn list_playgrounds(app: AppHandle) -> Vec<String> {
@@ -168,11 +203,7 @@ fn new_playground(name: String, app: AppHandle) -> Result<(), String> {
     if path.exists() {
         return Err(format!("'{}' already exists", name));
     }
-    let template = format!(
-        "fn main() {{\n    println!(\"Hello from {}!\");\n}}\n",
-        name
-    );
-    std::fs::write(&path, template).map_err(|e| e.to_string())
+    std::fs::write(&path, playground_template(&name)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -182,13 +213,21 @@ fn rename_playground(old_name: String, new_name: String, app: AppHandle) -> Resu
     if new_path.exists() {
         return Err(format!("'{}' already exists", new_name));
     }
-    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
+    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())?;
+    // Rename content folder atomically if it exists
+    let old_content = content_dir(&old_name, &app);
+    let new_content = content_dir(&new_name, &app);
+    if old_content.exists() {
+        std::fs::rename(&old_content, &new_content).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
 fn delete_playground(name: String, app: AppHandle) -> Result<(), String> {
     let path = safe_playground_path(&name, &app)?;
     std::fs::remove_file(&path).map_err(|e| e.to_string())
+    // Note: content folder is intentionally NOT deleted — v1.4 limitation
 }
 
 #[tauri::command]
@@ -219,13 +258,14 @@ async fn run_playground(
 
     let cargo = cargo_path();
     let workspace = workspace_dir(&app);
-
-    // Separate target dir — never conflicts with cargo tauri dev's lock on target/
     let playground_target = workspace.join("target").join("playground-runs");
+    let content_path = content_dir(&name, &app);
 
     let mut child = Command::new(&cargo)
         .args(["run", "--bin", &name, "--target-dir", playground_target.to_str().unwrap()])
         .current_dir(&workspace)
+        // Inject content folder path — readable by the running binary
+        .env("PLAYGROUND_CONTENT", &content_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -261,6 +301,8 @@ async fn run_playground(
     Ok(())
 }
 
+// ── Cargo.toml commands ───────────────────────────────────────────────────────
+
 #[tauri::command]
 fn get_cargo_toml(app: AppHandle) -> Result<String, String> {
     let path = workspace_dir(&app).join("Cargo.toml");
@@ -287,6 +329,115 @@ fn get_toolchain_info() -> serde_json::Value {
     serde_json::json!({ "path": path, "version": version })
 }
 
+// ── Content file commands ─────────────────────────────────────────────────────
+
+#[tauri::command]
+fn list_content_files(name: String, app: AppHandle) -> Result<Vec<ContentFile>, String> {
+    validate_name(&name)?;
+    let dir = content_dir(&name, &app);
+    if !dir.exists() {
+        return Ok(vec![]);
+    }
+    let mut files: Vec<ContentFile> = std::fs::read_dir(&dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .map(|e| {
+            let filename = e.file_name().to_string_lossy().to_string();
+            let size_bytes = e.metadata().map(|m| m.len()).unwrap_or(0);
+            let is_text = is_text_file(&filename);
+            ContentFile { filename, size_bytes, is_text }
+        })
+        .collect();
+    files.sort_by(|a, b| a.filename.cmp(&b.filename));
+    Ok(files)
+}
+
+#[tauri::command]
+fn create_content_file(name: String, filename: String, app: AppHandle) -> Result<(), String> {
+    let path = safe_content_path(&name, &filename, &app)?;
+    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    if path.exists() {
+        return Err(format!("'{}' already exists", filename));
+    }
+    std::fs::write(&path, "").map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn read_content_file(name: String, filename: String, app: AppHandle) -> Result<String, String> {
+    let path = safe_content_path(&name, &filename, &app)?;
+    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_content_file(name: String, filename: String, content: String, app: AppHandle) -> Result<(), String> {
+    let path = safe_content_path(&name, &filename, &app)?;
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_content_file(name: String, filename: String, app: AppHandle) -> Result<(), String> {
+    let path = safe_content_path(&name, &filename, &app)?;
+    std::fs::remove_file(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn rename_content_file(name: String, old_filename: String, new_filename: String, app: AppHandle) -> Result<(), String> {
+    let old_path = safe_content_path(&name, &old_filename, &app)?;
+    let new_path = safe_content_path(&name, &new_filename, &app)?;
+    if new_path.exists() {
+        return Err(format!("'{}' already exists", new_filename));
+    }
+    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_content_file(name: String, src_path: String, app: AppHandle) -> Result<String, String> {
+    validate_name(&name)?;
+    let src = std::path::Path::new(&src_path);
+    let filename = src.file_name()
+        .and_then(|f| f.to_str())
+        .ok_or_else(|| "Invalid source path".to_string())?
+        .to_string();
+    validate_filename(&filename)?;
+
+    let dir = content_dir(&name, &app);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+    // Resolve name collision with _1, _2, … suffix
+    let mut final_name = filename.clone();
+    let mut counter = 1u32;
+    while dir.join(&final_name).exists() {
+        let stem = std::path::Path::new(&filename)
+            .file_stem().and_then(|s| s.to_str()).unwrap_or(&filename);
+        let ext = std::path::Path::new(&filename)
+            .extension().and_then(|e| e.to_str())
+            .map(|e| format!(".{}", e))
+            .unwrap_or_default();
+        final_name = format!("{}_{}{}", stem, counter, ext);
+        counter += 1;
+    }
+
+    let dst = dir.join(&final_name);
+    std::fs::copy(src, &dst).map_err(|e| e.to_string())?;
+    Ok(final_name)
+}
+
+#[tauri::command]
+fn reveal_in_finder(path: String) -> Result<(), String> {
+    std::process::Command::new("open")
+        .args(["-R", &path])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn get_content_file_path(name: String, filename: String, app: AppHandle) -> Result<String, String> {
+    let path = safe_content_path(&name, &filename, &app)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 // ── App entry ─────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -294,9 +445,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            // Initialise the production workspace on first launch.
-            // Creates ~/Library/Application Support/.../workspace/ with
-            // Cargo.toml and a seeded hello.rs if it doesn't exist yet.
             ensure_workspace(app.handle())
                 .expect("Failed to initialise playground workspace");
             Ok(())
@@ -314,6 +462,15 @@ pub fn run() {
             get_cargo_toml,
             save_cargo_toml,
             get_toolchain_info,
+            list_content_files,
+            create_content_file,
+            read_content_file,
+            save_content_file,
+            delete_content_file,
+            rename_content_file,
+            import_content_file,
+            reveal_in_finder,
+            get_content_file_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

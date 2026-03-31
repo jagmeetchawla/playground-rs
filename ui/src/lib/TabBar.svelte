@@ -3,17 +3,20 @@
 
   const dispatch = createEventDispatcher()
 
-  let { tabs, active, dirtyTabs }: {
+  let { tabs, active, dirtyTabs, tabLabels = {}, tabTypes = {} }: {
     tabs: string[]
     active: string | null
     dirtyTabs: string[]
+    tabLabels?: Record<string, string>
+    tabTypes?: Record<string, 'rs' | 'content' | 'cargo'>
   } = $props()
 </script>
 
 <div class="tabbar" role="tablist">
   {#each tabs as name (name)}
     {@const isDirty = dirtyTabs.includes(name)}
-    <!-- Use div+role instead of button so we can nest the close button inside -->
+    {@const label = tabLabels[name] ?? name}
+    {@const tabType = tabTypes[name] ?? 'rs'}
     <div
       class="tab"
       class:active={active === name}
@@ -23,10 +26,15 @@
       onclick={() => dispatch('activate', name)}
       onkeydown={(e) => e.key === 'Enter' && dispatch('activate', name)}
     >
-      <!-- RS file badge -->
-      <span class="file-badge">RS</span>
+      {#if tabType === 'content'}
+        <span class="file-badge file-badge--content">📄</span>
+      {:else if tabType === 'cargo'}
+        <span class="file-badge file-badge--cargo">CT</span>
+      {:else}
+        <span class="file-badge">RS</span>
+      {/if}
 
-      <span class="tab-name">{name}{isDirty ? ' ●' : ''}</span>
+      <span class="tab-name">{label}{isDirty ? ' ●' : ''}</span>
 
       <button
         class="close-btn"
@@ -108,6 +116,17 @@
     padding: 1px 3px;
     flex-shrink: 0;
     line-height: 1.4;
+  }
+  .file-badge--content {
+    background: none;
+    font-size: 12px;
+    padding: 0;
+    letter-spacing: 0;
+    line-height: 1;
+  }
+  .file-badge--cargo {
+    background: #5a4a3a;
+    letter-spacing: 0;
   }
 
   .tab-name {
