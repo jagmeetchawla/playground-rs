@@ -261,6 +261,32 @@ async fn run_playground(
     Ok(())
 }
 
+#[tauri::command]
+fn get_cargo_toml(app: AppHandle) -> Result<String, String> {
+    let path = workspace_dir(&app).join("Cargo.toml");
+    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_cargo_toml(content: String, app: AppHandle) -> Result<(), String> {
+    let path = workspace_dir(&app).join("Cargo.toml");
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_toolchain_info() -> serde_json::Value {
+    let path = cargo_path();
+    let version = std::process::Command::new(&path)
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_else(|| "cargo (not found)".to_string())
+        .trim()
+        .to_string();
+    serde_json::json!({ "path": path, "version": version })
+}
+
 // ── App entry ─────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -285,6 +311,9 @@ pub fn run() {
             duplicate_playground,
             run_playground,
             workspace_path,
+            get_cargo_toml,
+            save_cargo_toml,
+            get_toolchain_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

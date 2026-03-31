@@ -81,15 +81,19 @@
   })
 
   const dispatch = createEventDispatcher()
-  let { code }: { code: string } = $props()
+  let { code, language = 'rust' }: { code: string; language?: string } = $props()
 
   let container: HTMLDivElement
   let editor: monaco.editor.IStandaloneCodeEditor
+  // Guard: prevent programmatic setValue() calls from triggering the change dispatch.
+  // Monaco fires onDidChangeModelContent even when we call setValue ourselves (e.g. on
+  // tab switch). Without this flag every tab open immediately marks the tab dirty.
+  let ignoreNextChange = false
 
   onMount(() => {
     editor = monaco.editor.create(container, {
       value: code,
-      language: 'rust',
+      language,
       theme: 'playground-dark',
       fontSize: 13,
       fontFamily: "'Menlo', 'Monaco', 'SF Mono', 'Courier New', monospace",
@@ -120,19 +124,32 @@
     })
 
     editor.onDidChangeModelContent(() => {
+      if (ignoreNextChange) { ignoreNextChange = false; return }
       dispatch('change', editor.getValue())
     })
 
     // Let our global keyboard shortcuts handle these — don't let Monaco consume them
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyN, () => {})
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyR, () => {})
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {})
   })
 
-  // Sync when user switches playground (code prop changes from outside)
+  // Sync when user switches playground (code prop changes from outside).
+  // Set ignoreNextChange BEFORE setValue so the onDidChangeModelContent listener
+  // skips the programmatic update and doesn't mark the tab dirty.
   $effect(() => {
     if (editor && editor.getValue() !== code) {
-      // Push value + clear undo history so Ctrl+Z doesn't bleed across files
+      ignoreNextChange = true
       editor.getModel()?.setValue(code)
+    }
+  })
+
+  // Sync language when tab type changes (e.g. switching to Cargo.toml)
+  $effect(() => {
+    const lang = language
+    const model = editor?.getModel()
+    if (model && model.getLanguageId() !== lang) {
+      monaco.editor.setModelLanguage(model, lang)
     }
   })
 

@@ -5,88 +5,90 @@
   import TabBar from './lib/TabBar.svelte'
   import Editor from './lib/Editor.svelte'
   import Output from './lib/Output.svelte'
+  import type { RunBlock, OutputLine } from './lib/Output.svelte'
 
-  type Status = 'idle' | 'checking' | 'compiling' | 'running' | 'error'
-  type OutputLine = { stream: 'stdout' | 'stderr' | 'info'; line: string }
+  // ── Constants ────────────────────────────────────────────────────────────────
+  const CARGO_TAB = 'Cargo.toml'
 
   // ── Playground list ──────────────────────────────────────────────────────────
   let playgrounds: string[] = $state([])
 
   // ── Tab state ────────────────────────────────────────────────────────────────
-  // openTabs  = ordered list of open tab names
-  // activeTab = which tab is currently visible in the editor
-  // tabCode   = cached source code per tab (so switching is instant)
-  // dirtyTabs = tabs with unsaved changes
   let openTabs:  string[]               = $state([])
   let activeTab: string | null          = $state(null)
   let tabCode:   Record<string, string> = $state({})
   let dirtyTabs: string[]               = $state([])
 
-  // The code shown in the Editor is always the active tab's code
-  let currentCode = $derived(activeTab ? (tabCode[activeTab] ?? '') : '')
+  let currentCode     = $derived(activeTab ? (tabCode[activeTab] ?? '') : '')
+  let editorLanguage  = $derived(activeTab === CARGO_TAB ? 'ini' : 'rust')
 
-  // ── Per-tab output & status ───────────────────────────────────────────────────
-  // Each tab keeps its own console history and run status so switching tabs
-  // never loses output from a previous run.
-  let tabOutput: Record<string, OutputLine[]> = $state({})
-  let tabStatus: Record<string, Status>       = $state({})
+  // ── Per-tab run blocks & status ──────────────────────────────────────────────
+  let tabRuns:     Record<string, RunBlock[]> = $state({})
+  let tabRunCount: Record<string, number>     = $state({})
 
-  // Derived views for whatever tab is currently visible
-  let currentOutput = $derived(activeTab ? (tabOutput[activeTab] ?? []) : [])
-  let currentStatus = $derived(activeTab ? (tabStatus[activeTab] ?? 'idle') : 'idle')
-  let isRunning     = $derived(currentStatus === 'running' || currentStatus === 'compiling')
+  let currentRuns   = $derived(activeTab ? (tabRuns[activeTab] ?? []) : [])
+  let lastRun       = $derived(currentRuns.at(-1))
+  let currentStatus = $derived(
+    lastRun?.status === 'compiling' ? 'compiling' :
+    lastRun?.status === 'running'   ? 'running'   :
+    lastRun?.status === 'error'     ? 'error'      :
+    'idle'
+  )
+  let isRunning = $derived(currentStatus === 'compiling' || currentStatus === 'running')
+
+  // ── Toolchain + Cargo.toml (sidebar) ─────────────────────────────────────────
+  let cargoToml:     string                              = $state('')
+  let toolchainInfo: { path: string; version: string }  = $state({ path: '', version: '' })
+
+  // ── New playground binding ────────────────────────────────────────────────────
+  let creatingNew: boolean = $state(false)
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
   onMount(async () => {
-    playgrounds = await invoke<string[]>('list_playgrounds')
+    playgrounds    = await invoke<string[]>('list_playgrounds')
+    cargoToml      = await invoke<string>('get_cargo_toml').catch(() => '')
+    toolchainInfo  = await invoke<{ path: string; version: string }>('get_toolchain_info')
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   })
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────────
   function handleKey(e: KeyboardEvent) {
-    if (e.metaKey && e.key === 'r') { e.preventDefault(); run() }
-    if (e.metaKey && e.key === '.') { e.preventDefault(); stop() }
-    if (e.metaKey && e.key === 's') { e.preventDefault(); save() }
     if (e.metaKey && e.key === 'n') { e.preventDefault(); requestNewPlayground() }
+    if (e.metaKey && e.key === 'r') { e.preventDefault(); run() }
+    if (e.metaKey && e.key === 's') { e.preventDefault(); save() }
+    if (e.metaKey && e.key === '.') { e.preventDefault(); stop() }
     if (e.metaKey && e.key === 'w') { e.preventDefault(); closeTab(activeTab) }
   }
 
   // ── Tab management ───────────────────────────────────────────────────────────
 
-  /** Open a playground in a tab (or switch to it if already open). */
   async function openTab(name: string) {
     if (!openTabs.includes(name)) {
-      // Load code from disk on first open
-      const code = await invoke<string>('load_playground', { name })
-      tabCode = { ...tabCode, [name]: code }
+      const code = name === CARGO_TAB
+        ? await invoke<string>('get_cargo_toml')
+        : await invoke<string>('load_playground', { name })
+      tabCode  = { ...tabCode,  [name]: code }
       openTabs = [...openTabs, name]
-      // New tabs start with empty output and idle status — no reset needed,
-      // missing key already means [] / 'idle' via the derived defaults above
     }
     activeTab = name
-    // Do NOT clear output — each tab keeps its own history across switches
   }
 
-  /** Close a tab. Prompts to save if dirty. */
   function closeTab(name: string | null) {
     if (!name) return
-    if (dirtyTabs.includes(name)) {
-      if (!confirm(`"${name}" has unsaved changes. Close anyway?`)) return
-      dirtyTabs = dirtyTabs.filter(n => n !== name)
-    }
+    // window.confirm() is not rendered in Tauri's WKWebView — always returns false.
+    // Close immediately; the source file stays on disk, only in-editor edits are lost.
+    dirtyTabs = dirtyTabs.filter(n => n !== name)
     const idx = openTabs.indexOf(name)
     openTabs = openTabs.filter(n => n !== name)
 
-    // Drop all per-tab state to keep memory lean
-    const { [name]: _code,   ...restCode   } = tabCode
-    const { [name]: _out,    ...restOut    } = tabOutput
-    const { [name]: _status, ...restStatus } = tabStatus
-    tabCode   = restCode
-    tabOutput = restOut
-    tabStatus = restStatus
+    const { [name]: _c, ...restCode  } = tabCode
+    const { [name]: _r, ...restRuns  } = tabRuns
+    const { [name]: _n, ...restCount } = tabRunCount
+    tabCode     = restCode
+    tabRuns     = restRuns
+    tabRunCount = restCount
 
-    // Focus adjacent tab
     if (activeTab === name) {
       activeTab = openTabs[idx] ?? openTabs[idx - 1] ?? null
     }
@@ -96,7 +98,12 @@
 
   async function save() {
     if (!activeTab) return
-    await invoke('save_playground', { name: activeTab, content: tabCode[activeTab] })
+    if (activeTab === CARGO_TAB) {
+      await invoke('save_cargo_toml', { content: tabCode[CARGO_TAB] })
+      cargoToml = tabCode[CARGO_TAB]
+    } else {
+      await invoke('save_playground', { name: activeTab, content: tabCode[activeTab] })
+    }
     dirtyTabs = dirtyTabs.filter(n => n !== activeTab)
   }
 
@@ -108,65 +115,105 @@
     }
   }
 
+  // ── RunBlock helpers ─────────────────────────────────────────────────────────
+
+  function updateLastRun(name: string, updater: (r: RunBlock) => RunBlock) {
+    const runs = tabRuns[name]
+    if (!runs?.length) return
+    const updated = [...runs]
+    updated[updated.length - 1] = updater(updated[updated.length - 1])
+    tabRuns = { ...tabRuns, [name]: updated }
+  }
+
   // ── Run / Stop ───────────────────────────────────────────────────────────────
 
-  /** Append one line to a tab's output (helper keeps call sites tidy). */
-  function pushLine(name: string, line: OutputLine) {
-    tabOutput = { ...tabOutput, [name]: [...(tabOutput[name] ?? []), line] }
-  }
-
-  /** Update a tab's run status. */
-  function setStatus(name: string, s: Status) {
-    tabStatus = { ...tabStatus, [name]: s }
-  }
-
   async function run() {
-    if (!activeTab || currentStatus !== 'idle') return
-    const name = activeTab   // capture — activeTab could change while awaiting
+    if (!activeTab || isRunning || activeTab === CARGO_TAB) return
+    const name = activeTab
     await save()
 
-    // ── Separator between runs ────────────────────────────────────────────────
-    // If this tab already has output from a previous run, add a visual divider
-    // so the history stays readable.
-    if ((tabOutput[name] ?? []).length > 0) {
-      pushLine(name, { stream: 'info', line: '──────────────────────────' })
+    // Collapse all previous runs for this tab
+    const existing = tabRuns[name] ?? []
+    const collapsed = existing.map(r => ({ ...r, collapsed: true }))
+
+    const runNum = (tabRunCount[name] ?? 0) + 1
+    tabRunCount = { ...tabRunCount, [name]: runNum }
+
+    const now = new Date()
+    const startedAt = now.toLocaleTimeString('en-US', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    })
+
+    const newBlock: RunBlock = {
+      runNum,
+      command: `cargo run --bin ${name}`,
+      startedAt,
+      status: 'compiling',
+      exitCode: null,
+      compilerLines: [],
+      programLines: [],
+      collapsed: false,
+      programStarted: false,
     }
-    pushLine(name, { stream: 'info', line: `▶  cargo run --bin ${name}` })
-    setStatus(name, 'compiling')
+
+    tabRuns = { ...tabRuns, [name]: [...collapsed, newBlock] }
 
     const channel = new Channel()
     channel.onmessage = (msg: any) => {
       if (msg.stream === 'complete') {
-        setStatus(name, msg.code === 0 ? 'idle' : 'error')
-      } else {
-        pushLine(name, { stream: msg.stream, line: msg.line })
-        if (msg.stream === 'stdout') setStatus(name, 'running')
+        updateLastRun(name, r => ({
+          ...r,
+          status: msg.code === 0 ? 'success' : 'error',
+          exitCode: msg.code,
+        }))
+      } else if (msg.stream === 'stdout') {
+        updateLastRun(name, r => ({
+          ...r,
+          programStarted: true,
+          status: 'running',
+          programLines: [...r.programLines, { stream: 'stdout', line: msg.line }],
+        }))
+      } else if (msg.stream === 'stderr') {
+        updateLastRun(name, r => ({
+          ...r,
+          ...(r.programStarted
+            ? { programLines: [...r.programLines, { stream: 'stderr', line: msg.line }] }
+            : { compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line }] }),
+        }))
       }
     }
 
     try {
       await invoke('run_playground', { name, onOutput: channel })
     } catch (e) {
-      pushLine(name, { stream: 'stderr', line: String(e) })
-      setStatus(name, 'error')
+      updateLastRun(name, r => ({
+        ...r,
+        status: 'error',
+        compilerLines: [...r.compilerLines, { stream: 'stderr', line: String(e) }],
+      }))
     }
   }
 
   function stop() {
     if (!activeTab) return
-    // TODO: kill process — implement in v1.0 iteration 2
-    pushLine(activeTab, { stream: 'info', line: '— stopped —' })
-    setStatus(activeTab, 'idle')
+    updateLastRun(activeTab, r => ({ ...r, status: 'error', exitCode: -1 }))
   }
 
   // ── Playground CRUD ──────────────────────────────────────────────────────────
 
-  async function requestNewPlayground() {
-    const name = window.prompt('Playground name (lowercase letters, digits, underscores):')
-    if (!name) return
-    await invoke('new_playground', { name })
-    playgrounds = await invoke<string[]>('list_playgrounds')
-    await openTab(name)
+  function requestNewPlayground() {
+    creatingNew = true
+  }
+
+  async function onNewPlayground(e: CustomEvent<string>) {
+    const name = e.detail
+    try {
+      await invoke('new_playground', { name })
+      playgrounds = await invoke<string[]>('list_playgrounds')
+      await openTab(name)
+    } catch (err) {
+      console.error('Failed to create playground:', err)
+    }
   }
 
   async function onRename(e: CustomEvent<{ old: string; new: string }>) {
@@ -175,14 +222,13 @@
     playgrounds = await invoke<string[]>('list_playgrounds')
 
     if (openTabs.includes(oldName)) {
-      // Migrate code
-      const { [oldName]: code,   ...restCode   } = tabCode
-      const { [oldName]: out,    ...restOut    } = tabOutput
-      const { [oldName]: status, ...restStatus } = tabStatus
+      const { [oldName]: code,  ...restCode  } = tabCode
+      const { [oldName]: runs,  ...restRuns  } = tabRuns
+      const { [oldName]: count, ...restCount } = tabRunCount
 
-      tabCode   = { ...restCode,   [newName]: code }
-      tabOutput = { ...restOut,    [newName]: out ?? [] }
-      tabStatus = { ...restStatus, [newName]: status ?? 'idle' }
+      tabCode     = { ...restCode,  [newName]: code }
+      tabRuns     = { ...restRuns,  [newName]: runs  ?? [] }
+      tabRunCount = { ...restCount, [newName]: count ?? 0  }
 
       openTabs  = openTabs.map(n => n === oldName ? newName : n)
       if (activeTab === oldName) activeTab = newName
@@ -197,7 +243,6 @@
     if (!confirm(`Delete playground "${name}"? This cannot be undone.`)) return
     await invoke('delete_playground', { name })
     playgrounds = await invoke<string[]>('list_playgrounds')
-    // closeTab handles cleaning up tabCode / tabOutput / tabStatus
     closeTab(name)
     dirtyTabs = dirtyTabs.filter(n => n !== name)
   }
@@ -208,42 +253,80 @@
     await openTab(newName)
   }
 
-  // ── Status label ─────────────────────────────────────────────────────────────
-  const statusLabel: Record<Status, string> = {
-    idle: '', checking: 'Checking…', compiling: 'Compiling…',
-    running: 'Running', error: 'Build failed',
+  async function onEditCargo() {
+    cargoToml = await invoke<string>('get_cargo_toml').catch(() => cargoToml)
+    await openTab(CARGO_TAB)
   }
+
+  function onToggle(e: CustomEvent<number>) {
+    if (!activeTab) return
+    const runNum = e.detail
+    const runs = tabRuns[activeTab] ?? []
+    tabRuns = {
+      ...tabRuns,
+      [activeTab]: runs.map(r => r.runNum === runNum ? { ...r, collapsed: !r.collapsed } : r),
+    }
+  }
+
+  function onClear() {
+    if (!activeTab) return
+    tabRuns     = { ...tabRuns,     [activeTab]: [] }
+    tabRunCount = { ...tabRunCount, [activeTab]: 0  }
+  }
+
+  // ── Toolchain label ───────────────────────────────────────────────────────────
+  // Show just the version string, e.g. "cargo 1.78.0" → "1.78.0"
+  let toolchainLabel = $derived(
+    toolchainInfo.version
+      ? (toolchainInfo.version.match(/\d+\.\d+\.\d+/)?.[0] ?? toolchainInfo.version)
+      : '…'
+  )
 </script>
 
 <div class="app">
   <!-- ── Toolbar ──────────────────────────────────────────────────────────────── -->
   <header class="toolbar">
     <div class="toolbar-left">
-      <span class="app-icon">
-        <!-- Small Rust crab-ish icon placeholder — just an RS badge -->
-        <span class="app-badge">RS</span>
-      </span>
+      <span class="app-badge">RS</span>
       <span class="app-name">Rust Playground</span>
     </div>
 
     <div class="toolbar-center">
-      {#if activeTab}
-        <span class="toolbar-filename">{activeTab}.rs</span>
-        {#if dirtyTabs.includes(activeTab)}
-          <span class="toolbar-dirty" title="Unsaved changes">●</span>
-        {/if}
-      {/if}
+      <!-- Toolchain info pill — display only -->
+      <span class="toolchain-pill" title={toolchainInfo.path}>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M5 3v2.5l1.5 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        cargo {toolchainLabel}
+      </span>
     </div>
 
     <div class="toolbar-right">
-      {#if currentStatus !== 'idle'}
-        <span
-          class="status-label"
-          class:error={currentStatus === 'error'}
-          class:running={isRunning}
-        >
-          {statusLabel[currentStatus]}
+      {#if currentStatus !== 'idle' && currentStatus !== 'error'}
+        <span class="status-label" class:running={isRunning}>
+          {currentStatus === 'compiling' ? 'Compiling…' : 'Running…'}
         </span>
+      {/if}
+      {#if currentStatus === 'error'}
+        <span class="status-label error">Build failed</span>
+      {/if}
+
+      <!-- Save button — lives on the right alongside Run/Stop -->
+      {#if activeTab}
+        <button
+          class="btn btn-save"
+          onclick={save}
+          disabled={!dirtyTabs.includes(activeTab)}
+          title="Save (⌘S)"
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+            <path d="M2 1h7l2 2v8H2V1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" fill="none"/>
+            <rect x="4" y="7" width="4" height="4" rx="0.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
+            <rect x="3.5" y="1" width="5" height="3" rx="0.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
+          </svg>
+          Save
+        </button>
       {/if}
 
       {#if isRunning}
@@ -252,7 +335,7 @@
           Stop
         </button>
       {:else}
-        <button class="btn btn-run" onclick={run} disabled={!activeTab}>
+        <button class="btn btn-run" onclick={run} disabled={!activeTab || activeTab === CARGO_TAB}>
           <svg width="10" height="12" viewBox="0 0 10 12"><polygon points="0,0 10,6 0,12" fill="currentColor"/></svg>
           Run
         </button>
@@ -262,19 +345,20 @@
 
   <!-- ── Main layout ───────────────────────────────────────────────────────────── -->
   <div class="main">
-    <!-- Sidebar -->
     <Sidebar
       {playgrounds}
       selected={activeTab}
       {dirtyTabs}
+      bind:creatingNew
+      {cargoToml}
       on:select={(e) => openTab(e.detail)}
-      on:new={requestNewPlayground}
+      on:new={onNewPlayground}
       on:rename={onRename}
       on:delete={onDelete}
       on:duplicate={onDuplicate}
+      on:editcargo={onEditCargo}
     />
 
-    <!-- Editor area = TabBar + Editor stacked -->
     <div class="editor-area">
       <TabBar
         tabs={openTabs}
@@ -286,7 +370,11 @@
 
       <div class="editor-wrap">
         {#if activeTab}
-          <Editor code={currentCode} on:change={(e) => onCodeChange(e.detail)} />
+          <Editor
+            code={currentCode}
+            language={editorLanguage}
+            on:change={(e) => onCodeChange(e.detail)}
+          />
         {:else}
           <div class="empty-state">
             <div class="empty-icon">
@@ -311,11 +399,11 @@
       </div>
     </div>
 
-    <!-- Output panel — shows the active tab's console history -->
     <Output
-      output={currentOutput}
+      runs={currentRuns}
       status={currentStatus}
-      on:clear={() => { if (activeTab) tabOutput = { ...tabOutput, [activeTab]: [] } }}
+      on:toggle={onToggle}
+      on:clear={onClear}
     />
   </div>
 </div>
@@ -337,7 +425,7 @@
     background: var(--bg-sidebar);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    position: relative;   /* needed for absolute-positioned center column */
+    position: relative;
     gap: 12px;
   }
 
@@ -352,9 +440,8 @@
   .toolbar-center {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
     flex-shrink: 0;
-    /* Center-align the file name */
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
@@ -387,17 +474,6 @@
     white-space: nowrap;
   }
 
-  .toolbar-filename {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text);
-  }
-
-  .toolbar-dirty {
-    color: var(--text-tertiary);
-    font-size: 8px;
-  }
-
   .status-label {
     font-size: 11px;
     color: var(--text-tertiary);
@@ -406,17 +482,25 @@
   .status-label.running { color: var(--green); }
   .status-label.error   { color: var(--red); }
 
-  /* ── Run / Stop buttons ── */
+  /* ── Toolbar buttons ── */
   .btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 14px;
+    gap: 5px;
+    padding: 5px 12px;
     font-size: 12px;
     font-weight: 600;
     border-radius: var(--radius-sm);
-    transition: background 0.12s;
+    transition: background 0.12s, opacity 0.12s;
   }
+
+  .btn-save {
+    background: rgba(255,255,255,0.08);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+  }
+  .btn-save:hover:not(:disabled) { background: rgba(255,255,255,0.14); }
+  .btn-save:disabled { opacity: 0.3; cursor: not-allowed; }
 
   .btn-run {
     background: var(--accent);
@@ -431,6 +515,22 @@
   }
   .btn-stop:hover { background: var(--bg-elevated); }
 
+  /* ── Toolchain pill ── */
+  .toolchain-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-tertiary);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 3px 8px;
+    cursor: default;
+    white-space: nowrap;
+  }
+
   /* ── Main 3-panel layout ── */
   .main {
     display: flex;
@@ -439,7 +539,7 @@
     position: relative;
   }
 
-  /* ── Editor area = TabBar + editor stacked ── */
+  /* ── Editor area ── */
   .editor-area {
     flex: 1;
     display: flex;
