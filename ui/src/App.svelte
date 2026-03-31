@@ -14,7 +14,7 @@
   type TabMeta =
     | { type: 'playground' }
     | { type: 'cargo' }
-    | { type: 'content'; playground: string; filename: string }
+    | { type: 'content'; filename: string }
 
   // ── Playground list ──────────────────────────────────────────────────────────
   let playgrounds: string[] = $state([])
@@ -85,8 +85,8 @@
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
-  function contentTabId(playground: string, filename: string) {
-    return `content:${playground}:${filename}`
+  function contentTabId(filename: string) {
+    return `content:${filename}`
   }
 
   function languageForTab(id: string | null, meta: TabMeta): string {
@@ -122,9 +122,7 @@
     if (!openTabs.includes(name)) {
       let code: string
       if (meta.type === 'content') {
-        code = await invoke<string>('read_content_file', {
-          name: meta.playground, filename: meta.filename
-        })
+        code = await invoke<string>('read_content_file', { filename: meta.filename })
       } else if (name === CARGO_TAB) {
         code = await invoke<string>('get_cargo_toml')
       } else {
@@ -165,7 +163,6 @@
 
     if (meta.type === 'content') {
       await invoke('save_content_file', {
-        name: meta.playground,
         filename: meta.filename,
         content: tabCode[activeTab],
       })
@@ -298,21 +295,6 @@
       }
     }
 
-    // Re-key any open content tabs that belonged to this playground
-    const contentPrefix = `content:${oldName}:`
-    const affectedIds = openTabs.filter(id => id.startsWith(contentPrefix))
-    for (const oldId of affectedIds) {
-      const newId = oldId.replace(contentPrefix, `content:${newName}:`)
-      const oldContentMeta = tabMeta[oldId] as TabMeta & { type: 'content' }
-      tabCode = { ...tabCode, [newId]: tabCode[oldId] }
-      tabMeta = { ...tabMeta, [newId]: { ...oldContentMeta, playground: newName } }
-      dirtyTabs = dirtyTabs.map(n => n === oldId ? newId : n)
-      openTabs = openTabs.map(n => n === oldId ? newId : n)
-      if (activeTab === oldId) activeTab = newId
-      // Clean up old keys
-      const { [oldId]: _c, ...rc } = tabCode; tabCode = rc
-      const { [oldId]: _m, ...rm } = tabMeta; tabMeta = rm
-    }
   }
 
   async function onDelete(e: CustomEvent<string>) {
@@ -337,10 +319,10 @@
 
   // ── Content file tab opening ─────────────────────────────────────────────────
 
-  async function onOpenContentFile(e: CustomEvent<{ playground: string; filename: string }>) {
-    const { playground, filename } = e.detail
-    const tabId = contentTabId(playground, filename)
-    await openTab(tabId, { type: 'content', playground, filename })
+  async function onOpenContentFile(e: CustomEvent<{ filename: string }>) {
+    const { filename } = e.detail
+    const tabId = contentTabId(filename)
+    await openTab(tabId, { type: 'content', filename })
   }
 
   // ── Console events ───────────────────────────────────────────────────────────

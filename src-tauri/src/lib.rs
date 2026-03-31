@@ -42,8 +42,8 @@ fn bin_dir(app: &AppHandle) -> PathBuf {
     workspace_dir(app).join("src").join("bin")
 }
 
-fn content_dir(name: &str, app: &AppHandle) -> PathBuf {
-    workspace_dir(app).join("content").join(name)
+fn content_dir(app: &AppHandle) -> PathBuf {
+    workspace_dir(app).join("content")
 }
 
 fn ensure_workspace(app: &AppHandle) -> Result<(), String> {
@@ -113,12 +113,10 @@ fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBuf, String> 
     Ok(path)
 }
 
-/// Returns the content file path. Creates the content dir if needed for writes.
-/// Always validates name + filename to block traversal.
-fn safe_content_path(name: &str, filename: &str, app: &AppHandle) -> Result<PathBuf, String> {
-    validate_name(name)?;
+/// Returns the content file path, validating the filename to block traversal.
+fn safe_content_path(filename: &str, app: &AppHandle) -> Result<PathBuf, String> {
     validate_filename(filename)?;
-    Ok(content_dir(name, app).join(filename))
+    Ok(content_dir(app).join(filename))
 }
 
 // ── Content file helpers ──────────────────────────────────────────────────────
@@ -213,14 +211,7 @@ fn rename_playground(old_name: String, new_name: String, app: AppHandle) -> Resu
     if new_path.exists() {
         return Err(format!("'{}' already exists", new_name));
     }
-    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())?;
-    // Rename content folder atomically if it exists
-    let old_content = content_dir(&old_name, &app);
-    let new_content = content_dir(&new_name, &app);
-    if old_content.exists() {
-        std::fs::rename(&old_content, &new_content).map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -259,7 +250,7 @@ async fn run_playground(
     let cargo = cargo_path();
     let workspace = workspace_dir(&app);
     let playground_target = workspace.join("target").join("playground-runs");
-    let content_path = content_dir(&name, &app);
+    let content_path = content_dir(&app);
 
     let mut child = Command::new(&cargo)
         .args(["run", "--bin", &name, "--target-dir", playground_target.to_str().unwrap()])
@@ -332,9 +323,8 @@ fn get_toolchain_info() -> serde_json::Value {
 // ── Content file commands ─────────────────────────────────────────────────────
 
 #[tauri::command]
-fn list_content_files(name: String, app: AppHandle) -> Result<Vec<ContentFile>, String> {
-    validate_name(&name)?;
-    let dir = content_dir(&name, &app);
+fn list_content_files(app: AppHandle) -> Result<Vec<ContentFile>, String> {
+    let dir = content_dir(&app);
     if !dir.exists() {
         return Ok(vec![]);
     }
@@ -354,8 +344,8 @@ fn list_content_files(name: String, app: AppHandle) -> Result<Vec<ContentFile>, 
 }
 
 #[tauri::command]
-fn create_content_file(name: String, filename: String, app: AppHandle) -> Result<(), String> {
-    let path = safe_content_path(&name, &filename, &app)?;
+fn create_content_file(filename: String, app: AppHandle) -> Result<(), String> {
+    let path = safe_content_path(&filename, &app)?;
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     if path.exists() {
         return Err(format!("'{}' already exists", filename));
@@ -364,27 +354,27 @@ fn create_content_file(name: String, filename: String, app: AppHandle) -> Result
 }
 
 #[tauri::command]
-fn read_content_file(name: String, filename: String, app: AppHandle) -> Result<String, String> {
-    let path = safe_content_path(&name, &filename, &app)?;
+fn read_content_file(filename: String, app: AppHandle) -> Result<String, String> {
+    let path = safe_content_path(&filename, &app)?;
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn save_content_file(name: String, filename: String, content: String, app: AppHandle) -> Result<(), String> {
-    let path = safe_content_path(&name, &filename, &app)?;
+fn save_content_file(filename: String, content: String, app: AppHandle) -> Result<(), String> {
+    let path = safe_content_path(&filename, &app)?;
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn delete_content_file(name: String, filename: String, app: AppHandle) -> Result<(), String> {
-    let path = safe_content_path(&name, &filename, &app)?;
+fn delete_content_file(filename: String, app: AppHandle) -> Result<(), String> {
+    let path = safe_content_path(&filename, &app)?;
     std::fs::remove_file(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn rename_content_file(name: String, old_filename: String, new_filename: String, app: AppHandle) -> Result<(), String> {
-    let old_path = safe_content_path(&name, &old_filename, &app)?;
-    let new_path = safe_content_path(&name, &new_filename, &app)?;
+fn rename_content_file(old_filename: String, new_filename: String, app: AppHandle) -> Result<(), String> {
+    let old_path = safe_content_path(&old_filename, &app)?;
+    let new_path = safe_content_path(&new_filename, &app)?;
     if new_path.exists() {
         return Err(format!("'{}' already exists", new_filename));
     }
@@ -392,8 +382,7 @@ fn rename_content_file(name: String, old_filename: String, new_filename: String,
 }
 
 #[tauri::command]
-fn import_content_file(name: String, src_path: String, app: AppHandle) -> Result<String, String> {
-    validate_name(&name)?;
+fn import_content_file(src_path: String, app: AppHandle) -> Result<String, String> {
     let src = std::path::Path::new(&src_path);
     let filename = src.file_name()
         .and_then(|f| f.to_str())
@@ -401,7 +390,7 @@ fn import_content_file(name: String, src_path: String, app: AppHandle) -> Result
         .to_string();
     validate_filename(&filename)?;
 
-    let dir = content_dir(&name, &app);
+    let dir = content_dir(&app);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
     // Resolve name collision with _1, _2, … suffix
@@ -433,8 +422,8 @@ fn reveal_in_finder(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_content_file_path(name: String, filename: String, app: AppHandle) -> Result<String, String> {
-    let path = safe_content_path(&name, &filename, &app)?;
+fn get_content_file_path(filename: String, app: AppHandle) -> Result<String, String> {
+    let path = safe_content_path(&filename, &app)?;
     Ok(path.to_string_lossy().to_string())
 }
 

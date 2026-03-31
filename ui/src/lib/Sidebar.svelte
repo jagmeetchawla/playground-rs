@@ -118,11 +118,9 @@
   let renameFileValue: string = $state('')
   let renameFileInputEl: HTMLInputElement | null = $state(null)
 
-  // Load content files when: tab switches to content, or selected playground changes
+  // Load content files whenever the Content tab is active
   $effect(() => {
-    const _tab = sidebarTab
-    const _sel = selected
-    if (_tab === 'content') loadContentFiles()
+    if (sidebarTab === 'content') loadContentFiles()
   })
 
   // Focus new-file input when creatingFile becomes true
@@ -140,10 +138,9 @@
   })
 
   async function loadContentFiles() {
-    if (!selected) { contentFiles = []; return }
     contentLoading = true
     try {
-      contentFiles = await invoke<ContentFile[]>('list_content_files', { name: selected })
+      contentFiles = await invoke<ContentFile[]>('list_content_files')
     } catch {
       contentFiles = []
     } finally {
@@ -168,20 +165,11 @@
   }
 
   function clickFile(file: ContentFile) {
-    if (!selected) return
     if (file.is_text) {
-      dispatch('opencontentfile', { playground: selected, filename: file.filename })
+      dispatch('opencontentfile', { filename: file.filename })
     } else {
-      // image/binary: open with system default / reveal in Finder
-      invoke<string>('get_content_file_path', { name: selected, filename: file.filename })
-        .then(path => {
-          const ext = file.filename.split('.').pop()?.toLowerCase() ?? ''
-          if (['png','jpg','jpeg','gif','webp','svg'].includes(ext)) {
-            invoke('reveal_in_finder', { path })
-          } else {
-            invoke('reveal_in_finder', { path })
-          }
-        })
+      invoke<string>('get_content_file_path', { filename: file.filename })
+        .then(path => invoke('reveal_in_finder', { path }))
     }
   }
 
@@ -192,9 +180,8 @@
   }
 
   async function deleteFile(filename: string) {
-    if (!selected) return
     fileContextMenu = null
-    await invoke('delete_content_file', { name: selected, filename })
+    await invoke('delete_content_file', { filename })
     await loadContentFiles()
   }
 
@@ -205,17 +192,13 @@
   }
 
   async function commitRenameFile() {
-    if (!selected || !renamingFile) return
+    if (!renamingFile) return
     const newName = renameFileValue.trim()
     if (newName && newName !== renamingFile) {
       try {
-        await invoke('rename_content_file', {
-          name: selected, oldFilename: renamingFile, newFilename: newName
-        })
+        await invoke('rename_content_file', { oldFilename: renamingFile, newFilename: newName })
         await loadContentFiles()
-      } catch (err) {
-        // rename failed — just reset
-      }
+      } catch { /* rename failed — just reset */ }
     }
     renamingFile = null
   }
@@ -226,9 +209,8 @@
   }
 
   async function revealFile(filename: string) {
-    if (!selected) return
     fileContextMenu = null
-    const path = await invoke<string>('get_content_file_path', { name: selected, filename })
+    const path = await invoke<string>('get_content_file_path', { filename })
     await invoke('reveal_in_finder', { path })
   }
 
@@ -244,15 +226,14 @@
       newFileError = 'Invalid name'
       return
     }
-    if (!selected) return
     try {
-      await invoke('create_content_file', { name: selected, filename })
+      await invoke('create_content_file', { filename })
       creatingFile = false
       newFileValue = ''
       newFileError = ''
       await loadContentFiles()
       if (isTextFile(filename)) {
-        dispatch('opencontentfile', { playground: selected, filename })
+        dispatch('opencontentfile', { filename })
       }
     } catch (err: any) {
       newFileError = String(err).includes('already exists') ? 'Already exists' : String(err)
@@ -272,15 +253,14 @@
 
   // ── Drag and drop ─────────────────────────────────────────────────────────────
   onMount(async () => {
-    // Listen to Tauri's file drop event for the whole window
     const unlisten = await listen<{ paths: string[]; position: { x: number; y: number } }>(
       'tauri://drag-drop',
       async (event) => {
-        if (sidebarTab === 'content' && selected && isDragOver) {
+        if (sidebarTab === 'content' && isDragOver) {
           isDragOver = false
           for (const srcPath of event.payload.paths) {
             try {
-              await invoke('import_content_file', { name: selected, srcPath })
+              await invoke('import_content_file', { srcPath })
             } catch { /* ignore individual file errors */ }
           }
           await loadContentFiles()
@@ -421,29 +401,15 @@
   {:else}
 
     <div class="content-header">
-      <div class="content-title-row">
-        <span class="sidebar-title">Content</span>
-        {#if selected}
-          <span class="content-for">— {selected}</span>
-        {/if}
-      </div>
-      {#if selected}
-        <button class="icon-btn" title="New file" onclick={startNewFile}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-        </button>
-      {/if}
+      <span class="sidebar-title">Content</span>
+      <button class="icon-btn" title="New file" onclick={startNewFile}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </button>
     </div>
 
-    {#if !selected}
-      <div class="content-empty-state">
-        <p class="empty-title">No playground selected</p>
-        <p class="empty-sub">Select a playground to view its content files</p>
-      </div>
-
-    {:else}
-      <!-- Drop zone wraps the whole file list area -->
+    <!-- Drop zone wraps the whole file list area -->
       <div
         class="content-pane"
         class:drag-over={isDragOver}
@@ -530,11 +496,10 @@
         <!-- Drag overlay hint -->
         {#if isDragOver}
           <div class="drag-overlay">
-            <span>Drop to import into <strong>{selected}</strong></span>
+            <span>Drop to add to Content</span>
           </div>
         {/if}
       </div>
-    {/if}
   {/if}
 
 </aside>

@@ -148,24 +148,23 @@ Auto-switch to Content tab:
 
 ---
 
-Folder Structure (unchanged from initial v1.4 design)
+Folder Structure
 
   workspace/
     Cargo.toml
     src/bin/
       hello2.rs
       chapter3.rs
-    content/
-      hello2/          ← content for hello2 playground
-        data.txt
-        config.json
-      chapter3/        ← content for chapter3 playground
-        input.txt
+    content/              ← ONE shared folder, all playgrounds read from here
+      data.csv
+      config.json
+      photo.png
 
 Rules:
-- content/<name>/ is created on first file add (lazy).
-- Renaming a playground renames its content subfolder atomically.
-- Deleting a playground does NOT delete its content folder in v1.4 (noted limitation).
+- content/ is a single flat directory shared by all playgrounds.
+- Created lazily on first file add.
+- Renaming or deleting a playground has no effect on content/.
+- No per-playground subfolders — keep it simple.
 
 ---
 
@@ -173,7 +172,7 @@ Runtime Access — PLAYGROUND_CONTENT env var
 
 When run_playground runs a binary it injects:
 
-  PLAYGROUND_CONTENT=/absolute/path/to/workspace/content/<name>
+  PLAYGROUND_CONTENT=/absolute/path/to/workspace/content
 
 The playground reads files portably:
 
@@ -287,9 +286,8 @@ RUNTIME
 [ ] New playground template includes the hint comment
 
 FOLDER STRUCTURE
-[ ] content/<name>/ created on first file add
-[ ] Renaming playground renames content subfolder
-[ ] Deleting playground does not delete content folder
+[ ] content/ created lazily on first file add
+[ ] content/ is shared — renaming/deleting a playground does not touch it
 
 BACKEND SECURITY
 [ ] Path-traversal guard on all content filenames
