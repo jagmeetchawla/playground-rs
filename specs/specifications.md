@@ -1,35 +1,23 @@
 SPECIFICATION
 
 Status
-- Version: v1.0 draft
-- Date: 2026-03-29
+- Version: v1.2 draft
+- Date: 2026-03-31
 - Owner: Jagmeet Chawla
 
 ---
 
-Visual Reference
+Visual References
 
-Primary UI reference: Apple Swift Playgrounds (macOS)
-Image: specs/assets/swift-playgrounds-reference.png
+Swift Playgrounds reference (UI target)
+  specs/assets/swift-playgrounds-reference.png
+  Shared 2026-03-30. Drove the v1.1 macOS dark colour system, blue pill sidebar,
+  file tabs, RS badge, and 'playground-dark' Monaco theme.
 
-![Swift Playgrounds reference](assets/swift-playgrounds-reference.png)
-
-Key UI elements observed in the reference screenshot:
-- Sidebar (left): dark panel (#2c2c2e), file list with Swift file icons, active item
-  highlighted with solid blue pill (system blue), "Find in Source Files" search at top,
-  app/project name as section header above file list
-- Editor (centre): file tabs at top of editor pane (not window chrome) — each tab shows
-  file icon + name, active tab visually distinct; line numbers; syntax highlighting with
-  pink keywords, cyan types, matching our 'playground-dark' Monaco theme
-- App Preview (right): labelled "App Preview" in the panel header (not "Output" or
-  "Console") — shows live rendered output of the running app
-- Toolbar (top): play ▶ button, stop ■ button, settings/filter icons, run destination
-  picker — all in the window chrome above the three panels
-- Tab bar sits between the toolbar and the editor — not part of the OS window titlebar
-
-This screenshot was shared on 2026-03-30 and directly motivated the v1.1 UI redesign:
-the macOS dark colour system, blue pill sidebar selection, file tabs, RS badge style,
-and the 'playground-dark' Monaco theme are all derived from this reference.
+Annotated feedback screenshot (v1.2 requirements source)
+  specs/assets/v1.2-annotated-feedback.png
+  Shared 2026-03-31. Shows the running app with six red-box annotations that define
+  all v1.2 work. Each section below maps directly to one annotation.
 
 ---
 
@@ -50,181 +38,213 @@ code on one side and output on the other.
 
 UI Layout
 
-Three-panel layout, inspired by Swift Playgrounds:
-
-┌──────────────────────────────────────────────────────────┐
-│  toolbar: [≡]  Rust Playground  [● idle]  [▶ Run / ■ Stop] │
-├──────────────┬──────────────────────┬─────────────────────┤
-│  sidebar     │   editor (Monaco)    │  output panel        │
-│              │                      │                       │
-│  • hello     │  fn main() {         │  > cargo run hello    │
-│  ● chapter3  │      println!(...)   │  Hello, world!        │
-│  • chapter4  │  }                   │                       │
-│  • ...       │  ~~~ error squiggle  │                       │
-│  [+ New]     │                      │  [✕ Clear]            │
-└──────────────┴──────────────────────┴─────────────────────┘
-
-● = unsaved changes indicator
-
-Panels:
-- Sidebar (left)   — playground list, new button, right-click menu, collapsible
-- Editor (center)  — Monaco editor, Rust syntax highlighting, live error squiggles
-- Output (right)   — stdout (white), stderr (red), compiler errors (amber), streaming
-
-Toolbar:
-- App name / hamburger menu (left) — opens settings
-- Status indicator: idle / checking / compiling / running / error (center)
-- Run button → becomes Stop button while running (never both visible at once)
-- Keyboard: Cmd+R to run, Cmd+. to stop, Cmd+S to save, Cmd+N to new playground
+┌─────────────────────────────────────────────────────────────────────────┐
+│  RS  Rust Playground  │  [💾 Save]  │  /path/to/cargo ▾  │  [▶ Run]    │
+├──────────────┬──────────────────────────────┬──────────────────────────┤
+│  Playgrounds │  [tab] hello  [tab] chapter3 │  Console                 │
+│  ───────── │  ──────────────────────────  │                           │
+│  🔍 Filter  │                              │  ┌─ Run #3 ──────────── ▾┐│
+│             │   fn main() {                │  │ ▶ cargo run hello      ││
+│  RS hello   │     println!("hi");          │  │ hi                     ││
+│  RS chapter3│   }                          │  └───────────────────────┘│
+│  RS chapter4│                              │                           │
+│  ...        │                              │  ┌─ Run #2 ──────────── ▸┐│
+│             │                              │  │ (collapsed)            ││
+│  ─────────  │                              │  └───────────────────────┘│
+│  Cargo.toml │                              │                           │
+└──────────────┴──────────────────────────────┴──────────────────────────┘
 
 ---
 
-Playground Management
+Toolbar (v1.2)
 
-Sidebar right-click context menu on any playground:
-- Rename — inline rename in sidebar, updates src/bin/<old>.rs → src/bin/<new>.rs
-- Delete — confirmation dialog, removes src/bin/<name>.rs
-- Duplicate — creates src/bin/<name>_copy.rs, selects it in editor
+Left:   RS badge + "Rust Playground" app name
+Centre: [💾 Save] button — explicit save, always visible, disabled when clean
+        Cargo/Rust path display — shows active toolchain path, click to pick different
+        distribution or toolchain (stable / beta / nightly / custom path)
+Right:  [▶ Run] / [■ Stop] — never both visible
 
-New playground ([+ New] button):
-- Prompts for name (inline input in sidebar)
-- Creates src/bin/<name>.rs with fn main() template
-- Loads it in editor, ready to type
+Save button behaviour:
+- Always visible in toolbar (not hidden behind Cmd+S only)
+- Disabled (greyed) when no unsaved changes in active tab
+- Enabled (white) when active tab is dirty
+- Cmd+S remains as keyboard shortcut — both routes do the same thing
 
-Empty state (no playgrounds):
-- Editor area shows: "No playgrounds yet — click [+ New] to create your first one"
-- Sidebar shows only the [+ New] button
-
----
-
-Live Error Checking
-
-cargo check runs automatically in the background as you type (debounced 500ms after
-last keystroke). Errors and warnings are surfaced inline in Monaco as squiggles — red
-for errors, amber for warnings — with hover tooltips showing the message.
-
-This is not live execution. No binary is compiled or run. cargo check is type-checking
-only — fast, no side effects. The same data RustRover (JetBrains) uses under the hood.
-
-Levels:
-- v1.0  cargo check debounced on change → Monaco markers (inline squiggles + hover)
-- v2.0  rust-analyzer LSP → full inline hints, completions, go-to-definition (RustRover-level)
+Toolchain picker (click on path in toolbar):
+- Popover lists: detected toolchains (stable, beta, nightly if installed via rustup)
+  plus any custom paths previously saved
+- [Browse…] option opens file picker for a custom cargo binary
+- Selected toolchain stored in app config, used for all cargo invocations
+- Shows Rust version next to each entry (e.g. "stable  1.78.0")
 
 ---
 
-Toolchain Setup
+Sidebar (v1.2)
 
-On first launch the app detects whether a Rust toolchain is present and guides the user
-through setup if needed. The goal: zero manual terminal steps for a new user.
+Top section — playground list (unchanged from v1.1):
+- Search/filter bar
+- Playground items with RS badge, blue pill selection
+- Right-click context menu: Rename, Duplicate, Delete
 
-First-run wizard (shown once, skipped on subsequent launches if toolchain is configured):
+Bottom section — Cargo.toml viewer:
+- Pinned at the bottom of the sidebar, always visible
+- Shows the workspace Cargo.toml (the one that governs all playgrounds)
+- Read-only view by default — syntax highlighted, scrollable
+- Double-click or [Edit] button to open in editor tab for editing
+- Useful for: checking/adding dependencies without leaving the app
 
-  App launches → detect Rust
-        │
-        ├─ Found → "Rust <version> found at <path>"
-        │           [Use this]  [Choose a different path]
-        │
-        └─ Not found → "Rust is not installed"
-                        [Install via rustup]       ← downloads + runs rustup-init, streams progress
-                        [Choose existing path]     ← file picker for custom / nvm-style installs
-                        [Open rustup.rs manually]  ← opens browser, user installs themselves
-
-Install via rustup:
-- Downloads rustup-init for the current platform from static.rust-lang.org
-- Runs it non-interactively (rustup-init -y --no-modify-path)
-- Streams install progress to the wizard UI
-- On completion, verifies cargo is callable and records the path
-
-Settings panel (hamburger menu → Settings):
-- Toolchain: current cargo path + version, [Detect again], [Change path]
-- Appearance: theme (dark / light / system), editor font size, tab size
-- Toolchain path stored in Tauri app config, used for all cargo invocations
+Divider between the two sections is a fixed separator — not draggable in v1.2.
 
 ---
 
-Settings
+New Playground flow (fix)
 
-Accessible via hamburger menu (top-left) or Cmd+,:
+Current behaviour (broken): the "+ Add playground from the sidebar" empty-state
+hint text does not work — clicking it or the + button does not reliably open a
+new playground.
 
-Toolchain
-- Current cargo path and Rust version
-- [Detect again] — re-runs detection
-- [Change path] — file picker
-
-Appearance
-- Theme: Dark / Light / System (default: System)
-- Editor font size: 12 / 13 / 14 / 16 / 18 (default: 14)
-- Tab size: 2 / 4 (default: 4)
-
----
-
-Keyboard Shortcuts
-
-Cmd+R        Run current playground
-Cmd+.        Stop running playground
-Cmd+S        Save current playground (without running)
-Cmd+N        New playground
-Cmd+W        Close / deselect current playground
-Cmd+,        Open settings
-Cmd+\        Toggle sidebar
+Required behaviour:
+- Sidebar + button (SVG icon, top-right of sidebar header) opens an inline name
+  input in the sidebar list
+- Cmd+N does the same
+- Input validated on Enter: must match [a-z][a-z0-9_]*, max 64 chars
+- On confirm: creates src/bin/<name>.rs with fn main() template, opens as new tab
+- On Escape or blur with empty input: cancels silently
+- Empty state "create a new one" link in editor area triggers the same flow
 
 ---
 
-Architecture (see architecture.md for full detail)
+Keyboard shortcuts (verify all work)
 
-- Tauri 2.0     — app shell, Rust backend, macOS WKWebView
-- Svelte        — frontend UI framework (lean, no virtual DOM)
-- Monaco Editor — code editor (same engine as VS Code)
-- Backend       — existing runner logic wrapped as Tauri commands
-- Playgrounds   — src/bin/<name>.rs, unchanged from CLI version
-- Streaming     — Tauri event system streams stdout/stderr line by line to the UI
-- Live check    — cargo check runs debounced, errors piped back as Monaco markers
+The empty state shortcut grid shows ⌘N / ⌘R / ⌘S. All three must work:
 
----
+Cmd+N   New playground — opens inline name input in sidebar
+Cmd+R   Run active playground (save first, then cargo run)
+Cmd+S   Save active playground — same as clicking Save button
+Cmd+.   Stop running playground
+Cmd+W   Close active tab (prompt if dirty)
+Cmd+,   Open settings
+Cmd+\   Toggle sidebar
 
-Constraints
-
-Product
-- macOS only for v1.0
-- CLI/script playgrounds only — fn main(), stdout/stderr output
-- Live error checking via cargo check — not live execution
-- Explicit Run button / Cmd+R for execution
-- Playground files are the source of truth — editor saves back to src/bin/<name>.rs
-
-Technical
-- Tauri 2.0
-- Svelte + Vite for frontend
-- Monaco Editor for code editing
-- Rust toolchain: detected, installed via rustup, or user-specified — not bundled
-- App ships as a .app / .dmg
+Each shortcut must work when focus is in the editor, sidebar, or output panel.
+Monaco intercepts keys by default — Cmd+R and Cmd+S are already overridden;
+verify Cmd+N is not consumed by Monaco when editor is focused.
 
 ---
 
-Acceptance Criteria
-See acceptance-criteria.md
+Console — block-based interface (v1.2)
+
+Current behaviour: a flat scrolling list of lines, appended per run with a
+divider. Hard to distinguish compiler output from program output; older runs
+are equally prominent as new ones.
+
+New behaviour: each run is a self-contained collapsible block.
+
+Block structure (one block per run):
+
+  ┌─ Run #3  ▶ cargo run hello  2026-03-31 14:41  ─────────────────── ▾ ┐
+  │                                                                       │
+  │  ┌─ Compiler ──────────────────────────────────────────────────── ▾ ┐│
+  │  │  Compiling hello v0.1.0                                          ││
+  │  │  Finished in 0.4s                                                ││
+  │  └──────────────────────────────────────────────────────────────────┘│
+  │                                                                       │
+  │  ┌─ Output ────────────────────────────────────────────────────── ▾ ┐│
+  │  │  Hello, world!                                                   ││
+  │  └──────────────────────────────────────────────────────────────────┘│
+  │                                                                       │
+  └───────────────────────────────────────────────────────────────────────┘
+
+Collapsing rules:
+- Latest run: expanded by default (both Compiler and Output sub-blocks open)
+- Previous runs: outer block collapses to header only on new run start
+- User can manually expand/collapse any block at any time
+- Collapsed header shows: run number, command, timestamp, exit status (✓ or ✗)
+
+Sub-blocks within a run:
+- Compiler — cargo compile output (stdout/stderr from cargo itself before the
+  binary runs): "Compiling…", "Finished", "error[E…]" lines
+- Output — stdout and stderr from the running binary itself
+- If compilation fails: Compiler block shows errors in red, Output block absent
+
+Error/warning styling within Compiler block:
+- error[E…] lines: red
+- warning: lines: amber
+- note: lines: dim white
+- Finished / Compiling lines: dim (tertiary text colour)
+
+Clear button:
+- Clears all run blocks for the active tab
+- Confirmation not required (history is not persisted to disk anyway)
 
 ---
 
-Exclusions
-- No live execution — running the binary on every keystroke
-- No rust-analyzer LSP in v1.0 — cargo check is sufficient
-- No inline result values (Swift Playgrounds AI feature)
-- No dependency management UI — edit Cargo.toml manually for now
-- No debugger
-- No git integration
-- No multi-file playgrounds
-- No Windows / Linux support in v1.0
-- No bundled Rust toolchain — toolchain is detected, installed via rustup, or user-specified
+Acceptance Criteria (v1.2 additions)
+
+TOOLBAR — SAVE BUTTON
+[ ] Save button visible in toolbar at all times when a tab is open
+[ ] Save button disabled (greyed) when active tab has no unsaved changes
+[ ] Save button enabled when active tab is dirty
+[ ] Clicking Save button saves file and clears dirty state — same as Cmd+S
+[ ] Cmd+S still works as keyboard shortcut
+
+TOOLBAR — TOOLCHAIN PICKER
+[ ] Toolbar shows current cargo path (truncated if long)
+[ ] Clicking path opens a popover listing available toolchains
+[ ] Each entry shows channel name and Rust version
+[ ] Selecting an entry switches the active toolchain for future runs
+[ ] [Browse…] opens file picker for custom cargo binary
+[ ] Invalid path rejected with error message
+
+NEW PLAYGROUND (fix)
+[ ] Clicking + in sidebar header opens inline name input in sidebar list
+[ ] Cmd+N opens the same inline input
+[ ] Input validates on Enter: [a-z][a-z0-9_]*, max 64 chars
+[ ] Invalid name shows inline error message
+[ ] Escape cancels without creating anything
+[ ] Created playground opens as a new tab immediately
+[ ] "create a new one" link in editor empty state triggers the same flow
+
+KEYBOARD SHORTCUTS
+[ ] Cmd+N creates new playground when editor is focused
+[ ] Cmd+R runs active playground when editor is focused
+[ ] Cmd+S saves active playground when editor is focused
+[ ] Cmd+. stops running playground
+[ ] Cmd+W closes active tab (prompts if dirty)
+[ ] All shortcuts work when sidebar or output panel is focused too
+
+CONSOLE — BLOCK INTERFACE
+[ ] Each run appears as a distinct collapsible block with header
+[ ] Block header shows: run number, command, timestamp, exit status
+[ ] Latest run block is expanded by default
+[ ] Previous run blocks auto-collapse when a new run starts
+[ ] User can manually expand/collapse any block
+[ ] Compiler sub-block and Output sub-block are separate within each run
+[ ] Compiler errors shown in red within Compiler block
+[ ] Warnings shown in amber within Compiler block
+[ ] Output sub-block absent when compilation fails
+[ ] Clear button removes all blocks for active tab
+
+SIDEBAR — CARGO.TOML
+[ ] Cargo.toml section pinned at bottom of sidebar
+[ ] Shows workspace Cargo.toml content with syntax highlighting
+[ ] Scrollable independently of playground list
+[ ] Double-click or [Edit] opens Cargo.toml as an editor tab
+
+---
+
+Exclusions (v1.2)
+- No Cargo.toml editing directly inline in the sidebar panel (open as tab instead)
+- No per-playground Cargo.toml (workspace model unchanged)
+- No toolchain installation from the picker — picker selects from already-installed only
+- No drag to reorder run blocks
 
 ---
 
 Notes
-- Svelte chosen over React for leanness — less boilerplate, no virtual DOM
-- Monaco is the right editor — Rust syntax highlighting built in, LSP-ready for v2.0
-- RustRover (JetBrains) is the target experience for v2.0 — rust-analyzer LSP
-- cargo check debounce: 500ms is the right balance — responsive but not thrashing
-- Output streaming is critical UX — do not wait for process to finish before showing output
-- Stop button replaces Run button (never both) — Cmd+. is macOS stop convention
-- Panel resize drag-and-drop, persistent across sessions (Tauri store plugin)
-- Window size + position persisted across restarts
-- Unsaved dot (●) follows VS Code / RustRover convention — familiar to developers
+- Toolchain picker is display + selection only in v1.2; installation via rustup wizard
+  remains a v1.x backlog item
+- Block-based console is the biggest UX change — implement incrementally: outer run
+  blocks first, then Compiler/Output sub-blocks
+- Cargo.toml at sidebar bottom is read-mostly; full editing via tab open is sufficient
+- Verify Monaco key intercept for Cmd+N specifically — not previously overridden
