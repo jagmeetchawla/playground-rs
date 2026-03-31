@@ -1,7 +1,7 @@
 SPECIFICATION
 
 Status
-- Version: v1.4 draft
+- Version: v1.4 draft (revised)
 - Date: 2026-03-31
 - Owner: Jagmeet Chawla
 
@@ -40,166 +40,169 @@ code on one side and output on the other.
 
 UI Layout (v1.4)
 
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│  RS  Rust Playground    │  ⊙ cargo 1.x.x  │            [💾 Save]  [▶ Run]          │
-├──────────────────┬──────────────────────────────┬──────────────────────────────────┤
-│  Playgrounds     │  [tab] hello2.rs  [tab] …  × │  Console                  Clear  │
-│  ─────────────── │  ─────────────────────────── │                                  │
-│  🔍 Filter       │                              │  ▸ Run #1  cargo run…  15:32 ✓   │
-│                  │   fn main() {                │  ▾ Run #2  cargo run…  15:34 ✓   │
-│  RS hello2   ▾   │     let path = content_dir() │    COMPILER                      │
-│  ├ 📄 data.txt   │       + "/data.txt";         │      Compiling…                  │
-│  ├ 📄 config.json│     …                        │    OUTPUT                        │
-│  └ [+ Add File]  │   }                          │      Hello from hello2!!         │
-│                  │                              │                                  │
-│  RS chapter3 ▸   │                              │                                  │
-│  RS hello    ▸   │                              │                                  │
-│  ...             │                              │                                  │
-│  ─────────────── │                              │                                  │
-│  > Cargo.toml    │                              │                                  │
-└──────────────────┴──────────────────────────────┴──────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│  RS  Rust Playground    │  ⊙ cargo 1.x.x  │           [💾 Save]  [▶ Run]          │
+├─────────────────────┬───────────────────────────────┬──────────────────────────────┤
+│  Playgrounds│Content │  [tab] hello2.rs  [tab] …  × │  Console               Clear │
+│  ───────────┴─────── │  ─────────────────────────── │                              │
+│                      │                              │  ▸ Run #1  cargo run  15:32 ✓ │
+│  (Playgrounds tab)   │   fn main() {                │  ▾ Run #2  cargo run  15:34 ✓ │
+│  🔍 Filter           │     let dir = env::var(      │    COMPILER                  │
+│  RS hello2  ●        │       "PLAYGROUND_CONTENT"); │      Compiling…              │
+│  RS chapter3         │     …                        │    OUTPUT                    │
+│  RS hello            │   }                          │      Hello!                  │
+│  ...                 │                              │                              │
+│  ─────────────────── │                              │                              │
+│  > Cargo.toml        │                              │                              │
+│                      │                              │                              │
+│  (Content tab)       │                              │                              │
+│  📄 data.txt         │                              │                              │
+│  📄 config.json      │                              │                              │
+│  🖼 photo.png        │                              │                              │
+│  [+ New File]        │                              │                              │
+│  [drop files here]   │                              │                              │
+└─────────────────────┴───────────────────────────────┴──────────────────────────────┘
 
 ---
 
-Feature: Playground Content Folder (v1.4)
+Sidebar — Two-Tab Design (v1.4)
 
-Motivation
-Some playgrounds need supporting files to be useful — configuration, sample data, CSV
-files, JSON fixtures, images. Swift Playgrounds solves this with an "assets" folder
-per playground. We solve it the same way: each playground gets a `content/` subfolder
-in the workspace. Files placed there are accessible to the running program at runtime.
+The left sidebar has two tabs across the top:
+
+  [ Playgrounds ]  [ Content ]
+
+These are the only two views of the sidebar. The tab strip is always visible.
+Switching between them never changes the active playground — context is preserved.
+
+──────────────────────────────────────────
+Tab 1: Playgrounds  (unchanged from v1.3)
+──────────────────────────────────────────
+
+Same as before:
+- Search/filter bar
+- Playground items: RS badge, blue pill selection, dirty dot ●
+- Right-click context menu: Rename, Duplicate, Delete
+- + button in header: opens inline name input to create new playground
+- Cargo.toml section pinned at bottom (collapsible, Edit button)
+
+No per-playground content file expansion in this tab.
+The playground list stays clean — filenames do not appear here.
+
+──────────────────────────────────────────
+Tab 2: Content
+──────────────────────────────────────────
+
+Shows the content folder for the currently selected playground.
+If no playground is selected, shows an empty state: "Select a playground to view
+its content files."
+
+Header:
+  Content — hello2        ← playground name in subtitle, updates on selection change
+
+File list:
+  📄 data.txt
+  📄 config.json
+  🖼 photo.png
+  📦 archive.zip
+
+File type icons (by extension):
+  📄  any text-ish: .txt .md .csv .log .toml .yaml .yml .json .xml .html .rs
+  🖼  .png .jpg .jpeg .gif .webp .svg
+  📦  everything else (binary / unknown)
+
+File interactions:
+  Click text file (📄)    → open as editor tab in the main editor area
+  Click image file (🖼)   → open with macOS default app (shell::open)
+  Click binary file (📦)  → reveal in Finder
+  Right-click any file    → context menu: Rename / Delete / Reveal in Finder
+
+New file button:
+  [+ New File] pinned at the bottom of the list.
+  Opens an inline name input directly in the file list (same pattern as new playground):
+    - Text input appears at the bottom of the list, auto-focused.
+    - Placeholder: "filename.txt"
+    - Enter: validate → create empty file → open as editor tab if text type.
+    - Escape / blur with empty input: cancel silently.
+    - Duplicate name: inline error "Already exists".
+    - Name with / \ or null bytes: inline error "Invalid name".
+
+Drag and drop:
+  The entire Content tab pane is a drop zone.
+  User drags one or more files from Finder and drops onto the Content tab.
+  Each file is copied (not moved) into content/<playground>/.
+  Name collision: appended _1, _2… suffix — no silent overwrite.
+  A subtle dashed border appears on the pane while files are dragged over it.
+
+Empty content folder state:
+  When no files exist yet:
+
+    Drop files here
+    or [+ New File]
+
+  Instructional, not just blank.
+
+Auto-switch to Content tab:
+  When a user opens a content file from any path (e.g. future file picker),
+  the sidebar switches to the Content tab automatically so the file is visible
+  in context. The playground tab is not auto-switched.
 
 ---
 
-Folder Structure
+Folder Structure (unchanged from initial v1.4 design)
 
-  workspace/                    ← ~/Library/Application Support/…/workspace/
+  workspace/
     Cargo.toml
-    src/
-      bin/
-        hello2.rs
-        chapter3.rs
-        …
-    content/                    ← NEW: one subfolder per playground
-      hello2/
+    src/bin/
+      hello2.rs
+      chapter3.rs
+    content/
+      hello2/          ← content for hello2 playground
         data.txt
         config.json
-      chapter3/
+      chapter3/        ← content for chapter3 playground
         input.txt
-      …
 
 Rules:
-- The `content/` folder at workspace root is created lazily (on first file add).
-- Each playground's subfolder `content/<name>/` is created when the playground is
-  created or on first file add (whichever comes first).
-- Content folders are not deleted when a playground is deleted — user must clean
-  up manually in v1.4. (Future: prompt on playground delete.)
-- Renaming a playground renames its content subfolder atomically with the source rename.
+- content/<name>/ is created on first file add (lazy).
+- Renaming a playground renames its content subfolder atomically.
+- Deleting a playground does NOT delete its content folder in v1.4 (noted limitation).
 
 ---
 
 Runtime Access — PLAYGROUND_CONTENT env var
 
-When `run_playground` executes a binary, the runner injects:
+When run_playground runs a binary it injects:
 
   PLAYGROUND_CONTENT=/absolute/path/to/workspace/content/<name>
 
-The binary then reads files portably:
+The playground reads files portably:
 
-  use std::env;
+  use std::{env, fs};
 
   fn main() {
       let dir = env::var("PLAYGROUND_CONTENT").unwrap_or_default();
-      let data = std::fs::read_to_string(format!("{dir}/data.txt")).unwrap();
+      let data = fs::read_to_string(format!("{dir}/data.csv")).unwrap();
       println!("{data}");
   }
 
-The app auto-generates a helper comment at the top of every new playground:
-
-  // Content folder: use env::var("PLAYGROUND_CONTENT") to get the path.
-
-This hint only appears in the fn main() template — it is not injected at runtime or
-added to existing playgrounds.
+New playground template includes a hint comment:
+  // Files in your content folder are available via:
+  // let dir = std::env::var("PLAYGROUND_CONTENT").unwrap_or_default();
 
 ---
 
-Sidebar — Content Files Section
+Editor Integration (content text files)
 
-The sidebar playground list item expands to show its content files.
-
-Collapsed state (default):
-  RS hello2  ▸        ← chevron shows content is collapsed, badge shows file count if >0
-                        e.g. RS hello2  ▸ [2]
-
-Expanded state (active playground or manually expanded):
-  RS hello2  ▾
-  ├ 📄 data.txt
-  ├ 🖼 photo.png
-  └ [+ Add File]      ← always last item; opens add-file flow
-
-File type icons (by extension):
-  📄  .txt .md .csv .log .toml .yaml .yml .json .xml .html .rs (any text-ish)
-  🖼  .png .jpg .jpeg .gif .webp .svg
-  📦  everything else (binary / unknown)
-
-Interactions:
-- Click on a text file (📄)     → open as editor tab (language auto-detected by ext)
-- Click on image file (🖼)      → open in a simple preview panel (v1.4 basic: just open
-                                   with macOS default app via shell::open)
-- Click on binary file (📦)     → reveal in Finder
-- Right-click on any file       → context menu: Rename / Delete / Reveal in Finder
-- Drag file from Finder         → accepted; copies file into content/<name>/ folder
-- [+ Add File]                  → opens the add-file flow (see below)
-
-Only the selected playground auto-expands its content section. Others stay collapsed.
-Clicking the chevron on any playground toggles its content section independently.
-
----
-
-Add File Flow
-
-Two entry points both show the same inline UI in the sidebar:
-
-  A) [+ Add File] in the content section
-  B) "New file" option in future (v1.5+) — placeholder only in v1.4
-
-Inline flow:
-1. A text input appears below the last file, pre-focused.
-2. Placeholder: "filename.txt"
-3. On Enter: validate the name (see below), create the file, open as editor tab.
-4. On Escape / blur with empty name: cancel silently.
-
-File name validation:
-- Must not be empty.
-- Must not contain path separators (/ or \) or null bytes.
-- No length limit beyond filesystem constraints (255 chars).
-- No restriction on extension or case — anything is valid.
-- If a file with that name already exists: show inline error "Already exists".
-
-File creation:
-- Creates an empty file at content/<name>/<filename>.
-- For text-ish extensions (.txt .md .rs .json .csv .toml etc.): opens as editor tab.
-- For others: just creates the file, shows it in the list.
-
-Import existing file (drag-and-drop):
-- User drags a file from Finder onto the playground item in the sidebar.
-- File is copied (not moved) into content/<name>/.
-- If a file with the same name exists: append _1, _2, … suffix (no silent overwrite).
-- Tauri file drop events handle the drag target; the drop zone is the entire sidebar
-  item row (or the content sub-list if already expanded).
-
----
-
-Editor Integration
-
-Opening a content text file in an editor tab:
-- Tab label: just the filename (e.g. "data.txt") — no RS badge, use a 📄 badge instead.
-- Language auto-detected from extension:
-    .rs → rust,  .json → json,  .toml → ini (Monaco),  .md → markdown,
-    .csv .txt .log → plaintext,  .yaml .yml → yaml,  all others → plaintext
-- Saved via a new backend command `save_content_file(name, filename, content)`.
-- Dirty state + Cmd+S both work exactly as for playground files.
-- Tab shows dirty ● if unsaved, clears on save.
+Opening a content text file:
+- Tab badge: 📄 (not the RS badge used for Rust source files)
+- Tab label: just the filename, e.g. "data.txt"
+- Language auto-detected by extension:
+    .rs → rust   .json → json   .toml → ini   .md → markdown
+    .yaml / .yml → yaml          .csv .txt .log and all others → plaintext
+- Dirty state and Cmd+S work identically to playground source tabs.
+- Save invokes save_content_file(playground_name, filename, content) — not save_playground.
+- Closing a dirty content tab: same behaviour as closing a dirty playground tab
+  (close immediately, no confirm — file on disk is safe).
 
 ---
 
@@ -207,112 +210,111 @@ Backend Commands (new in v1.4)
 
 list_content_files(name: &str) → Result<Vec<ContentFile>>
   ContentFile { filename: String, size_bytes: u64, is_text: bool }
-  Returns files in content/<name>/ sorted alphabetically.
-  Returns empty vec if folder doesn't exist (not an error).
+  Sorted alphabetically. Returns empty vec (not error) if folder missing.
 
 create_content_file(name: &str, filename: &str) → Result<()>
-  Creates an empty file at content/<name>/<filename>.
-  Creates the content/<name>/ dir if missing.
+  Creates empty file at content/<name>/<filename>.
+  Creates content/<name>/ dir if missing.
   Returns Err if filename already exists.
 
 save_content_file(name: &str, filename: &str, content: &str) → Result<()>
-  Overwrites content/<name>/<filename> with new text content.
+  Overwrites with new text content.
 
 read_content_file(name: &str, filename: &str) → Result<String>
-  Reads content/<name>/<filename> as UTF-8 text.
+  Reads as UTF-8 text.
 
 delete_content_file(name: &str, filename: &str) → Result<()>
-  Deletes the file. Returns Err if not found.
+  Deletes file. Returns Err if not found.
 
-rename_content_file(name: &str, old: &str, new: &str) → Result<()>
-  Renames within same content folder. Returns Err if new name already exists.
+rename_content_file(name: &str, old: &str, new_name: &str) → Result<()>
+  Renames within the same content folder.
+  Returns Err if new name already exists.
 
 import_content_file(name: &str, src_path: &str) → Result<String>
-  Copies file from src_path into content/<name>/. Returns final filename
-  (may differ from original if a name collision was resolved with _1 suffix).
+  Copies from src_path into content/<name>/.
+  Returns final filename (may have _1 suffix if collision resolved).
 
-Security: all filenames pass through the same path-traversal guard as playground names:
+Security: same path-traversal guard as playground names on all filename parameters.
   - Reject names containing / \ or null bytes.
-  - Canonicalize destination path and verify it stays inside content/<name>/.
+  - Canonicalize and verify destination stays inside content/<name>/.
 
----
-
-run_playground change
-
-In the existing run_playground command, before spawning the cargo process, set:
-
-  cmd.env("PLAYGROUND_CONTENT", workspace_dir.join("content").join(name))
-
-No other change to the run flow.
+run_playground change:
+  cmd.env("PLAYGROUND_CONTENT", workspace_dir.join("content").join(name));
 
 ---
 
 Acceptance Criteria (v1.4)
 
-FOLDER STRUCTURE
-[ ] content/ folder created at workspace root on first file add
-[ ] content/<name>/ subfolder created per playground
-[ ] Renaming a playground renames its content subfolder atomically
-[ ] Deleting a playground does NOT delete its content folder (v1.4 limitation, noted)
+SIDEBAR TABS
+[ ] Two tabs visible at top of sidebar: "Playgrounds" and "Content"
+[ ] Switching tabs does not change the active playground
+[ ] Playgrounds tab is unchanged from v1.3
+[ ] Content tab header shows "Content — <playground name>"
+[ ] Content tab shows empty state when no playground is selected
+[ ] Content tab shows empty drop-zone state when folder is empty
 
-RUNTIME
-[ ] PLAYGROUND_CONTENT env var is set when running any playground
-[ ] Value is the absolute path to content/<name>/
-[ ] Playground can read files via env::var("PLAYGROUND_CONTENT")
-[ ] New playground template includes the content-dir hint comment
+CONTENT FILE LIST
+[ ] Files listed with correct 📄 🖼 📦 icons
+[ ] Clicking text file opens as editor tab
+[ ] Clicking image file opens with macOS default app
+[ ] Clicking binary file reveals in Finder
+[ ] Right-click: Rename / Delete / Reveal in Finder
 
-SIDEBAR — CONTENT SECTION
-[ ] Active playground auto-expands to show its content files
-[ ] Collapsed playground shows file count badge if it has content files
-[ ] 📄 🖼 📦 icons shown by file type
-[ ] [+ Add File] button at bottom of content list
-[ ] Right-click on file: Rename, Delete, Reveal in Finder
-
-ADD FILE FLOW
-[ ] [+ Add File] opens inline name input in sidebar
-[ ] Enter creates file and opens as editor tab (if text type)
+NEW FILE
+[ ] [+ New File] opens inline input at bottom of file list
+[ ] Enter validates name and creates file
+[ ] Text files open as editor tab immediately on creation
 [ ] Escape cancels silently
-[ ] Duplicate filename shows inline error
-[ ] Filename with path separators (/) rejected
+[ ] Duplicate name shows inline error "Already exists"
+[ ] Name with / or \ shows inline error "Invalid name"
 
 DRAG AND DROP
-[ ] Dragging a file from Finder onto a playground item copies it to content/<name>/
-[ ] Name collision resolved with _1 suffix (no silent overwrite)
+[ ] Entire Content tab pane is a drop zone
+[ ] Dashed highlight border appears on drag-over
+[ ] Files dropped are copied into content/<playground>/
+[ ] Name collision resolved with _1 suffix (no overwrite)
+[ ] Multiple files can be dropped at once
 
-EDITOR TAB FOR CONTENT FILES
-[ ] Text content files open as editor tabs
-[ ] Tab shows 📄 badge instead of RS badge
-[ ] Language detected from file extension
-[ ] Dirty state and Cmd+S save work correctly
-[ ] save_content_file invoked (not save_playground)
+EDITOR TABS FOR CONTENT FILES
+[ ] Tab shows 📄 badge (not RS)
+[ ] Language auto-detected from extension
+[ ] Dirty state and Cmd+S work correctly
+[ ] save_content_file invoked on save (not save_playground)
 
-IMAGE / BINARY FILES
-[ ] Clicking image file opens with macOS default app (shell::open)
-[ ] Clicking binary file reveals in Finder
+RUNTIME
+[ ] PLAYGROUND_CONTENT env var injected on run
+[ ] Points to correct absolute path for the active playground
+[ ] New playground template includes the hint comment
+
+FOLDER STRUCTURE
+[ ] content/<name>/ created on first file add
+[ ] Renaming playground renames content subfolder
+[ ] Deleting playground does not delete content folder
 
 BACKEND SECURITY
-[ ] All content filenames validated against path-traversal attack
-[ ] Canonicalized paths verified to stay within content/<name>/ boundary
+[ ] Path-traversal guard on all content filenames
+[ ] Canonicalized paths verified to stay within content/<name>/
 
 ---
 
 Exclusions (v1.4)
-- No inline image preview in the app itself — delegate to macOS
-- No drag-and-drop reordering of content files
-- No content folder size limits or quotas
-- No deletion of content folder on playground delete (warn only)
+- No inline image preview inside the app — delegate to macOS
+- No drag to reorder content files
+- No content folder deletion on playground delete (v1.4 limitation)
 - No shared/global content folder — content is per-playground only
 - No binary file editing in Monaco
 
 ---
 
 Notes
-- The PLAYGROUND_CONTENT env var pattern matches how many tools expose context to
-  subprocesses (e.g. CARGO_MANIFEST_DIR). It's simple, portable, and requires no
-  magic from the runner.
-- Drag-and-drop in Tauri uses the file-drop feature of the webview — must be enabled
-  in tauri.conf.json: `"fileDropEnabled": true` under windows config.
-- Monaco language IDs: "rust", "json", "ini" (for TOML), "markdown", "yaml",
-  "plaintext". All are built into Monaco, no extra plugins needed.
-- Content files are not tracked in Cargo.toml or any build manifest — they are
-  purely runtime data accessed by the binary.
+- The two-tab sidebar design keeps the playground list uncluttered — file browsing
+  has its own dedicated space rather than expanding inline under each playground.
+  This is the same pattern used by many IDEs (VS Code Explorer vs Search tabs).
+- The Content tab always reflects the currently selected playground — it follows
+  selection, it does not drive it.
+- Drag-and-drop in Tauri requires fileDropEnabled: true in tauri.conf.json under
+  the window configuration.
+- Monaco language IDs used: "rust", "json", "ini" (TOML), "markdown", "yaml",
+  "plaintext". All built-in, no extra plugins needed.
+- The PLAYGROUND_CONTENT env var pattern is inspired by CARGO_MANIFEST_DIR — a
+  well-known convention for giving subprocesses their own path context.
