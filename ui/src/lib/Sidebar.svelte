@@ -113,6 +113,13 @@
   let newFileError: string = $state('')
   let newFileInputEl: HTMLInputElement | null = $state(null)
 
+  let contentSearch: string = $state('')
+  let filteredFiles = $derived(
+    contentSearch.trim() === ''
+      ? contentFiles
+      : contentFiles.filter(f => f.filename.toLowerCase().includes(contentSearch.toLowerCase()))
+  )
+
   let fileContextMenu: { x: number; y: number; filename: string } | null = $state(null)
   let renamingFile: string | null = $state(null)
   let renameFileValue: string = $state('')
@@ -417,6 +424,20 @@
       </button>
     </div>
 
+    <div class="search-wrap">
+      <svg class="search-icon" width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      <input
+        class="search-input" type="search" placeholder="Filter"
+        bind:value={contentSearch} onclick={(e) => e.stopPropagation()}
+      />
+      {#if contentSearch}
+        <button class="search-clear" onclick={() => contentSearch = ''}>×</button>
+      {/if}
+    </div>
+
     <!-- Drop zone wraps the whole file list area -->
       <div
         class="content-pane"
@@ -434,7 +455,7 @@
           <div class="content-loading">Loading…</div>
 
         {:else if contentFiles.length === 0 && !creatingFile}
-          <div class="content-empty-drop">
+          <div class="content-empty-drop" class:hidden={contentSearch.trim() !== ''}>
             <div class="drop-icon">
               <svg width="32" height="32" viewBox="0 0 32 32" fill="none" opacity="0.3">
                 <rect x="4" y="2" width="20" height="26" rx="3" stroke="currentColor" stroke-width="1.5"/>
@@ -449,7 +470,10 @@
 
         {:else}
           <ul class="file-list">
-            {#each contentFiles as file (file.filename)}
+            {#if filteredFiles.length === 0 && contentSearch.trim() !== ''}
+              <li class="empty-hint">No matches</li>
+            {/if}
+            {#each filteredFiles as file (file.filename)}
               <li
                 class="file-item"
                 onclick={() => clickFile(file)}
@@ -855,6 +879,8 @@
     border: 1px solid rgba(10,132,255,0.4);
     border-radius: var(--radius-sm); padding: 8px 16px;
   }
+
+  .hidden { display: none; }
 
   /* ── Context menus ── */
   .context-menu {
