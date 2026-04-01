@@ -6,12 +6,12 @@ Active specs live in specifications.md. Completed specs live in archive/.
 
 ---
 
-IN PROGRESS
-───────────
+RELEASED
+────────
 
 v0.1.5 — Multiple Projects + Unified Storage
-  Status: implementation in progress
-  See specifications.md
+  Status: complete — released 2026-04-01
+  See specs/archive/specs-v0.1.5.md
 
 
 ---
