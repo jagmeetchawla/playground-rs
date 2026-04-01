@@ -1,7 +1,7 @@
 SPECIFICATION
 
 Status
-- Version: v1.5
+- Version: v0.1.5
 - Date: 2026-03-31
 - Owner: Jagmeet Chawla
 
@@ -33,7 +33,7 @@ axum. Projects make the tool genuinely useful across domains without dependency 
 
 ---
 
-Core Concept Change: Projects (v1.5)
+Core Concept Change: Projects (v0.1.5)
 
 A Project is an independent Rust package with:
   - Its own Cargo.toml  (and thus its own dependency set)
@@ -84,7 +84,7 @@ Rules:
 
 ---
 
-UI Layout (v1.5)
+UI Layout (v0.1.5)
 
 ┌────────────────────────────────────────────────────────────────────────────────────┐
 │  RS  [ default ▾ ]          │  ⊙ cargo 1.x.x  │         [💾 Save]  [▶ Run]        │
@@ -205,9 +205,9 @@ ensure_workspace() is renamed ensure_project() and called:
 
 Migration note:
   Dev-mode users who had playgrounds in src/bin/ (repo root) will not see them
-  after upgrading to v1.5 — those files are in a different location. Users
+  after upgrading to v0.1.5 — those files are in a different location. Users
   should manually copy src/bin/*.rs files into the new project's folder if needed.
-  v1.5 creates a fresh "default" project on first launch.
+  v0.1.5 creates a fresh "default" project on first launch.
 
 ---
 
@@ -234,7 +234,7 @@ No changes to:
 
 ---
 
-Acceptance Criteria (v1.5)
+Acceptance Criteria (v0.1.5)
 
 STORAGE
 [ ] App Support used in both dev and release mode
@@ -276,7 +276,7 @@ EXISTING FUNCTIONALITY
 
 ---
 
-Exclusions (v1.5)
+Exclusions (v0.1.5)
 - No project import/export
 - No project templates beyond the default hello world seed
 - No drag to reorder projects in the list

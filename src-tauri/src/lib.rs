@@ -1,42 +1,33 @@
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri::ipc::Channel;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 
-// ── Storage ───────────────────────────────────────────────────────────────────
+// ── App state ─────────────────────────────────────────────────────────────────
 
-const DEFAULT_CARGO_TOML: &str = r#"[package]
-name = "playgrounds"
-version = "0.1.0"
-edition = "2021"
+/// Holds the currently active project name.  Managed via `app.manage()`.
+struct ActiveProject(Mutex<String>);
 
-# Add dependencies here — every playground can use them.
-[dependencies]
-"#;
-
-const DEFAULT_HELLO: &str = r#"fn main() {
-    println!("Hello, world!");
-}
-"#;
-
-/// New playground template — includes the PLAYGROUND_CONTENT hint.
-fn playground_template(name: &str) -> String {
-    format!(
-        "// Files in your content folder are available via:\n// let dir = std::env::var(\"PLAYGROUND_CONTENT\").unwrap_or_default();\n\nfn main() {{\n    println!(\"Hello from {}!\");\n}}\n",
-        name
-    )
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Config {
+    active_project: String,
 }
 
+// ── Storage paths ─────────────────────────────────────────────────────────────
+
+/// Root of all projects — same path in dev and release.
+fn projects_dir(app: &AppHandle) -> PathBuf {
+    app.path()
+        .app_data_dir()
+        .expect("Could not resolve App Support directory")
+        .join("projects")
+}
+
+/// Active project directory: projects/<active_project_name>/
 fn workspace_dir(app: &AppHandle) -> PathBuf {
-    if cfg!(debug_assertions) {
-        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        manifest.parent().unwrap().to_path_buf()
-    } else {
-        app.path()
-            .app_data_dir()
-            .expect("Could not resolve App Support directory")
-            .join("workspace")
-    }
+    let name = app.state::<ActiveProject>().0.lock().unwrap().clone();
+    projects_dir(app).join(name)
 }
 
 fn bin_dir(app: &AppHandle) -> PathBuf {
@@ -47,31 +38,85 @@ fn content_dir(app: &AppHandle) -> PathBuf {
     workspace_dir(app).join("content")
 }
 
-fn ensure_workspace(app: &AppHandle) -> Result<(), String> {
-    if cfg!(debug_assertions) {
-        return Ok(());
+fn config_path(app: &AppHandle) -> PathBuf {
+    app.path()
+        .app_data_dir()
+        .expect("Could not resolve App Support directory")
+        .join("config.json")
+}
+
+// ── Config persistence ────────────────────────────────────────────────────────
+
+fn load_config(app: &AppHandle) -> Config {
+    let path = config_path(app);
+    if path.exists() {
+        if let Ok(s) = std::fs::read_to_string(&path) {
+            if let Ok(c) = serde_json::from_str::<Config>(&s) {
+                return c;
+            }
+        }
     }
+    Config { active_project: "default".to_string() }
+}
+
+fn save_config(app: &AppHandle, active_project: &str) -> Result<(), String> {
+    let config = Config { active_project: active_project.to_string() };
+    let json = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialise config: {}", e))?;
+    std::fs::write(config_path(app), json)
+        .map_err(|e| format!("Failed to write config.json: {}", e))
+}
+
+// ── Project templates ─────────────────────────────────────────────────────────
+
+fn project_cargo_toml(name: &str) -> String {
+    format!(
+        "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n# Add dependencies here — every playground can use them.\n[dependencies]\n",
+        name
+    )
+}
+
+/// New playground template — includes the PLAYGROUND_CONTENT hint.
+fn playground_template(name: &str) -> String {
+    format!(
+        "// Files in your content folder are available via:\n// let dir = std::env::var(\"PLAYGROUND_CONTENT\").unwrap_or_default();\n\nfn main() {{\n    println!(\"Hello from {}!\");\n}}\n",
+        name
+    )
+}
+
+// ── Project bootstrap ─────────────────────────────────────────────────────────
+
+/// Ensures the active project has the required directory structure.
+/// Creates Cargo.toml + src/bin/hello.rs + content/ if they don't exist yet.
+fn ensure_project(app: &AppHandle) -> Result<(), String> {
     let workspace = workspace_dir(app);
     let bin = bin_dir(app);
+    let content = content_dir(app);
+
     if !bin.exists() {
         std::fs::create_dir_all(&bin)
-            .map_err(|e| format!("Failed to create workspace: {}", e))?;
-        std::fs::write(workspace.join("Cargo.toml"), DEFAULT_CARGO_TOML)
+            .map_err(|e| format!("Failed to create project dirs: {}", e))?;
+        let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
+        std::fs::write(workspace.join("Cargo.toml"), project_cargo_toml(&project_name))
             .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
-        std::fs::write(bin.join("hello.rs"), DEFAULT_HELLO)
+        std::fs::write(bin.join("hello.rs"), playground_template("hello"))
             .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
+    }
+    if !content.exists() {
+        std::fs::create_dir_all(&content)
+            .map_err(|e| format!("Failed to create content dir: {}", e))?;
     }
     Ok(())
 }
 
-// ── Name / filename validation ────────────────────────────────────────────────
+// ── Validation ────────────────────────────────────────────────────────────────
 
 fn validate_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
-        return Err("Playground name cannot be empty".into());
+        return Err("Name cannot be empty".into());
     }
     if name.len() > 64 {
-        return Err("Playground name too long (max 64 chars)".into());
+        return Err("Name too long (max 64 chars)".into());
     }
     let valid = name.chars().enumerate().all(|(i, c)| {
         if i == 0 { c.is_ascii_lowercase() }
@@ -114,7 +159,6 @@ fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBuf, String> 
     Ok(path)
 }
 
-/// Returns the content file path, validating the filename to block traversal.
 fn safe_content_path(filename: &str, app: &AppHandle) -> Result<PathBuf, String> {
     validate_filename(filename)?;
     Ok(content_dir(app).join(filename))
@@ -168,6 +212,124 @@ fn which_cargo() -> Option<PathBuf> {
         })
 }
 
+// ── Project commands ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn list_projects(app: AppHandle) -> Result<Vec<String>, String> {
+    let dir = projects_dir(&app);
+    if !dir.exists() {
+        return Ok(vec![]);
+    }
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| e.file_name().into_string().ok())
+        .collect();
+    names.sort();
+    Ok(names)
+}
+
+#[tauri::command]
+fn get_active_project(app: AppHandle) -> String {
+    app.state::<ActiveProject>().0.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn new_project(name: String, app: AppHandle) -> Result<(), String> {
+    validate_name(&name)?;
+    let project_path = projects_dir(&app).join(&name);
+    if project_path.exists() {
+        return Err(format!("Project '{}' already exists", name));
+    }
+    let bin = project_path.join("src").join("bin");
+    std::fs::create_dir_all(&bin)
+        .map_err(|e| format!("Failed to create project: {}", e))?;
+    std::fs::write(project_path.join("Cargo.toml"), project_cargo_toml(&name))
+        .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
+    std::fs::write(bin.join("hello.rs"), playground_template("hello"))
+        .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
+    std::fs::create_dir_all(project_path.join("content"))
+        .map_err(|e| format!("Failed to create content dir: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn switch_project(name: String, app: AppHandle) -> Result<(), String> {
+    let project_path = projects_dir(&app).join(&name);
+    if !project_path.exists() {
+        return Err(format!("Project '{}' does not exist", name));
+    }
+    *app.state::<ActiveProject>().0.lock().unwrap() = name.clone();
+    save_config(&app, &name)
+}
+
+#[tauri::command]
+fn rename_project(old_name: String, new_name: String, app: AppHandle) -> Result<(), String> {
+    validate_name(&new_name)?;
+    let old_path = projects_dir(&app).join(&old_name);
+    let new_path = projects_dir(&app).join(&new_name);
+    if !old_path.exists() {
+        return Err(format!("Project '{}' does not exist", old_name));
+    }
+    if new_path.exists() {
+        return Err(format!("Project '{}' already exists", new_name));
+    }
+    std::fs::rename(&old_path, &new_path)
+        .map_err(|e| format!("Failed to rename project: {}", e))?;
+    // If this is the active project, update in-memory state and config
+    let is_active = *app.state::<ActiveProject>().0.lock().unwrap() == old_name;
+    if is_active {
+        *app.state::<ActiveProject>().0.lock().unwrap() = new_name.clone();
+        save_config(&app, &new_name)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_project(name: String, app: AppHandle) -> Result<(), String> {
+    let project_path = projects_dir(&app).join(&name);
+    if !project_path.exists() {
+        return Err(format!("Project '{}' does not exist", name));
+    }
+    std::fs::remove_dir_all(&project_path)
+        .map_err(|e| format!("Failed to delete project: {}", e))
+}
+
+#[tauri::command]
+fn duplicate_project(name: String, app: AppHandle) -> Result<String, String> {
+    let src = projects_dir(&app).join(&name);
+    if !src.exists() {
+        return Err(format!("Project '{}' does not exist", name));
+    }
+    // Find an available name
+    let mut new_name = format!("{}_copy", name);
+    let mut i = 2usize;
+    while projects_dir(&app).join(&new_name).exists() {
+        new_name = format!("{}_copy{}", name, i);
+        i += 1;
+    }
+    copy_dir_all(&src, &projects_dir(&app).join(&new_name))
+        .map_err(|e| format!("Failed to duplicate project: {}", e))?;
+    Ok(new_name)
+}
+
+fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        // Skip build artifacts
+        if name.to_string_lossy() == "target" { continue; }
+        if entry.file_type()?.is_dir() {
+            copy_dir_all(&entry.path(), &dst.join(&name))?;
+        } else {
+            std::fs::copy(entry.path(), dst.join(&name))?;
+        }
+    }
+    Ok(())
+}
+
 // ── Playground commands ───────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -219,7 +381,6 @@ fn rename_playground(old_name: String, new_name: String, app: AppHandle) -> Resu
 fn delete_playground(name: String, app: AppHandle) -> Result<(), String> {
     let path = safe_playground_path(&name, &app)?;
     std::fs::remove_file(&path).map_err(|e| e.to_string())
-    // Note: content folder is intentionally NOT deleted — v1.4 limitation
 }
 
 #[tauri::command]
@@ -256,7 +417,6 @@ async fn run_playground(
     let mut child = Command::new(&cargo)
         .args(["run", "--bin", &name, "--target-dir", playground_target.to_str().unwrap()])
         .current_dir(&workspace)
-        // Inject content folder path — readable by the running binary
         .env("PLAYGROUND_CONTENT", &content_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -435,8 +595,41 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            ensure_workspace(app.handle())
-                .expect("Failed to initialise playground workspace");
+            // Ensure App Support directory exists
+            let app_data = app.path()
+                .app_data_dir()
+                .expect("Cannot resolve App Support dir");
+            std::fs::create_dir_all(&app_data)
+                .expect("Cannot create App Support dir");
+
+            // Load persisted config
+            let config = load_config(app.handle());
+
+            // Ensure projects directory exists
+            let proj_dir = app_data.join("projects");
+            std::fs::create_dir_all(&proj_dir)
+                .expect("Cannot create projects dir");
+
+            // Resolve active project: use config value if its dir exists,
+            // otherwise fall back to the first existing project or "default"
+            let active = if proj_dir.join(&config.active_project).exists() {
+                config.active_project.clone()
+            } else {
+                std::fs::read_dir(&proj_dir).ok()
+                    .and_then(|mut d| d.find(|e| {
+                        e.as_ref().map(|e| e.path().is_dir()).unwrap_or(false)
+                    }))
+                    .and_then(|e| e.ok())
+                    .and_then(|e| e.file_name().into_string().ok())
+                    .unwrap_or_else(|| "default".to_string())
+            };
+
+            // Register active project in app state BEFORE calling ensure_project
+            app.manage(ActiveProject(Mutex::new(active)));
+
+            // Bootstrap the active project's directory structure if needed
+            ensure_project(app.handle())
+                .expect("Failed to initialise project");
 
             // ── Native macOS menu ─────────────────────────────────────────────
             let app_menu = SubmenuBuilder::new(app, "Rust Playground")
@@ -489,9 +682,6 @@ pub fn run() {
             Ok(())
         })
         .on_menu_event(|app, event| {
-            // Route menu clicks to the frontend as Tauri events.
-            // This fires for both mouse clicks AND keyboard accelerators,
-            // bypassing Monaco's key capture entirely.
             let event_name = match event.id().as_ref() {
                 "new_playground"   => Some("menu:new"),
                 "save"             => Some("menu:save"),
@@ -505,6 +695,15 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            // Project management
+            list_projects,
+            get_active_project,
+            new_project,
+            switch_project,
+            rename_project,
+            delete_project,
+            duplicate_project,
+            // Playground management
             list_playgrounds,
             load_playground,
             save_playground,
@@ -514,9 +713,11 @@ pub fn run() {
             duplicate_playground,
             run_playground,
             workspace_path,
+            // Cargo / toolchain
             get_cargo_toml,
             save_cargo_toml,
             get_toolchain_info,
+            // Content files
             list_content_files,
             create_content_file,
             read_content_file,

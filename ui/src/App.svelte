@@ -6,6 +6,7 @@
   import TabBar from './lib/TabBar.svelte'
   import Editor from './lib/Editor.svelte'
   import Output from './lib/Output.svelte'
+  import ProjectSwitcher from './lib/ProjectSwitcher.svelte'
   import type { RunBlock } from './lib/Output.svelte'
 
   // ── Constants ────────────────────────────────────────────────────────────────
@@ -16,6 +17,10 @@
     | { type: 'playground' }
     | { type: 'cargo' }
     | { type: 'content'; filename: string }
+
+  // ── Projects ─────────────────────────────────────────────────────────────────
+  let projects:       string[] = $state([])
+  let activeProject:  string   = $state('')
 
   // ── Playground list ──────────────────────────────────────────────────────────
   let playgrounds: string[] = $state([])
@@ -77,8 +82,11 @@
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
   onMount(async () => {
-    playgrounds   = await invoke<string[]>('list_playgrounds')
-    cargoToml     = await invoke<string>('get_cargo_toml').catch(() => '')
+    ;[activeProject, projects] = await Promise.all([
+      invoke<string>('get_active_project'),
+      invoke<string[]>('list_projects'),
+    ])
+    await loadProjectData()
     toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
 
     // Native menu events — Cmd+S/N/R/W routed through the macOS menu bar.
@@ -99,6 +107,28 @@
   })
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  /// Load (or reload) the active project's playgrounds and Cargo.toml.
+  async function loadProjectData() {
+    playgrounds = await invoke<string[]>('list_playgrounds')
+    cargoToml   = await invoke<string>('get_cargo_toml').catch(() => '')
+  }
+
+  /// Close all tabs then switch to a different project.
+  async function switchProject(name: string) {
+    // Close all tabs cleanly (no dirty-check — user confirmed via switcher UI)
+    openTabs  = []
+    activeTab = null
+    tabCode   = {}
+    tabMeta   = {}
+    tabRuns   = {}
+    tabRunCount = {}
+    dirtyTabs = []
+
+    await invoke('switch_project', { name })
+    activeProject = name
+    await loadProjectData()
+  }
 
   function contentTabId(filename: string) {
     return `content:${filename}`
@@ -332,6 +362,36 @@
     await openTab(CARGO_TAB, { type: 'cargo' })
   }
 
+  // ── Project management ──────────────────────────────────────────────────────
+
+  async function onNewProject(e: CustomEvent<string>) {
+    const name = e.detail
+    await invoke('new_project', { name })
+    projects = await invoke<string[]>('list_projects')
+    await switchProject(name)
+  }
+
+  async function onRenameProject(e: CustomEvent<{ old: string; new: string }>) {
+    await invoke('rename_project', { oldName: e.detail.old, newName: e.detail.new })
+    projects = await invoke<string[]>('list_projects')
+    activeProject = e.detail.new
+  }
+
+  async function onDeleteProject(e: CustomEvent<string>) {
+    const name = e.detail
+    // Switch away first, then delete
+    const remaining = projects.filter(p => p !== name)
+    let switchTo = remaining[0]
+    if (!switchTo) {
+      // No projects left — create a fresh default
+      await invoke('new_project', { name: 'default' })
+      switchTo = 'default'
+    }
+    await switchProject(switchTo)
+    await invoke('delete_project', { name })
+    projects = await invoke<string[]>('list_projects')
+  }
+
   // ── Content file tab opening ─────────────────────────────────────────────────
 
   async function onOpenContentFile(e: CustomEvent<{ filename: string }>) {
@@ -369,7 +429,14 @@
   <header class="toolbar">
     <div class="toolbar-left">
       <span class="app-badge">RS</span>
-      <span class="app-name">Rust Playground</span>
+      <ProjectSwitcher
+        {projects}
+        active={activeProject}
+        on:switch={(e) => switchProject(e.detail)}
+        on:new={onNewProject}
+        on:rename={onRenameProject}
+        on:delete={onDeleteProject}
+      />
     </div>
 
     <div class="toolbar-center">
