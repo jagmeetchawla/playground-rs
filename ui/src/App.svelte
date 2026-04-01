@@ -12,32 +12,31 @@
   // ── Constants ────────────────────────────────────────────────────────────────
   const CARGO_TAB = 'Cargo.toml'
 
-  // ── Tab metadata — what kind of file is in each tab ──────────────────────────
+  // ── Tab metadata ─────────────────────────────────────────────────────────────
   type TabMeta =
     | { type: 'playground' }
     | { type: 'cargo' }
     | { type: 'content'; filename: string }
 
   // ── Projects ─────────────────────────────────────────────────────────────────
-  let projects:            string[]                              = $state([])
-  let activeProject:       string                               = $state('')
+  let projects:            string[]                                    = $state([])
+  let activeProject:       string                                      = $state('')
   let switcherPendingMode: 'new' | 'rename' | 'delete-confirm' | null = $state(null)
 
   // ── Playground list ──────────────────────────────────────────────────────────
   let playgrounds: string[] = $state([])
 
   // ── Tab state ────────────────────────────────────────────────────────────────
-  let openTabs:  string[]               = $state([])
-  let activeTab: string | null          = $state(null)
-  let tabCode:   Record<string, string> = $state({})
-  let dirtyTabs: string[]               = $state([])
+  let openTabs:  string[]                = $state([])
+  let activeTab: string | null           = $state(null)
+  let tabCode:   Record<string, string>  = $state({})
+  let dirtyTabs: string[]                = $state([])
   let tabMeta:   Record<string, TabMeta> = $state({})
 
   let currentCode    = $derived(activeTab ? (tabCode[activeTab] ?? '') : '')
   let currentTabMeta = $derived(activeTab ? (tabMeta[activeTab] ?? { type: 'playground' } as TabMeta) : { type: 'playground' } as TabMeta)
   let editorLanguage = $derived(languageForTab(activeTab, currentTabMeta))
 
-  // Tab display labels and badge types for TabBar
   let tabLabels = $derived(
     Object.fromEntries(openTabs.map(id => {
       const meta = tabMeta[id]
@@ -81,6 +80,48 @@
   // ── New playground binding ────────────────────────────────────────────────────
   let creatingNew: boolean = $state(false)
 
+  // ── Layout & panel sizing ─────────────────────────────────────────────────────
+  let sidebarVisible                   = $state(true)
+  let layoutMode: 'bottom' | 'right'   = $state('bottom')
+  let sidebarW                         = $state(220)
+  let outputH                          = $state(240)   // bottom layout
+  let outputW                          = $state(300)   // right layout
+
+  // Drag state — pointer-captured resize handles
+  let dragging: 'sidebar' | 'output' | null = null
+  let dragStartX = 0, dragStartY = 0, dragStartVal = 0
+
+  function startSidebarResize(e: PointerEvent) {
+    dragging = 'sidebar'
+    dragStartX = e.clientX
+    dragStartVal = sidebarW
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  function startOutputResize(e: PointerEvent) {
+    dragging = 'output'
+    dragStartX = e.clientX
+    dragStartY = e.clientY
+    dragStartVal = layoutMode === 'bottom' ? outputH : outputW
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  function onDragMove(e: PointerEvent) {
+    if (dragging === 'sidebar') {
+      sidebarW = Math.max(160, Math.min(380, dragStartVal + (e.clientX - dragStartX)))
+    } else if (dragging === 'output') {
+      if (layoutMode === 'bottom') {
+        // Dragging upward increases output height
+        outputH = Math.max(80, Math.min(600, dragStartVal - (e.clientY - dragStartY)))
+      } else {
+        // Dragging leftward increases output width
+        outputW = Math.max(200, Math.min(600, dragStartVal - (e.clientX - dragStartX)))
+      }
+    }
+  }
+
+  function stopDrag() { dragging = null }
+
   // ── Lifecycle ────────────────────────────────────────────────────────────────
   onMount(async () => {
     ;[activeProject, projects] = await Promise.all([
@@ -90,15 +131,12 @@
     await loadProjectData()
     toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
 
-    // Native menu events — routed through the macOS menu bar.
-    // These fire even when Monaco has focus (bypasses Monaco's key capture).
     const unlisteners = await Promise.all([
       listen('menu:save',      () => save()),
       listen('menu:run',       () => run()),
       listen('menu:stop',      () => stop()),
       listen('menu:new',       () => requestNewPlayground()),
       listen('menu:close-tab', () => closeTab(activeTab)),
-      // Project menu events
       listen('menu:new-project',    () => { switcherPendingMode = 'new' }),
       listen('menu:rename-project', () => { switcherPendingMode = 'rename' }),
       listen('menu:delete-project', () => { switcherPendingMode = 'delete-confirm' }),
@@ -114,18 +152,15 @@
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
-  /// Load (or reload) the active project's playgrounds and Cargo.toml.
   async function loadProjectData() {
     playgrounds = await invoke<string[]>('list_playgrounds')
     cargoToml   = await invoke<string>('get_cargo_toml').catch(() => '')
   }
 
-  /// Sync the native Project menu with the current projects list and active project.
   function syncMenuProjects() {
     invoke('rebuild_projects_menu', { projects, active: activeProject }).catch(console.error)
   }
 
-  /// Close all tabs then switch to a different project.
   async function switchProject(name: string) {
     openTabs  = []
     activeTab = null
@@ -134,16 +169,13 @@
     tabRuns   = {}
     tabRunCount = {}
     dirtyTabs = []
-
     await invoke('switch_project', { name })
     activeProject = name
     await loadProjectData()
     syncMenuProjects()
   }
 
-  function contentTabId(filename: string) {
-    return `content:${filename}`
-  }
+  function contentTabId(filename: string) { return `content:${filename}` }
 
   function languageForTab(id: string | null, meta: TabMeta): string {
     if (!id) return 'rust'
@@ -170,6 +202,7 @@
     if (e.metaKey && e.key === 's') { e.preventDefault(); save() }
     if (e.metaKey && e.key === '.') { e.preventDefault(); stop() }
     if (e.metaKey && e.key === 'w') { e.preventDefault(); closeTab(activeTab) }
+    if (e.metaKey && e.shiftKey && e.code === 'KeyL') { e.preventDefault(); sidebarVisible = !sidebarVisible }
   }
 
   // ── Tab management ───────────────────────────────────────────────────────────
@@ -184,8 +217,8 @@
       } else {
         code = await invoke<string>('load_playground', { name })
       }
-      tabCode = { ...tabCode,  [name]: code }
-      tabMeta = { ...tabMeta,  [name]: meta }
+      tabCode  = { ...tabCode,  [name]: code }
+      tabMeta  = { ...tabMeta,  [name]: meta }
       openTabs = [...openTabs, name]
     }
     activeTab = name
@@ -195,7 +228,7 @@
     if (!name) return
     dirtyTabs = dirtyTabs.filter(n => n !== name)
     const idx = openTabs.indexOf(name)
-    openTabs = openTabs.filter(n => n !== name)
+    openTabs  = openTabs.filter(n => n !== name)
 
     const { [name]: _c, ...restCode  } = tabCode
     const { [name]: _m, ...restMeta  } = tabMeta
@@ -218,10 +251,7 @@
     const meta = tabMeta[activeTab] ?? { type: 'playground' }
 
     if (meta.type === 'content') {
-      await invoke('save_content_file', {
-        filename: meta.filename,
-        content: tabCode[activeTab],
-      })
+      await invoke('save_content_file', { filename: meta.filename, content: tabCode[activeTab] })
     } else if (meta.type === 'cargo') {
       await invoke('save_cargo_toml', { content: tabCode[activeTab] })
       cargoToml = tabCode[activeTab]
@@ -253,7 +283,6 @@
 
   async function run() {
     if (!activeTab || isRunning) return
-    // Only run playground tabs
     const meta = tabMeta[activeTab] ?? { type: 'playground' }
     if (meta.type !== 'playground') return
     const name = activeTab
@@ -309,9 +338,10 @@
     }
   }
 
+  // Stop: actually kill the running process via the backend.
+  // The channel's "complete" message handles the RunBlock status update.
   function stop() {
-    if (!activeTab) return
-    updateLastRun(activeTab, r => ({ ...r, status: 'error', exitCode: -1 }))
+    invoke('kill_playground').catch(console.error)
   }
 
   // ── Playground CRUD ──────────────────────────────────────────────────────────
@@ -350,7 +380,6 @@
         dirtyTabs = [...dirtyTabs.filter(n => n !== oldName), newName]
       }
     }
-
   }
 
   async function onDelete(e: CustomEvent<string>) {
@@ -373,13 +402,12 @@
     await openTab(CARGO_TAB, { type: 'cargo' })
   }
 
-  // ── Project management ──────────────────────────────────────────────────────
-  // These throw on error so ProjectSwitcher can catch and display inline.
+  // ── Project management ───────────────────────────────────────────────────────
 
   async function onNewProject(name: string) {
     await invoke('new_project', { name })
     projects = await invoke<string[]>('list_projects')
-    await switchProject(name)  // switchProject calls syncMenuProjects with updated state
+    await switchProject(name)
   }
 
   async function onRenameProject(oldName: string, newName: string) {
@@ -390,7 +418,6 @@
   }
 
   async function onDeleteProject(name: string) {
-    // Switch away first, then delete
     const remaining = projects.filter(p => p !== name)
     let switchTo = remaining[0]
     if (!switchTo) {
@@ -407,8 +434,7 @@
 
   async function onOpenContentFile(e: CustomEvent<{ filename: string }>) {
     const { filename } = e.detail
-    const tabId = contentTabId(filename)
-    await openTab(tabId, { type: 'content', filename })
+    await openTab(contentTabId(filename), { type: 'content', filename })
   }
 
   // ── Console events ───────────────────────────────────────────────────────────
@@ -429,17 +455,33 @@
     tabRunCount = { ...tabRunCount, [activeTab]: 0  }
   }
 
-  // ── Run-button label ─────────────────────────────────────────────────────────
+  // ── Derived ──────────────────────────────────────────────────────────────────
   let runDisabled = $derived(
     !activeTab || isRunning || (tabMeta[activeTab ?? '']?.type ?? 'playground') !== 'playground'
   )
 </script>
 
 <div class="app">
-  <!-- ── Toolbar ──────────────────────────────────────────────────────────────── -->
+  <!-- ── Toolbar ────────────────────────────────────────────────────────────── -->
   <header class="toolbar">
     <div class="toolbar-left">
+      <!-- Hide / show sidebar -->
+      <button
+        class="icon-btn"
+        onclick={() => sidebarVisible = !sidebarVisible}
+        title="{sidebarVisible ? 'Hide' : 'Show'} Sidebar (⌘⇧L)"
+        aria-label="{sidebarVisible ? 'Hide' : 'Show'} sidebar"
+      >
+        <svg width="15" height="12" viewBox="0 0 15 12" fill="none">
+          <rect x="0" y="0" width="4" height="12" rx="1"
+                fill="currentColor" opacity={sidebarVisible ? 0.8 : 0.3}/>
+          <rect x="6" y="0" width="9" height="12" rx="1"
+                fill="currentColor" opacity="0.5"/>
+        </svg>
+      </button>
+
       <span class="app-badge">RS</span>
+
       <ProjectSwitcher
         {projects}
         active={activeProject}
@@ -498,77 +540,133 @@
           Run
         </button>
       {/if}
+
+      <!-- Layout switch — icon shows what you'll switch TO -->
+      <button
+        class="icon-btn layout-btn"
+        onclick={() => layoutMode = layoutMode === 'bottom' ? 'right' : 'bottom'}
+        title="Switch to {layoutMode === 'bottom' ? 'side-by-side' : 'stacked'} layout"
+        aria-label="Switch layout"
+      >
+        {#if layoutMode === 'bottom'}
+          <!-- Currently stacked → show side-by-side icon -->
+          <svg width="15" height="12" viewBox="0 0 15 12" fill="none">
+            <rect x="0"  y="0" width="7" height="12" rx="1" fill="currentColor" opacity="0.7"/>
+            <rect x="8"  y="0" width="7" height="12" rx="1" fill="currentColor" opacity="0.4"/>
+          </svg>
+        {:else}
+          <!-- Currently side-by-side → show stacked icon -->
+          <svg width="15" height="12" viewBox="0 0 15 12" fill="none">
+            <rect x="0" y="0" width="15" height="6"  rx="1" fill="currentColor" opacity="0.7"/>
+            <rect x="0" y="7" width="15" height="5"  rx="1" fill="currentColor" opacity="0.4"/>
+          </svg>
+        {/if}
+      </button>
     </div>
   </header>
 
-  <!-- ── Main layout ───────────────────────────────────────────────────────────── -->
+  <!-- ── Main layout ──────────────────────────────────────────────────────────── -->
   <div class="main">
-    <Sidebar
-      {playgrounds}
-      selected={activeTab && tabMeta[activeTab]?.type === 'playground' ? activeTab : null}
-      {dirtyTabs}
-      bind:creatingNew
-      {cargoToml}
-      on:select={(e) => openTab(e.detail, { type: 'playground' })}
-      on:new={onNewPlayground}
-      on:rename={onRename}
-      on:delete={onDelete}
-      on:duplicate={onDuplicate}
-      on:editcargo={onEditCargo}
-      on:opencontentfile={onOpenContentFile}
-    />
 
-    <div class="editor-area">
-      <TabBar
-        tabs={openTabs}
-        active={activeTab}
-        {dirtyTabs}
-        {tabLabels}
-        {tabTypes}
-        on:activate={(e) => openTab(e.detail, tabMeta[e.detail] ?? { type: 'playground' })}
-        on:close={(e) => closeTab(e.detail)}
-      />
+    <!-- Sidebar + vertical resize handle -->
+    {#if sidebarVisible}
+      <div class="sidebar-wrap" style="width:{sidebarW}px">
+        <Sidebar
+          {playgrounds}
+          selected={activeTab && tabMeta[activeTab]?.type === 'playground' ? activeTab : null}
+          {dirtyTabs}
+          bind:creatingNew
+          {cargoToml}
+          on:select={(e) => openTab(e.detail, { type: 'playground' })}
+          on:new={onNewPlayground}
+          on:rename={onRename}
+          on:delete={onDelete}
+          on:duplicate={onDuplicate}
+          on:editcargo={onEditCargo}
+          on:opencontentfile={onOpenContentFile}
+        />
+      </div>
+      <div
+        class="drag-handle drag-col"
+        onpointerdown={startSidebarResize}
+        onpointermove={onDragMove}
+        onpointerup={stopDrag}
+        role="separator"
+        aria-label="Resize sidebar"
+      ></div>
+    {/if}
 
-      <div class="editor-wrap">
-        {#if activeTab}
-          <Editor
-            code={currentCode}
-            language={editorLanguage}
-            onSave={save}
-            onRun={run}
-            onNew={requestNewPlayground}
-            on:change={(e) => onCodeChange(e.detail)}
-          />
-        {:else}
-          <div class="empty-state">
-            <div class="empty-icon">
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" opacity="0.2">
-                <rect x="8" y="4" width="28" height="36" rx="4" stroke="currentColor" stroke-width="2"/>
-                <path d="M14 14h16M14 20h12M14 26h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <polygon points="32,30 44,38 32,46" fill="currentColor"/>
-              </svg>
+    <!-- Editor + Output (layout switches between row and column) -->
+    <div class="center-wrap" class:layout-bottom={layoutMode === 'bottom'}>
+      <div class="editor-area">
+        <TabBar
+          tabs={openTabs}
+          active={activeTab}
+          {dirtyTabs}
+          {tabLabels}
+          {tabTypes}
+          on:activate={(e) => openTab(e.detail, tabMeta[e.detail] ?? { type: 'playground' })}
+          on:close={(e) => closeTab(e.detail)}
+        />
+        <div class="editor-wrap">
+          {#if activeTab}
+            <Editor
+              code={currentCode}
+              language={editorLanguage}
+              onSave={save}
+              onRun={run}
+              onNew={requestNewPlayground}
+              on:change={(e) => onCodeChange(e.detail)}
+            />
+          {:else}
+            <div class="empty-state">
+              <div class="empty-icon">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" opacity="0.2">
+                  <rect x="8" y="4" width="28" height="36" rx="4" stroke="currentColor" stroke-width="2"/>
+                  <path d="M14 14h16M14 20h12M14 26h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <polygon points="32,30 44,38 32,46" fill="currentColor"/>
+                </svg>
+              </div>
+              <p class="empty-title">No playground open</p>
+              <p class="empty-hint">
+                Select one from the sidebar or
+                <button class="link-btn" onclick={requestNewPlayground}>create a new one</button>
+              </p>
+              <div class="shortcut-grid">
+                <span class="shortcut-key">⌘N</span><span class="shortcut-desc">New playground</span>
+                <span class="shortcut-key">⌘R</span><span class="shortcut-desc">Run</span>
+                <span class="shortcut-key">⌘S</span><span class="shortcut-desc">Save</span>
+              </div>
             </div>
-            <p class="empty-title">No playground open</p>
-            <p class="empty-hint">
-              Select one from the sidebar or
-              <button class="link-btn" onclick={requestNewPlayground}>create a new one</button>
-            </p>
-            <div class="shortcut-grid">
-              <span class="shortcut-key">⌘N</span><span class="shortcut-desc">New playground</span>
-              <span class="shortcut-key">⌘R</span><span class="shortcut-desc">Run</span>
-              <span class="shortcut-key">⌘S</span><span class="shortcut-desc">Save</span>
-            </div>
-          </div>
-        {/if}
+          {/if}
+        </div>
+      </div>
+
+      <!-- Resize handle between editor and output (col in right mode, row in bottom) -->
+      <div
+        class="drag-handle"
+        class:drag-col={layoutMode === 'right'}
+        class:drag-row={layoutMode === 'bottom'}
+        onpointerdown={startOutputResize}
+        onpointermove={onDragMove}
+        onpointerup={stopDrag}
+        role="separator"
+        aria-label="Resize output panel"
+      ></div>
+
+      <div
+        class="output-wrap"
+        style="{layoutMode === 'bottom' ? `height:${outputH}px` : `width:${outputW}px`}"
+      >
+        <Output
+          runs={currentRuns}
+          status={currentStatus}
+          on:toggle={onToggle}
+          on:clear={onClear}
+        />
       </div>
     </div>
 
-    <Output
-      runs={currentRuns}
-      status={currentStatus}
-      on:toggle={onToggle}
-      on:clear={onClear}
-    />
   </div>
 </div>
 
@@ -580,20 +678,21 @@
     overflow: hidden;
   }
 
+  /* ── Toolbar ── */
   .toolbar {
     display: flex;
     align-items: center;
     height: var(--toolbar-height);
-    padding: 0 12px;
+    padding: 0 8px 0 6px;
     background: var(--bg-sidebar);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     position: relative;
-    gap: 12px;
+    gap: 8px;
   }
 
   .toolbar-left {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 6px;
     flex: 1; min-width: 0;
   }
 
@@ -604,20 +703,30 @@
   }
 
   .toolbar-right {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; gap: 8px;
     flex: 1; justify-content: flex-end; min-width: 0;
   }
 
+  /* ── Icon buttons (sidebar toggle, layout switch) ── */
+  .icon-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    border-radius: var(--radius-xs);
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    transition: color 0.1s, background 0.1s;
+  }
+  .icon-btn:hover { color: var(--text-secondary); background: var(--bg-hover); }
+
+  .layout-btn { margin-left: 2px; }
+
+  /* ── App badge ── */
   .app-badge {
     font-size: 8px; font-weight: 800;
     background: var(--rust-orange); color: #fff;
     border-radius: 3px; padding: 2px 4px;
     line-height: 1.3; letter-spacing: 0.03em;
-  }
-
-  .app-name {
-    font-size: 13px; font-weight: 600;
-    color: var(--text-secondary); white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .status-label { font-size: 11px; color: var(--text-tertiary); letter-spacing: 0.02em; }
@@ -629,6 +738,7 @@
     padding: 5px 12px; font-size: 12px; font-weight: 600;
     border-radius: var(--radius-sm);
     transition: background 0.12s, opacity 0.12s;
+    flex-shrink: 0;
   }
 
   .btn-save {
@@ -654,10 +764,49 @@
     cursor: default; white-space: nowrap;
   }
 
+  /* ── Main layout ── */
   .main {
-    display: flex; flex: 1; overflow: hidden; position: relative;
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    flex-direction: row;
   }
 
+  /* ── Sidebar ── */
+  .sidebar-wrap {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Drag handles ── */
+  .drag-handle {
+    flex-shrink: 0;
+    background: transparent;
+    transition: background 0.15s;
+    position: relative;
+    z-index: 10;
+  }
+  .drag-handle:hover,
+  .drag-handle:active { background: rgba(255,255,255,0.1); }
+
+  .drag-col { width: 4px; cursor: col-resize; border-right: 1px solid var(--border); }
+  .drag-row { height: 4px; cursor: row-resize; border-bottom: 1px solid var(--border); }
+
+  /* ── Center wrap (editor + output) ── */
+  .center-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: row;   /* right layout: side-by-side */
+    overflow: hidden;
+    min-width: 0;
+  }
+  .center-wrap.layout-bottom {
+    flex-direction: column; /* bottom layout: stacked */
+  }
+
+  /* ── Editor area ── */
   .editor-area {
     flex: 1; display: flex; flex-direction: column;
     overflow: hidden; min-width: 0;
@@ -667,6 +816,21 @@
     flex: 1; display: flex; overflow: hidden;
   }
 
+  /* ── Output wrap ── */
+  .output-wrap {
+    flex-shrink: 0;
+    display: flex;
+    overflow: hidden;
+  }
+  /* Border direction depends on layout */
+  .center-wrap:not(.layout-bottom) .output-wrap {
+    border-left: 1px solid var(--border);
+  }
+  .center-wrap.layout-bottom .output-wrap {
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── Empty state ── */
   .empty-state {
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;

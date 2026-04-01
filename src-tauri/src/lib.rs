@@ -9,6 +9,10 @@ use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, Predefined
 /// Holds the currently active project name.  Managed via `app.manage()`.
 struct ActiveProject(Mutex<String>);
 
+/// PID of the currently running `cargo run` child process (= its PGID, since we
+/// call `process_group(0)` at spawn time).  None when nothing is running.
+struct RunningProcess(Mutex<Option<u32>>);
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Config {
     active_project: String,
@@ -422,8 +426,14 @@ async fn run_playground(
         .env("PLAYGROUND_CONTENT", &content_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .process_group(0)   // own process group so kill() hits cargo + spawned binary
         .spawn()
         .map_err(|e| format!("Failed to start cargo: {}", e))?;
+
+    // Store PID (= PGID) so kill_playground can send signals to the whole group.
+    if let Some(pid) = child.id() {
+        *app.state::<RunningProcess>().0.lock().unwrap() = Some(pid);
+    }
 
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
@@ -447,11 +457,35 @@ async fn run_playground(
     let status = child.wait().await.map_err(|e| e.to_string())?;
     let _ = tokio::join!(stdout_task, stderr_task);
 
+    // Process finished — clear stored PID.
+    *app.state::<RunningProcess>().0.lock().unwrap() = None;
+
     on_output.send(serde_json::json!({
         "stream": "complete",
         "code": status.code().unwrap_or(-1)
     })).ok();
 
+    Ok(())
+}
+
+/// Kill the currently running cargo process (and its spawned binary) by sending
+/// SIGTERM to the whole process group, waiting 300 ms, then SIGKILL.
+#[tauri::command]
+async fn kill_playground(app: AppHandle) -> Result<(), String> {
+    let maybe_pid = app.state::<RunningProcess>().0.lock().unwrap().take();
+    if let Some(pid) = maybe_pid {
+        // Send SIGTERM to the entire process group (-<pgid>)
+        let _ = tokio::process::Command::new("kill")
+            .args(["-TERM", &format!("-{}", pid)])
+            .status()
+            .await;
+        // Give processes 300 ms to clean up, then force-kill.
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        let _ = tokio::process::Command::new("kill")
+            .args(["-KILL", &format!("-{}", pid)])
+            .status()
+            .await;
+    }
     Ok(())
 }
 
@@ -723,6 +757,7 @@ pub fn run() {
 
             // Register active project in app state BEFORE calling ensure_project
             app.manage(ActiveProject(Mutex::new(active)));
+            app.manage(RunningProcess(Mutex::new(None)));
 
             // Bootstrap the active project's directory structure if needed
             ensure_project(app.handle())
@@ -788,6 +823,7 @@ pub fn run() {
             delete_playground,
             duplicate_playground,
             run_playground,
+            kill_playground,
             workspace_path,
             // Cargo / toolchain
             get_cargo_toml,
