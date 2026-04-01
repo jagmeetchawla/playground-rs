@@ -135,8 +135,14 @@
                 onclick={() => selectProject(name)}
                 disabled={busy}
               >
-                <span class="project-dot" class:filled={name === active}></span>
+                <span class="item-badge">RS</span>
                 <span class="project-name">{name}</span>
+                {#if name === active}
+                  <svg class="active-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                    <path d="M1 4l3 3 5-6" stroke="currentColor" stroke-width="1.6"
+                          stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                {/if}
               </button>
             </li>
           {/each}
@@ -154,7 +160,7 @@
 
       {:else if mode === 'new'}
         <div class="inline-input-section">
-          <p class="inline-label">New Project</p>
+          <p class="inline-label"><span class="form-badge">RS</span> New Project</p>
           <input
             class="inline-input"
             class:error={!!newError}
@@ -178,7 +184,7 @@
 
       {:else if mode === 'rename'}
         <div class="inline-input-section">
-          <p class="inline-label">Rename "{active}"</p>
+          <p class="inline-label"><span class="form-badge">RS</span> Rename "{active}"</p>
           <input
             class="inline-input"
             class:error={!!renameError}
@@ -274,11 +280,29 @@
   .project-item.active-project        { background: rgba(10,132,255,0.12); }
   .project-item:disabled              { opacity: 0.5; cursor: not-allowed; }
 
-  .project-dot {
-    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-    border: 1.5px solid var(--text-tertiary);
+  /* RS badge in list rows */
+  .item-badge {
+    font-size: 7px; font-weight: 800; letter-spacing: 0.04em;
+    background: var(--rust-orange); color: #fff;
+    border-radius: 3px; padding: 2px 3px;
+    line-height: 1.3; flex-shrink: 0;
+    min-width: 16px; text-align: center;
   }
-  .project-dot.filled { background: var(--accent); border-color: var(--accent); }
+  .active-project .item-badge { background: var(--rust-orange); }
+
+  /* Active checkmark */
+  .active-check { flex-shrink: 0; color: var(--accent); }
+
+  /* RS badge in form label rows */
+  .form-badge {
+    display: inline-block;
+    font-size: 7px; font-weight: 800; letter-spacing: 0.04em;
+    background: var(--rust-orange); color: #fff;
+    border-radius: 3px; padding: 2px 3px;
+    line-height: 1.3;
+    vertical-align: middle;
+    margin-right: 2px;
+  }
 
   .project-name {
     flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
