@@ -234,6 +234,84 @@ No changes to:
 
 ---
 
+Native macOS Menu Bar (v0.1.5 revision)
+
+The menu bar must reflect the two-level hierarchy: Projects and Playgrounds.
+The old single "File" menu is replaced by two menus: "Project" and "Playground".
+
+Full menu structure:
+
+  Rust Playground          ← app menu (unchanged)
+    About Rust Playground
+    ─────
+    Hide Rust Playground   ⌘H
+    Hide Others            ⌥⌘H
+    Show All
+    ─────
+    Quit                   ⌘Q
+
+  Project                  ← new menu (was part of File)
+    New Project…           ⌘⇧N
+    ─────
+    <project list>         ← dynamic; active project has a checkmark (✓)
+    ─────
+    Rename Project…
+    Delete Project…
+
+  Playground               ← renamed from File, playground-scoped actions
+    New Playground         ⌘N
+    ─────
+    Save                   ⌘S
+    ─────
+    Close Tab              ⌘W
+
+  Run                      ← unchanged
+    Run                    ⌘R
+    Stop                   ⌘.
+
+  Edit                     ← unchanged
+    Undo  Redo  Cut  Copy  Paste  Select All
+
+Dynamic project list:
+  - Rebuilt whenever a project is created, renamed, or deleted.
+  - Each item has id "switch_project:<name>" so on_menu_event can parse it.
+  - Active project gets a checkmark via MenuItem::set_checked(true) or
+    by rebuilding the menu with the checked item.
+  - Clicking any project name emits "menu:switch-project" with the name
+    as payload to the frontend.
+
+Keyboard accelerators:
+  ⌘⇧N  → "menu:new-project"     (open new-project flow in ProjectSwitcher)
+  ⌘N   → "menu:new"             (new playground in active project)
+  ⌘S   → "menu:save"
+  ⌘R   → "menu:run"
+  ⌘.   → "menu:stop"
+  ⌘W   → "menu:close-tab"
+
+New Tauri events emitted by on_menu_event:
+  "menu:new-project"     → frontend opens ProjectSwitcher in 'new' mode
+  "menu:rename-project"  → frontend opens ProjectSwitcher in 'rename' mode
+  "menu:delete-project"  → frontend opens ProjectSwitcher in 'delete-confirm' mode
+  "menu:switch-project"  → payload: project name string; frontend calls switchProject()
+  (existing events unchanged: menu:new, menu:save, menu:run, menu:stop, menu:close-tab)
+
+Menu rebuild command:
+  rebuild_projects_menu(projects: Vec<String>, active: String, app: AppHandle)
+  Called from frontend after any project list change (new/rename/delete/switch).
+  Rebuilds only the Project submenu, leaves other menus untouched.
+
+Frontend additions:
+  - App.svelte listens to menu:new-project, menu:rename-project,
+    menu:delete-project — sets ProjectSwitcher mode accordingly via a
+    new openSwitcher(mode) binding
+  - App.svelte listens to menu:switch-project — calls switchProject(payload)
+  - After every project mutation (new/rename/delete/switch), calls
+    invoke('rebuild_projects_menu', { projects, active: activeProject })
+  - ProjectSwitcher: expose openWithMode(mode) so App can drive it from
+    menu events (open popover + set mode in one call)
+
+---
+
 Acceptance Criteria (v0.1.5)
 
 STORAGE
@@ -268,6 +346,16 @@ DELETE PROJECT
 [ ] Project directory removed
 [ ] Switches to first remaining project (or creates "default" if none)
 [ ] Deleted project no longer appears in list
+
+NATIVE MENU BAR
+[ ] "Project" menu present (replaces old File menu project actions)
+[ ] "Playground" menu present with New / Save / Close Tab
+[ ] Project list in Project menu is dynamic — updates on any project change
+[ ] Active project shown with checkmark ✓ in project list
+[ ] Clicking a project name in the menu switches to that project
+[ ] ⌘⇧N triggers new-project flow in ProjectSwitcher popover
+[ ] Rename Project… and Delete Project… in menu open correct popover modes
+[ ] All existing accelerators still work (⌘N, ⌘S, ⌘R, ⌘., ⌘W)
 
 EXISTING FUNCTIONALITY
 [ ] All v1.4 features work within a project (playgrounds, content, run, save)
