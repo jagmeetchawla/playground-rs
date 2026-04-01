@@ -3,3 +3,6 @@
 /ui/node_modules
 /ui/dist
 /target/playground-runs
+
+# Dev-mode content folder (user files — not source code)
+/content

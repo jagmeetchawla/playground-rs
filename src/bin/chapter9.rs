@@ -5,7 +5,7 @@ use std::path::Path;
 fn main() {
     println!("Running chapter 9 playground!");
 
-    let filename = "content/hello.txt";
+    let filename = "content/hello3.txt";
 
     if Path::new(filename).exists() {
         println!("file exists: {}", filename);
