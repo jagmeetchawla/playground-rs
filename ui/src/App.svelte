@@ -467,16 +467,17 @@
     <div class="toolbar-left">
       <!-- Hide / show sidebar -->
       <button
-        class="icon-btn"
+        class="toolbar-pill"
+        class:pill-active={sidebarVisible}
         onclick={() => sidebarVisible = !sidebarVisible}
         title="{sidebarVisible ? 'Hide' : 'Show'} Sidebar (⌘⇧L)"
         aria-label="{sidebarVisible ? 'Hide' : 'Show'} sidebar"
       >
-        <svg width="15" height="12" viewBox="0 0 15 12" fill="none">
-          <rect x="0" y="0" width="4" height="12" rx="1"
-                fill="currentColor" opacity={sidebarVisible ? 0.8 : 0.3}/>
-          <rect x="6" y="0" width="9" height="12" rx="1"
-                fill="currentColor" opacity="0.5"/>
+        <svg width="16" height="13" viewBox="0 0 16 13" fill="none">
+          <rect x="0.5" y="0.5" width="4.5" height="12" rx="1.5"
+                fill="currentColor" opacity={sidebarVisible ? 1 : 0.35}/>
+          <rect x="6.5" y="0.5" width="9" height="12" rx="1.5"
+                fill="currentColor" opacity="0.35"/>
         </svg>
       </button>
 
@@ -543,22 +544,22 @@
 
       <!-- Layout switch — icon shows what you'll switch TO -->
       <button
-        class="icon-btn layout-btn"
+        class="toolbar-pill"
         onclick={() => layoutMode = layoutMode === 'bottom' ? 'right' : 'bottom'}
         title="Switch to {layoutMode === 'bottom' ? 'side-by-side' : 'stacked'} layout"
         aria-label="Switch layout"
       >
         {#if layoutMode === 'bottom'}
-          <!-- Currently stacked → show side-by-side icon -->
-          <svg width="15" height="12" viewBox="0 0 15 12" fill="none">
-            <rect x="0"  y="0" width="7" height="12" rx="1" fill="currentColor" opacity="0.7"/>
-            <rect x="8"  y="0" width="7" height="12" rx="1" fill="currentColor" opacity="0.4"/>
+          <!-- Currently stacked → icon previews side-by-side -->
+          <svg width="16" height="13" viewBox="0 0 16 13" fill="none">
+            <rect x="0.5" y="0.5" width="7"   height="12" rx="1.5" fill="currentColor" opacity="0.8"/>
+            <rect x="9"   y="0.5" width="6.5" height="12" rx="1.5" fill="currentColor" opacity="0.4"/>
           </svg>
         {:else}
-          <!-- Currently side-by-side → show stacked icon -->
-          <svg width="15" height="12" viewBox="0 0 15 12" fill="none">
-            <rect x="0" y="0" width="15" height="6"  rx="1" fill="currentColor" opacity="0.7"/>
-            <rect x="0" y="7" width="15" height="5"  rx="1" fill="currentColor" opacity="0.4"/>
+          <!-- Currently side-by-side → icon previews stacked -->
+          <svg width="16" height="13" viewBox="0 0 16 13" fill="none">
+            <rect x="0.5" y="0.5" width="15" height="6.5" rx="1.5" fill="currentColor" opacity="0.8"/>
+            <rect x="0.5" y="8.5" width="15" height="4"   rx="1.5" fill="currentColor" opacity="0.4"/>
           </svg>
         {/if}
       </button>
@@ -707,18 +708,29 @@
     flex: 1; justify-content: flex-end; min-width: 0;
   }
 
-  /* ── Icon buttons (sidebar toggle, layout switch) ── */
-  .icon-btn {
-    display: flex; align-items: center; justify-content: center;
-    width: 28px; height: 28px;
-    border-radius: var(--radius-xs);
-    color: var(--text-tertiary);
+  /* ── Pill buttons — sidebar toggle + layout switch (Safari-style) ── */
+  .toolbar-pill {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 26px;
+    padding: 0 9px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.11);
+    color: var(--text-secondary);
     flex-shrink: 0;
-    transition: color 0.1s, background 0.1s;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
   }
-  .icon-btn:hover { color: var(--text-secondary); background: var(--bg-hover); }
-
-  .layout-btn { margin-left: 2px; }
+  .toolbar-pill:hover {
+    background: rgba(255,255,255,0.13);
+    border-color: rgba(255,255,255,0.18);
+    color: var(--text);
+  }
+  /* "active" state — sidebar is visible, pill looks pressed-in */
+  .toolbar-pill.pill-active {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.18);
+    color: var(--text);
+  }
 
   /* ── App badge ── */
   .app-badge {

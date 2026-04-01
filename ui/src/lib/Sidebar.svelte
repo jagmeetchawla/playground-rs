@@ -99,7 +99,7 @@
     if (e.key === 'Escape') renamingName = null
   }
 
-  let cargoExpanded: boolean = $state(true)
+  let cargoExpanded: boolean = $state(false)
 
   // ── Content tab state ─────────────────────────────────────────────────────────
   export type ContentFile = { filename: string; size_bytes: number; is_text: boolean }
