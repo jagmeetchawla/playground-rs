@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { invoke, Channel } from '@tauri-apps/api/core'
+  import { listen } from '@tauri-apps/api/event'
   import Sidebar from './lib/Sidebar.svelte'
   import TabBar from './lib/TabBar.svelte'
   import Editor from './lib/Editor.svelte'
@@ -79,8 +80,22 @@
     playgrounds   = await invoke<string[]>('list_playgrounds')
     cargoToml     = await invoke<string>('get_cargo_toml').catch(() => '')
     toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+
+    // Native menu events — Cmd+S/N/R/W routed through the macOS menu bar.
+    // These fire even when Monaco has focus (bypasses Monaco's key capture).
+    const unlisteners = await Promise.all([
+      listen('menu:save',      () => save()),
+      listen('menu:run',       () => run()),
+      listen('menu:stop',      () => stop()),
+      listen('menu:new',       () => requestNewPlayground()),
+      listen('menu:close-tab', () => closeTab(activeTab)),
+    ])
+
     window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
+    return () => {
+      window.removeEventListener('keydown', handleKey)
+      unlisteners.forEach(u => u())
+    }
   })
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -440,6 +455,9 @@
           <Editor
             code={currentCode}
             language={editorLanguage}
+            onSave={save}
+            onRun={run}
+            onNew={requestNewPlayground}
             on:change={(e) => onCodeChange(e.detail)}
           />
         {:else}

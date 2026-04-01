@@ -1,6 +1,7 @@
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri::ipc::Channel;
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 
 // ── Storage ───────────────────────────────────────────────────────────────────
 
@@ -436,7 +437,72 @@ pub fn run() {
         .setup(|app| {
             ensure_workspace(app.handle())
                 .expect("Failed to initialise playground workspace");
+
+            // ── Native macOS menu ─────────────────────────────────────────────
+            let app_menu = SubmenuBuilder::new(app, "Rust Playground")
+                .item(&PredefinedMenuItem::about(app, None, None)?)
+                .separator()
+                .item(&PredefinedMenuItem::hide(app, None)?)
+                .item(&PredefinedMenuItem::hide_others(app, None)?)
+                .item(&PredefinedMenuItem::show_all(app, None)?)
+                .separator()
+                .item(&PredefinedMenuItem::quit(app, None)?)
+                .build()?;
+
+            let file_menu = SubmenuBuilder::new(app, "File")
+                .item(&MenuItemBuilder::with_id("new_playground", "New Playground")
+                    .accelerator("CmdOrCtrl+N").build(app)?)
+                .separator()
+                .item(&MenuItemBuilder::with_id("save", "Save")
+                    .accelerator("CmdOrCtrl+S").build(app)?)
+                .separator()
+                .item(&MenuItemBuilder::with_id("close_tab", "Close Tab")
+                    .accelerator("CmdOrCtrl+W").build(app)?)
+                .build()?;
+
+            let run_menu = SubmenuBuilder::new(app, "Run")
+                .item(&MenuItemBuilder::with_id("run_playground", "Run")
+                    .accelerator("CmdOrCtrl+R").build(app)?)
+                .item(&MenuItemBuilder::with_id("stop_playground", "Stop")
+                    .accelerator("CmdOrCtrl+.").build(app)?)
+                .build()?;
+
+            let edit_menu = SubmenuBuilder::new(app, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .separator()
+                .select_all()
+                .build()?;
+
+            let menu = MenuBuilder::new(app)
+                .item(&app_menu)
+                .item(&file_menu)
+                .item(&run_menu)
+                .item(&edit_menu)
+                .build()?;
+
+            app.set_menu(menu)?;
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            // Route menu clicks to the frontend as Tauri events.
+            // This fires for both mouse clicks AND keyboard accelerators,
+            // bypassing Monaco's key capture entirely.
+            let event_name = match event.id().as_ref() {
+                "new_playground"   => Some("menu:new"),
+                "save"             => Some("menu:save"),
+                "close_tab"        => Some("menu:close-tab"),
+                "run_playground"   => Some("menu:run"),
+                "stop_playground"  => Some("menu:stop"),
+                _ => None,
+            };
+            if let Some(name) = event_name {
+                app.emit(name, ()).ok();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             list_playgrounds,

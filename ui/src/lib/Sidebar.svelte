@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick, createEventDispatcher } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { listen } from '@tauri-apps/api/event'
+  import { getCurrentWebview } from '@tauri-apps/api/webview'
 
   const dispatch = createEventDispatcher()
 
@@ -252,21 +252,29 @@
   }
 
   // ── Drag and drop ─────────────────────────────────────────────────────────────
+  // Tauri v2 API: getCurrentWebview().onDragDropEvent()
+  // (The v1 listen('tauri://drag-drop') API was removed in Tauri v2)
   onMount(async () => {
-    const unlisten = await listen<{ paths: string[]; position: { x: number; y: number } }>(
-      'tauri://drag-drop',
-      async (event) => {
-        if (sidebarTab === 'content' && isDragOver) {
+    const unlisten = await getCurrentWebview().onDragDropEvent(async (event) => {
+      if (event.payload.type === 'enter' || event.payload.type === 'over') {
+        if (sidebarTab === 'content') isDragOver = true
+      } else if (event.payload.type === 'drop') {
+        if (sidebarTab === 'content') {
           isDragOver = false
-          for (const srcPath of event.payload.paths) {
+          const paths = (event.payload as any).paths as string[]
+          for (const srcPath of paths) {
             try {
               await invoke('import_content_file', { srcPath })
             } catch { /* ignore individual file errors */ }
           }
           await loadContentFiles()
+        } else {
+          isDragOver = false
         }
+      } else if (event.payload.type === 'leave') {
+        isDragOver = false
       }
-    )
+    })
     return unlisten
   })
 </script>

@@ -81,7 +81,19 @@
   })
 
   const dispatch = createEventDispatcher()
-  let { code, language = 'rust' }: { code: string; language?: string } = $props()
+  let {
+    code,
+    language = 'rust',
+    onSave = () => {},
+    onRun = () => {},
+    onNew = () => {},
+  }: {
+    code: string
+    language?: string
+    onSave?: () => void
+    onRun?: () => void
+    onNew?: () => void
+  } = $props()
 
   let container: HTMLDivElement
   let editor: monaco.editor.IStandaloneCodeEditor
@@ -128,10 +140,11 @@
       dispatch('change', editor.getValue())
     })
 
-    // Let our global keyboard shortcuts handle these — don't let Monaco consume them
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyN, () => {})
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyR, () => {})
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {})
+    // Route keyboard shortcuts through our callbacks so Monaco doesn't swallow them.
+    // addCommand() calls stopPropagation internally — empty handlers silently drop events.
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => onSave())
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyR, () => onRun())
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyN, () => onNew())
   })
 
   // Sync when user switches playground (code prop changes from outside).
