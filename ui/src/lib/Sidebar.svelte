@@ -570,7 +570,7 @@
 
 <style>
   .sidebar {
-    width: var(--sidebar-width);
+    width: 100%;
     flex-shrink: 0;
     background: var(--bg-sidebar);
     border-right: 1px solid var(--border);
