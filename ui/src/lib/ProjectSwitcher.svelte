@@ -112,6 +112,7 @@
 
 <div class="project-switcher">
   <button class="pill" onclick={toggle} class:open>
+    <span class="pill-badge">RS</span>
     <span class="pill-name">{active}</span>
     <svg class="pill-caret" width="10" height="6" viewBox="0 0 10 6">
       <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5"
@@ -238,6 +239,12 @@
     max-width: 180px;
   }
   .pill:hover, .pill.open { background: var(--bg-hover); border-color: var(--border-strong); }
+  .pill-badge {
+    font-size: 7.5px; font-weight: 800; letter-spacing: 0.04em;
+    background: var(--rust-orange); color: #fff;
+    border-radius: 3px; padding: 2px 4px;
+    line-height: 1.3; flex-shrink: 0;
+  }
   .pill-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
   .pill-caret { flex-shrink: 0; color: var(--text-tertiary); transition: transform 0.15s; }
   .pill.open .pill-caret { transform: rotate(180deg); }

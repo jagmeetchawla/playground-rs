@@ -481,8 +481,6 @@
         </svg>
       </button>
 
-      <span class="app-badge">RS</span>
-
       <ProjectSwitcher
         {projects}
         active={activeProject}
@@ -732,14 +730,6 @@
     color: var(--text);
   }
 
-  /* ── App badge ── */
-  .app-badge {
-    font-size: 8px; font-weight: 800;
-    background: var(--rust-orange); color: #fff;
-    border-radius: 3px; padding: 2px 4px;
-    line-height: 1.3; letter-spacing: 0.03em;
-    flex-shrink: 0;
-  }
 
   .status-label { font-size: 11px; color: var(--text-tertiary); letter-spacing: 0.02em; }
   .status-label.running { color: var(--green); }
