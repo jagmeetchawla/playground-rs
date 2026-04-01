@@ -335,13 +335,15 @@ fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result
 #[tauri::command]
 fn list_playgrounds(app: AppHandle) -> Vec<String> {
     let dir = bin_dir(&app);
-    let mut names: Vec<String> = std::fs::read_dir(&dir)
-        .unwrap_or_else(|_| panic!("Cannot read {:?}", dir))
-        .filter_map(|e| e.ok())
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .filter(|f| f.ends_with(".rs"))
-        .map(|f| f.trim_end_matches(".rs").to_string())
-        .collect();
+    let mut names: Vec<String> = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|f| f.ends_with(".rs"))
+            .map(|f| f.trim_end_matches(".rs").to_string())
+            .collect(),
+        Err(_) => vec![],
+    };
     names.sort();
     names
 }

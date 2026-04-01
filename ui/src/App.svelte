@@ -363,27 +363,25 @@
   }
 
   // ── Project management ──────────────────────────────────────────────────────
+  // These throw on error so ProjectSwitcher can catch and display inline.
 
-  async function onNewProject(e: CustomEvent<string>) {
-    const name = e.detail
+  async function onNewProject(name: string) {
     await invoke('new_project', { name })
     projects = await invoke<string[]>('list_projects')
     await switchProject(name)
   }
 
-  async function onRenameProject(e: CustomEvent<{ old: string; new: string }>) {
-    await invoke('rename_project', { oldName: e.detail.old, newName: e.detail.new })
+  async function onRenameProject(oldName: string, newName: string) {
+    await invoke('rename_project', { oldName, newName })
     projects = await invoke<string[]>('list_projects')
-    activeProject = e.detail.new
+    activeProject = newName
   }
 
-  async function onDeleteProject(e: CustomEvent<string>) {
-    const name = e.detail
+  async function onDeleteProject(name: string) {
     // Switch away first, then delete
     const remaining = projects.filter(p => p !== name)
     let switchTo = remaining[0]
     if (!switchTo) {
-      // No projects left — create a fresh default
       await invoke('new_project', { name: 'default' })
       switchTo = 'default'
     }
@@ -432,10 +430,10 @@
       <ProjectSwitcher
         {projects}
         active={activeProject}
-        on:switch={(e) => switchProject(e.detail)}
-        on:new={onNewProject}
-        on:rename={onRenameProject}
-        on:delete={onDeleteProject}
+        onswitch={switchProject}
+        onnew={onNewProject}
+        onrename={onRenameProject}
+        ondelete={onDeleteProject}
       />
     </div>
 
