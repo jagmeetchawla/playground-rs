@@ -687,7 +687,7 @@ fn build_menu<R: tauri::Runtime>(
             .accelerator("CmdOrCtrl+W").build(handle)?)
         .separator()
         .item(&MenuItemBuilder::with_id("menu_delete_playground", "Delete Playground…")
-            .enabled(playground_count > 1)
+            .enabled(playground_count > 0)
             .build(handle)?)
         .build()?;
 
