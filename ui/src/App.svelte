@@ -19,8 +19,9 @@
     | { type: 'content'; filename: string }
 
   // ── Projects ─────────────────────────────────────────────────────────────────
-  let projects:       string[] = $state([])
-  let activeProject:  string   = $state('')
+  let projects:            string[]                              = $state([])
+  let activeProject:       string                               = $state('')
+  let switcherPendingMode: 'new' | 'rename' | 'delete-confirm' | null = $state(null)
 
   // ── Playground list ──────────────────────────────────────────────────────────
   let playgrounds: string[] = $state([])
@@ -89,7 +90,7 @@
     await loadProjectData()
     toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
 
-    // Native menu events — Cmd+S/N/R/W routed through the macOS menu bar.
+    // Native menu events — routed through the macOS menu bar.
     // These fire even when Monaco has focus (bypasses Monaco's key capture).
     const unlisteners = await Promise.all([
       listen('menu:save',      () => save()),
@@ -97,6 +98,11 @@
       listen('menu:stop',      () => stop()),
       listen('menu:new',       () => requestNewPlayground()),
       listen('menu:close-tab', () => closeTab(activeTab)),
+      // Project menu events
+      listen('menu:new-project',    () => { switcherPendingMode = 'new' }),
+      listen('menu:rename-project', () => { switcherPendingMode = 'rename' }),
+      listen('menu:delete-project', () => { switcherPendingMode = 'delete-confirm' }),
+      listen<string>('menu:switch-project', (e) => switchProject(e.payload)),
     ])
 
     window.addEventListener('keydown', handleKey)
@@ -114,9 +120,13 @@
     cargoToml   = await invoke<string>('get_cargo_toml').catch(() => '')
   }
 
+  /// Sync the native Project menu with the current projects list and active project.
+  function syncMenuProjects() {
+    invoke('rebuild_projects_menu', { projects, active: activeProject }).catch(console.error)
+  }
+
   /// Close all tabs then switch to a different project.
   async function switchProject(name: string) {
-    console.log('[switchProject] start', name)
     openTabs  = []
     activeTab = null
     tabCode   = {}
@@ -126,10 +136,9 @@
     dirtyTabs = []
 
     await invoke('switch_project', { name })
-    console.log('[switchProject] backend switched ok')
     activeProject = name
     await loadProjectData()
-    console.log('[switchProject] loadProjectData done, playgrounds=', playgrounds)
+    syncMenuProjects()
   }
 
   function contentTabId(filename: string) {
@@ -368,33 +377,16 @@
   // These throw on error so ProjectSwitcher can catch and display inline.
 
   async function onNewProject(name: string) {
-    console.log('[new_project] start', name)
-    try {
-      await invoke('new_project', { name })
-      console.log('[new_project] created ok')
-      projects = await invoke<string[]>('list_projects')
-      console.log('[new_project] projects list', projects)
-      await switchProject(name)
-      console.log('[new_project] switched ok, activeProject=', activeProject)
-    } catch(err) {
-      console.error('[new_project] FAILED', err)
-      throw err
-    }
+    await invoke('new_project', { name })
+    projects = await invoke<string[]>('list_projects')
+    await switchProject(name)  // switchProject calls syncMenuProjects with updated state
   }
 
   async function onRenameProject(oldName: string, newName: string) {
-    console.log('[rename_project] start', oldName, '->', newName)
-    try {
-      await invoke('rename_project', { oldName, newName })
-      console.log('[rename_project] renamed ok')
-      projects = await invoke<string[]>('list_projects')
-      console.log('[rename_project] projects list', projects)
-      activeProject = newName
-      console.log('[rename_project] activeProject updated')
-    } catch(err) {
-      console.error('[rename_project] FAILED', err)
-      throw err
-    }
+    await invoke('rename_project', { oldName, newName })
+    projects = await invoke<string[]>('list_projects')
+    activeProject = newName
+    syncMenuProjects()
   }
 
   async function onDeleteProject(name: string) {
@@ -408,6 +400,7 @@
     await switchProject(switchTo)
     await invoke('delete_project', { name })
     projects = await invoke<string[]>('list_projects')
+    syncMenuProjects()
   }
 
   // ── Content file tab opening ─────────────────────────────────────────────────
@@ -454,6 +447,7 @@
         onnew={onNewProject}
         onrename={onRenameProject}
         ondelete={onDeleteProject}
+        bind:pendingMode={switcherPendingMode}
       />
     </div>
 

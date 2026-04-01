@@ -9,6 +9,7 @@
     onnew,
     onrename,
     ondelete,
+    pendingMode = $bindable(null as 'new' | 'rename' | 'delete-confirm' | null),
   }: {
     projects: string[]
     active: string
@@ -16,7 +17,17 @@
     onnew:    (name: string) => Promise<void>
     onrename: (oldName: string, newName: string) => Promise<void>
     ondelete: (name: string) => Promise<void>
+    pendingMode?: 'new' | 'rename' | 'delete-confirm' | null
   } = $props()
+
+  // Open the popover in the requested mode when driven from outside (e.g. menu bar).
+  $effect(() => {
+    if (pendingMode) {
+      open = true
+      mode = pendingMode
+      pendingMode = null
+    }
+  })
 
   let open    = $state(false)
   let mode: 'list' | 'new' | 'rename' | 'delete-confirm' = $state('list')
