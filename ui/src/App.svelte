@@ -494,9 +494,14 @@
 
     <div class="toolbar-center">
       <span class="toolchain-pill" title={toolchainInfo.path}>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-          <circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/>
-          <path d="M5 3v2.5l1.5 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <!-- Isometric crate — crates.io style -->
+        <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
+          <path d="M7 1L13 4L7 7L1 4Z"
+                stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
+          <path d="M1 4L1 8.5L7 11.5L7 7Z"
+                stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
+          <path d="M13 4L13 8.5L7 11.5L7 7Z"
+                stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
         </svg>
         cargo {toolchainLabel}
       </span>
