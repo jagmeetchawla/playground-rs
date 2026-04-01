@@ -1,7 +1,7 @@
 SPECIFICATION
 
 Status
-- Version: v1.4 draft (revised)
+- Version: v1.5
 - Date: 2026-03-31
 - Owner: Jagmeet Chawla
 
@@ -11,15 +11,10 @@ Visual References
 
 Swift Playgrounds reference (UI target)
   specs/assets/swift-playgrounds-reference.png
-  Shared 2026-03-30. Drove the v1.1 macOS dark colour system, blue pill sidebar,
-  file tabs, RS badge, and 'playground-dark' Monaco theme.
 
-Annotated feedback screenshot (v1.2 requirements source)
+Annotated feedback screenshots
   specs/assets/v1.2-annotated-feedback.png
-
-Annotated feedback screenshot (v1.3 requirements source)
   specs/assets/v1.3-annotated-feedback.png
-  Three bug fixes: tab close, false-dirty state, Save button position.
 
 ---
 
@@ -27,292 +22,263 @@ Product
 
 What
 A native macOS desktop app — built with Tauri — that wraps the existing Rust playground
-runner in a Swift Playgrounds-inspired UI. Write Rust, see errors live, hit Run, see
-output. Nothing else needed.
+runner in a Swift Playgrounds-inspired UI. Multiple independent Projects let users
+maintain separate Rust environments with different dependencies. Write Rust, see errors
+live, hit Run, see output.
 
 Why
-The CLI runner works well but requires a terminal. A GUI removes that friction, makes the
-playground feel like a first-class tool, and opens it up to a wider audience. The Swift
-Playgrounds model is the right reference point: clean, focused, distraction-free, with
-code on one side and output on the other.
+Single-workspace was a good starting point but limits real use. Different problems need
+different dependency sets — async code needs tokio, data work needs polars, web needs
+axum. Projects make the tool genuinely useful across domains without dependency conflict.
 
 ---
 
-UI Layout (v1.4)
+Core Concept Change: Projects (v1.5)
+
+A Project is an independent Rust package with:
+  - Its own Cargo.toml  (and thus its own dependency set)
+  - Its own set of Playgrounds  (src/bin/*.rs)
+  - Its own Content folder  (content/)
+
+"Workspace" is not used as a term — it collides with Cargo workspaces (multi-crate
+monorepos). "Project" maps to how Xcode, VS Code, and IntelliJ name this concept.
+
+Hierarchy:
+  Projects  >  Playgrounds  >  Content files
+
+---
+
+Storage — Unified (dev = release)
+
+ALL storage uses macOS Application Support regardless of build mode.
+The dev-mode shortcut (repo root as workspace) is removed. Dev and release
+behave identically.
+
+  ~/Library/Application Support/com.playground-rs.app/
+    config.json              ← { "active_project": "default" }
+    projects/
+      default/
+        Cargo.toml
+        src/bin/
+          hello.rs
+          my_playground.rs
+        content/
+          data.csv
+      async_experiments/
+        Cargo.toml           ← [dependencies] tokio = { ... }
+        src/bin/
+          server.rs
+        content/
+      data_science/
+        Cargo.toml           ← [dependencies] polars = { ... }
+        src/bin/
+          analysis.rs
+        content/
+
+Rules:
+  - Each project's content/ is isolated to that project.
+  - Switching projects closes all open tabs and loads the new project.
+  - The active project name is persisted to config.json so it survives restarts.
+  - On first launch (no projects exist), a "default" project is created and seeded
+    with a hello.rs playground.
+
+---
+
+UI Layout (v1.5)
 
 ┌────────────────────────────────────────────────────────────────────────────────────┐
-│  RS  Rust Playground    │  ⊙ cargo 1.x.x  │           [💾 Save]  [▶ Run]          │
+│  RS  [ default ▾ ]          │  ⊙ cargo 1.x.x  │         [💾 Save]  [▶ Run]        │
 ├─────────────────────┬───────────────────────────────┬──────────────────────────────┤
-│  Playgrounds│Content │  [tab] hello2.rs  [tab] …  × │  Console               Clear │
-│  ───────────┴─────── │  ─────────────────────────── │                              │
-│                      │                              │  ▸ Run #1  cargo run  15:32 ✓ │
-│  (Playgrounds tab)   │   fn main() {                │  ▾ Run #2  cargo run  15:34 ✓ │
-│  🔍 Filter           │     let dir = env::var(      │    COMPILER                  │
-│  RS hello2  ●        │       "PLAYGROUND_CONTENT"); │      Compiling…              │
-│  RS chapter3         │     …                        │    OUTPUT                    │
-│  RS hello            │   }                          │      Hello!                  │
-│  ...                 │                              │                              │
-│  ─────────────────── │                              │                              │
-│  > Cargo.toml        │                              │                              │
-│                      │                              │                              │
-│  (Content tab)       │                              │                              │
-│  📄 data.txt         │                              │                              │
-│  📄 config.json      │                              │                              │
-│  🖼 photo.png        │                              │                              │
-│  [+ New File]        │                              │                              │
-│  [drop files here]   │                              │                              │
+│  Playgrounds│Content │  [tab] hello.rs  [tab] …  ×  │  Console               Clear │
+│  ───────────┴─────── │  ──────────────────────────── │                              │
+│  🔍 Filter           │   fn main() {                 │  ▸ Run #1  cargo run  15:32 ✓ │
+│  RS hello.rs  ●      │     println!("Hello!");       │  ▾ Run #2  cargo run  15:34 ✓ │
+│  RS server.rs        │   }                           │    COMPILER                  │
+│  ...                 │                               │      Compiling…              │
+│  ─────────────────── │                               │    OUTPUT                    │
+│  > Cargo.toml        │                               │      Hello!                  │
 └─────────────────────┴───────────────────────────────┴──────────────────────────────┘
 
 ---
 
-Sidebar — Two-Tab Design (v1.4)
+Project Switcher (toolbar)
 
-The left sidebar has two tabs across the top:
+The app name "Rust Playground" is replaced by a project name pill with a dropdown arrow:
 
-  [ Playgrounds ]  [ Content ]
+  [ default ▾ ]
 
-These are the only two views of the sidebar. The tab strip is always visible.
-Switching between them never changes the active playground — context is preserved.
+Clicking it opens a popover anchored to the pill:
 
-──────────────────────────────────────────
-Tab 1: Playgrounds  (unchanged from v1.3)
-──────────────────────────────────────────
+  ┌──────────────────────┐
+  │ ● default            │  ← active project (checkmark or filled dot)
+  │   async_experiments  │
+  │   data_science       │
+  │ ────────────────────  │
+  │   New Project…       │
+  │ ────────────────────  │
+  │   Rename Project…    │
+  │   Delete Project…    │
+  └──────────────────────┘
 
-Same as before:
-- Search/filter bar
-- Playground items: RS badge, blue pill selection, dirty dot ●
-- Right-click context menu: Rename, Duplicate, Delete
-- + button in header: opens inline name input to create new playground
-- Cargo.toml section pinned at bottom (collapsible, Edit button)
+Interactions:
+  Click a project name  → switch to that project (close tabs, reload sidebar)
+  New Project…          → opens inline name input in the popover
+  Rename Project…       → opens inline rename input for the active project
+  Delete Project…       → confirmation alert, then delete; switch to first remaining
+                          project or create "default" if none left
 
-No per-playground content file expansion in this tab.
-The playground list stays clean — filenames do not appear here.
-
-──────────────────────────────────────────
-Tab 2: Content
-──────────────────────────────────────────
-
-Shows the content folder for the currently selected playground.
-If no playground is selected, shows an empty state: "Select a playground to view
-its content files."
-
-Header:
-  Content — hello2        ← playground name in subtitle, updates on selection change
-
-File list:
-  📄 data.txt
-  📄 config.json
-  🖼 photo.png
-  📦 archive.zip
-
-File type icons (by extension):
-  📄  any text-ish: .txt .md .csv .log .toml .yaml .yml .json .xml .html .rs
-  🖼  .png .jpg .jpeg .gif .webp .svg
-  📦  everything else (binary / unknown)
-
-File interactions:
-  Click text file (📄)    → open as editor tab in the main editor area
-  Click image file (🖼)   → open with macOS default app (shell::open)
-  Click binary file (📦)  → reveal in Finder
-  Right-click any file    → context menu: Rename / Delete / Reveal in Finder
-
-New file button:
-  [+ New File] pinned at the bottom of the list.
-  Opens an inline name input directly in the file list (same pattern as new playground):
-    - Text input appears at the bottom of the list, auto-focused.
-    - Placeholder: "filename.txt"
-    - Enter: validate → create empty file → open as editor tab if text type.
-    - Escape / blur with empty input: cancel silently.
-    - Duplicate name: inline error "Already exists".
-    - Name with / \ or null bytes: inline error "Invalid name".
-
-Drag and drop:
-  The entire Content tab pane is a drop zone.
-  User drags one or more files from Finder and drops onto the Content tab.
-  Each file is copied (not moved) into content/<playground>/.
-  Name collision: appended _1, _2… suffix — no silent overwrite.
-  A subtle dashed border appears on the pane while files are dragged over it.
-
-Empty content folder state:
-  When no files exist yet:
-
-    Drop files here
-    or [+ New File]
-
-  Instructional, not just blank.
-
-Auto-switch to Content tab:
-  When a user opens a content file from any path (e.g. future file picker),
-  the sidebar switches to the Content tab automatically so the file is visible
-  in context. The playground tab is not auto-switched.
+Project name rules (same as playground names):
+  - Lowercase letters, digits, underscores only: [a-z][a-z0-9_]*
+  - Max 64 characters
+  - Must be unique
 
 ---
 
-Folder Structure
+Sidebar — unchanged from v1.4
 
-  workspace/
-    Cargo.toml
-    src/bin/
-      hello2.rs
-      chapter3.rs
-    content/              ← ONE shared folder, all playgrounds read from here
-      data.csv
-      config.json
-      photo.png
-
-Rules:
-- content/ is a single flat directory shared by all playgrounds.
-- Created lazily on first file add.
-- Renaming or deleting a playground has no effect on content/.
-- No per-playground subfolders — keep it simple.
+The two-tab sidebar (Playgrounds | Content) is unchanged.
+Content tab now shows files for the active project's content/ folder.
+No per-playground subfolder — content/ is shared across all playgrounds
+within the same project.
 
 ---
 
-Runtime Access — PLAYGROUND_CONTENT env var
+Backend — New Commands
 
-When run_playground runs a binary it injects:
+list_projects() → Result<Vec<String>>
+  Lists project directory names under projects/, alphabetically sorted.
 
-  PLAYGROUND_CONTENT=/absolute/path/to/workspace/content
+get_active_project() → Result<String>
+  Returns the active project name from config.json.
+  Returns "default" if config.json missing or malformed.
 
-The playground reads files portably:
+new_project(name: String) → Result<()>
+  Creates projects/<name>/ with:
+    - Cargo.toml  (fresh package with just the package section + empty [dependencies])
+    - src/bin/hello.rs  (hello world template)
+    - content/  directory
+  Errors if name already exists.
 
-  use std::{env, fs};
+switch_project(name: String) → Result<()>
+  Updates the in-memory active project state.
+  Persists to config.json.
+  Frontend is responsible for closing tabs and reloading state after this call.
 
-  fn main() {
-      let dir = env::var("PLAYGROUND_CONTENT").unwrap_or_default();
-      let data = fs::read_to_string(format!("{dir}/data.csv")).unwrap();
-      println!("{data}");
-  }
+rename_project(old_name: String, new_name: String) → Result<()>
+  Renames the directory.
+  If old_name is the active project, updates config.json to new_name.
 
-New playground template includes a hint comment:
-  // Files in your content folder are available via:
-  // let dir = std::env::var("PLAYGROUND_CONTENT").unwrap_or_default();
+delete_project(name: String) → Result<()>
+  Deletes projects/<name>/ recursively.
+  Does not switch automatically — frontend switches first, then calls delete.
 
----
-
-Editor Integration (content text files)
-
-Opening a content text file:
-- Tab badge: 📄 (not the RS badge used for Rust source files)
-- Tab label: just the filename, e.g. "data.txt"
-- Language auto-detected by extension:
-    .rs → rust   .json → json   .toml → ini   .md → markdown
-    .yaml / .yml → yaml          .csv .txt .log and all others → plaintext
-- Dirty state and Cmd+S work identically to playground source tabs.
-- Save invokes save_content_file(playground_name, filename, content) — not save_playground.
-- Closing a dirty content tab: same behaviour as closing a dirty playground tab
-  (close immediately, no confirm — file on disk is safe).
+duplicate_project(name: String) → Result<String>
+  Copies projects/<name>/ to projects/<name>_copy (or _copy2, etc.).
+  Returns the new project name.
 
 ---
 
-Backend Commands (new in v1.4)
+Backend — Modified Behaviour
 
-list_content_files(name: &str) → Result<Vec<ContentFile>>
-  ContentFile { filename: String, size_bytes: u64, is_text: bool }
-  Sorted alphabetically. Returns empty vec (not error) if folder missing.
+workspace_dir(app) is now project-aware:
+  projects_dir(app).join(active_project_name)
 
-create_content_file(name: &str, filename: &str) → Result<()>
-  Creates empty file at content/<name>/<filename>.
-  Creates content/<name>/ dir if missing.
-  Returns Err if filename already exists.
+projects_dir(app):
+  app_data_dir().join("projects")   ← same path in dev and release
 
-save_content_file(name: &str, filename: &str, content: &str) → Result<()>
-  Overwrites with new text content.
+Active project is held in Tauri app state:
+  struct ActiveProject(Mutex<String>)
 
-read_content_file(name: &str, filename: &str) → Result<String>
-  Reads as UTF-8 text.
+Registered in setup():
+  app.manage(ActiveProject(Mutex::new(loaded_project_name)))
 
-delete_content_file(name: &str, filename: &str) → Result<()>
-  Deletes file. Returns Err if not found.
+All existing commands (list_playgrounds, new_playground, run_playground,
+list_content_files, etc.) remain unchanged in signature — they just resolve
+paths through the updated workspace_dir() which is now project-aware.
 
-rename_content_file(name: &str, old: &str, new_name: &str) → Result<()>
-  Renames within the same content folder.
-  Returns Err if new name already exists.
+config.json schema:
+  { "active_project": "default" }
 
-import_content_file(name: &str, src_path: &str) → Result<String>
-  Copies from src_path into content/<name>/.
-  Returns final filename (may have _1 suffix if collision resolved).
+ensure_workspace() is renamed ensure_project() and called:
+  - On app startup (for the active project)
+  - After new_project() (for the new project)
 
-Security: same path-traversal guard as playground names on all filename parameters.
-  - Reject names containing / \ or null bytes.
-  - Canonicalize and verify destination stays inside content/<name>/.
-
-run_playground change:
-  cmd.env("PLAYGROUND_CONTENT", workspace_dir.join("content").join(name));
+Migration note:
+  Dev-mode users who had playgrounds in src/bin/ (repo root) will not see them
+  after upgrading to v1.5 — those files are in a different location. Users
+  should manually copy src/bin/*.rs files into the new project's folder if needed.
+  v1.5 creates a fresh "default" project on first launch.
 
 ---
 
-Acceptance Criteria (v1.4)
+Frontend — Changes
 
-SIDEBAR TABS
-[ ] Two tabs visible at top of sidebar: "Playgrounds" and "Content"
-[ ] Switching tabs does not change the active playground
-[ ] Playgrounds tab is unchanged from v1.3
-[ ] Content tab header shows "Content — <playground name>"
-[ ] Content tab shows empty state when no playground is selected
-[ ] Content tab shows empty drop-zone state when folder is empty
+App.svelte:
+  - Add activeProject: string state, loaded from get_active_project() in onMount
+  - Add projects: string[] list, loaded from list_projects() in onMount
+  - Replace toolbar app name with <ProjectSwitcher> component
+  - switchProject(name): call switch_project(name), clear all tabs, reload
+    playgrounds/cargoToml/toolchainInfo for the new project
 
-CONTENT FILE LIST
-[ ] Files listed with correct 📄 🖼 📦 icons
-[ ] Clicking text file opens as editor tab
-[ ] Clicking image file opens with macOS default app
-[ ] Clicking binary file reveals in Finder
-[ ] Right-click: Rename / Delete / Reveal in Finder
+New component: ProjectSwitcher.svelte
+  Props: projects: string[], active: string
+  Events: switch(name), new(name), rename({old, new}), delete(name)
+  Renders the pill button + dropdown popover.
+  Inline name input for new/rename within the popover.
 
-NEW FILE
-[ ] [+ New File] opens inline input at bottom of file list
-[ ] Enter validates name and creates file
-[ ] Text files open as editor tab immediately on creation
-[ ] Escape cancels silently
-[ ] Duplicate name shows inline error "Already exists"
-[ ] Name with / or \ shows inline error "Invalid name"
-
-DRAG AND DROP
-[ ] Entire Content tab pane is a drop zone
-[ ] Dashed highlight border appears on drag-over
-[ ] Files dropped are copied into content/<playground>/
-[ ] Name collision resolved with _1 suffix (no overwrite)
-[ ] Multiple files can be dropped at once
-
-EDITOR TABS FOR CONTENT FILES
-[ ] Tab shows 📄 badge (not RS)
-[ ] Language auto-detected from extension
-[ ] Dirty state and Cmd+S work correctly
-[ ] save_content_file invoked on save (not save_playground)
-
-RUNTIME
-[ ] PLAYGROUND_CONTENT env var injected on run
-[ ] Points to correct absolute path for the active playground
-[ ] New playground template includes the hint comment
-
-FOLDER STRUCTURE
-[ ] content/ created lazily on first file add
-[ ] content/ is shared — renaming/deleting a playground does not touch it
-
-BACKEND SECURITY
-[ ] Path-traversal guard on all content filenames
-[ ] Canonicalized paths verified to stay within content/<name>/
+No changes to:
+  - Sidebar.svelte  (already project-agnostic after v1.4 simplification)
+  - Editor.svelte
+  - TabBar.svelte
+  - Output.svelte
 
 ---
 
-Exclusions (v1.4)
-- No inline image preview inside the app — delegate to macOS
-- No drag to reorder content files
-- No content folder deletion on playground delete (v1.4 limitation)
-- No shared/global content folder — content is per-playground only
-- No binary file editing in Monaco
+Acceptance Criteria (v1.5)
+
+STORAGE
+[ ] App Support used in both dev and release mode
+[ ] projects/ directory created on first launch
+[ ] config.json created/updated on project switch
+[ ] Active project survives app restart
+
+PROJECT SWITCHER
+[ ] Toolbar shows active project name with ▾ arrow
+[ ] Clicking opens popover with project list
+[ ] Active project is visually indicated (dot or checkmark)
+[ ] Clicking another project switches to it
+[ ] All open tabs are closed on switch
+[ ] Sidebar reloads with new project's playgrounds and content
+
+NEW PROJECT
+[ ] "New Project…" opens inline name input
+[ ] Validation: lowercase, digits, underscores; max 64 chars
+[ ] Duplicate name shows error
+[ ] New project seeded with hello.rs playground
+[ ] Switches to new project after creation
+
+RENAME PROJECT
+[ ] "Rename Project…" pre-fills current name
+[ ] Validation rules same as new
+[ ] Toolbar pill updates immediately
+[ ] config.json updated if renaming active project
+
+DELETE PROJECT
+[ ] Confirmation shown before delete
+[ ] Project directory removed
+[ ] Switches to first remaining project (or creates "default" if none)
+[ ] Deleted project no longer appears in list
+
+EXISTING FUNCTIONALITY
+[ ] All v1.4 features work within a project (playgrounds, content, run, save)
+[ ] Each project's content/ is independent
+[ ] PLAYGROUND_CONTENT points to the active project's content/ folder
 
 ---
 
-Notes
-- The two-tab sidebar design keeps the playground list uncluttered — file browsing
-  has its own dedicated space rather than expanding inline under each playground.
-  This is the same pattern used by many IDEs (VS Code Explorer vs Search tabs).
-- The Content tab always reflects the currently selected playground — it follows
-  selection, it does not drive it.
-- Drag-and-drop in Tauri requires fileDropEnabled: true in tauri.conf.json under
-  the window configuration.
-- Monaco language IDs used: "rust", "json", "ini" (TOML), "markdown", "yaml",
-  "plaintext". All built-in, no extra plugins needed.
-- The PLAYGROUND_CONTENT env var pattern is inspired by CARGO_MANIFEST_DIR — a
-  well-known convention for giving subprocesses their own path context.
+Exclusions (v1.5)
+- No project import/export
+- No project templates beyond the default hello world seed
+- No drag to reorder projects in the list
+- No project-level metadata (description, icon, colour)
+- No multi-window (one project open at a time)
