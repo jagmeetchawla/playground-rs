@@ -83,8 +83,9 @@
   let creatingNew: boolean = $state(false)
 
   // ── Modal state ───────────────────────────────────────────────────────────────
-  let showHelp:  boolean = $state(false)
-  let showAbout: boolean = $state(false)
+  let showHelp:        boolean       = $state(false)
+  let showAbout:       boolean       = $state(false)
+  let deletePending:   string | null = $state(null)
 
   // ── Layout & panel sizing ─────────────────────────────────────────────────────
   let sidebarVisible                   = $state(true)
@@ -147,8 +148,9 @@
       listen('menu:rename-project', () => { switcherPendingMode = 'rename' }),
       listen('menu:delete-project', () => { switcherPendingMode = 'delete-confirm' }),
       listen<string>('menu:switch-project', (e) => switchProject(e.payload)),
-      listen('menu:help',  () => { showHelp  = true }),
-      listen('menu:about', () => { showAbout = true }),
+      listen('menu:help',              () => { showHelp  = true }),
+      listen('menu:about',             () => { showAbout = true }),
+      listen('menu:delete-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground') deletePending = activeTab }),
     ])
 
     window.addEventListener('keydown', handleKey)
@@ -156,6 +158,15 @@
       window.removeEventListener('keydown', handleKey)
       unlisteners.forEach(u => u())
     }
+  })
+
+  // Rebuild the native menu whenever projects or playground count changes
+  $effect(() => {
+    invoke('rebuild_menu', {
+      projects,
+      active: activeProject,
+      playgroundCount: playgrounds.length,
+    }).catch(console.error)
   })
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -166,7 +177,7 @@
   }
 
   function syncMenuProjects() {
-    invoke('rebuild_projects_menu', { projects, active: activeProject }).catch(console.error)
+    invoke('rebuild_menu', { projects, active: activeProject, playgroundCount: playgrounds.length }).catch(console.error)
   }
 
   async function switchProject(name: string) {
@@ -390,9 +401,13 @@
     }
   }
 
-  async function onDelete(e: CustomEvent<string>) {
-    const name = e.detail
-    if (!confirm(`Delete playground "${name}"? This cannot be undone.`)) return
+  function onDelete(e: CustomEvent<string>) {
+    deletePending = e.detail
+  }
+
+  async function confirmDelete() {
+    const name = deletePending!
+    deletePending = null
     await invoke('delete_playground', { name })
     playgrounds = await invoke<string[]>('list_playgrounds')
     closeTab(name)
@@ -690,6 +705,17 @@
   <AboutModal onclose={() => showAbout = false} />
 {/if}
 
+{#if deletePending}
+  <div class="confirm-backdrop" onclick={() => deletePending = null} aria-hidden="true"></div>
+  <div class="confirm-dialog" role="alertdialog" aria-modal="true">
+    <p class="confirm-msg">Delete <strong>{deletePending}</strong>?<br><span class="confirm-sub">This cannot be undone.</span></p>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" onclick={() => deletePending = null}>Cancel</button>
+      <button class="confirm-delete" onclick={confirmDelete}>Delete</button>
+    </div>
+  </div>
+{/if}
+
 <style>
   .app {
     display: flex;
@@ -889,4 +915,43 @@
   }
 
   .shortcut-desc { font-size: 12px; color: var(--text-tertiary); }
+
+  /* ── Delete confirm dialog ── */
+  .confirm-backdrop {
+    position: fixed; inset: 0; z-index: 299;
+    background: rgba(0,0,0,0.45); backdrop-filter: blur(2px);
+  }
+  .confirm-dialog {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 300;
+    width: 300px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+    padding: 20px 20px 16px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .confirm-msg {
+    font-size: 13px; color: var(--text); line-height: 1.55; margin: 0;
+  }
+  .confirm-msg strong { color: var(--text); }
+  .confirm-sub { font-size: 12px; color: var(--text-tertiary); }
+  .confirm-actions {
+    display: flex; justify-content: flex-end; gap: 8px;
+  }
+  .confirm-cancel {
+    font-size: 12px; padding: 5px 12px; border-radius: 6px;
+    background: rgba(255,255,255,0.07); border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .confirm-cancel:hover { background: rgba(255,255,255,0.11); }
+  .confirm-delete {
+    font-size: 12px; padding: 5px 12px; border-radius: 6px;
+    background: rgba(220, 60, 60, 0.25); border: 1px solid rgba(220,60,60,0.4);
+    color: #ff7070;
+  }
+  .confirm-delete:hover { background: rgba(220, 60, 60, 0.38); }
 </style>

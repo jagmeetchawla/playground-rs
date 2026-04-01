@@ -632,6 +632,7 @@ fn build_menu<R: tauri::Runtime>(
     handle: &impl tauri::Manager<R>,
     projects: &[String],
     active: &str,
+    playground_count: usize,
 ) -> tauri::Result<tauri::menu::Menu<R>> {
     let app_submenu = SubmenuBuilder::new(handle, "Rustic Playground")
         .item(&PredefinedMenuItem::about(handle, None, None)?)
@@ -660,6 +661,7 @@ fn build_menu<R: tauri::Runtime>(
     let rename_project_item = MenuItemBuilder::with_id("rename_project", "Rename Project…")
         .build(handle)?;
     let delete_project_item = MenuItemBuilder::with_id("delete_project", "Delete Project…")
+        .enabled(projects.len() > 1)
         .build(handle)?;
 
     let mut proj_builder = SubmenuBuilder::new(handle, "Project")
@@ -683,6 +685,10 @@ fn build_menu<R: tauri::Runtime>(
         .separator()
         .item(&MenuItemBuilder::with_id("close_tab", "Close Tab")
             .accelerator("CmdOrCtrl+W").build(handle)?)
+        .separator()
+        .item(&MenuItemBuilder::with_id("menu_delete_playground", "Delete Playground…")
+            .enabled(playground_count > 1)
+            .build(handle)?)
         .build()?;
 
     let run_menu = SubmenuBuilder::new(handle, "Run")
@@ -722,8 +728,8 @@ fn build_menu<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-fn rebuild_projects_menu(projects: Vec<String>, active: String, app: AppHandle) -> Result<(), String> {
-    let menu = build_menu(&app, &projects, &active).map_err(|e| e.to_string())?;
+fn rebuild_menu(projects: Vec<String>, active: String, playground_count: usize, app: AppHandle) -> Result<(), String> {
+    let menu = build_menu(&app, &projects, &active, playground_count).map_err(|e| e.to_string())?;
     app.set_menu(menu).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -787,7 +793,8 @@ pub fn run() {
                 names
             };
             let active_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
-            let menu = build_menu(app.handle(), &initial_projects, &active_name)?;
+            // On startup we don't know playground count yet; frontend will call rebuild_menu shortly
+            let menu = build_menu(app.handle(), &initial_projects, &active_name, usize::MAX)?;
             app.set_menu(menu)?;
             Ok(())
         })
@@ -805,10 +812,11 @@ pub fn run() {
                 "new_playground"   => Some("menu:new"),
                 "save"             => Some("menu:save"),
                 "close_tab"        => Some("menu:close-tab"),
-                "run_playground"   => Some("menu:run"),
-                "stop_playground"  => Some("menu:stop"),
-                "show_help"        => Some("menu:help"),
-                "show_about"       => Some("menu:about"),
+                "run_playground"          => Some("menu:run"),
+                "stop_playground"         => Some("menu:stop"),
+                "menu_delete_playground"  => Some("menu:delete-playground"),
+                "show_help"               => Some("menu:help"),
+                "show_about"              => Some("menu:about"),
                 _ => None,
             };
             if let Some(name) = event_name {
@@ -824,7 +832,7 @@ pub fn run() {
             rename_project,
             delete_project,
             duplicate_project,
-            rebuild_projects_menu,
+            rebuild_menu,
             // Playground management
             list_playgrounds,
             load_playground,
