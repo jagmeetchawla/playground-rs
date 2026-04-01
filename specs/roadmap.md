@@ -16,14 +16,32 @@ v0.1.5 — Multiple Projects + Unified Storage
 
 ---
 
+IN PROGRESS
+───────────
+
+v0.1.6 — Editor Experience + App Polish
+  Status: specced 2026-04-01, not yet started
+  See specifications.md
+
+  Features:
+  1. Stop button — actually kill the process (SIGTERM + SIGKILL fallback)
+  2. Live error checking — cargo check squiggles in Monaco (~500 ms debounce)
+  3. Toolchain setup wizard — first-run rustup detection and install
+  4. Settings panel — font, theme, tab size, cargo path (Cmd+,)
+  5. Window state persistence — size, position, tabs, sidebar width
+  6. Resizable panels — drag sidebar and output panel borders
+  7. Hide Left Panel button — Cmd+Shift+L, matches Safari/Xcode
+  8. Layout switch — toggle output panel bottom ↔ right
+
+---
+
 NEXT UP
 ───────
 
-v0.1.6 — TBD
-  Not yet specced. Candidates:
+v0.1.7 — Candidates (not yet specced)
   - Dependency manager UI (add/remove crates from Cargo.toml without editing manually)
   - Playground templates (select a starting point: async, CLI, data, web)
-  - Output improvements (copy button, timestamps per line, ansi colour support)
+  - Output improvements (copy button, timestamps per line, ANSI colour support)
 
 
 ---
