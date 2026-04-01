@@ -58,13 +58,14 @@
   // ── New project ───────────────────────────────────────────────────────────────
   async function confirmNew() {
     const name = newValue.trim().toLowerCase()
+    console.log('[ProjectSwitcher] confirmNew', name)
     if (!name) { mode = 'list'; return }
     if (!/^[a-z][a-z0-9_]*$/.test(name)) { newError = 'Lowercase letters, digits, underscores only'; return }
     if (name.length > 64)                 { newError = 'Max 64 characters'; return }
     if (projects.includes(name))          { newError = 'Already exists'; return }
     busy = true; opError = ''
-    try    { await onnew(name); close() }
-    catch  (err) { opError = String(err); busy = false }
+    try    { await onnew(name); console.log('[ProjectSwitcher] onnew ok'); close() }
+    catch  (err) { console.error('[ProjectSwitcher] onnew failed', err); opError = String(err); busy = false }
   }
 
   function handleNewKey(e: KeyboardEvent) {
@@ -75,13 +76,14 @@
   // ── Rename project ────────────────────────────────────────────────────────────
   async function confirmRename() {
     const name = renameValue.trim().toLowerCase()
+    console.log('[ProjectSwitcher] confirmRename', active, '->', name)
     if (!name || name === active) { mode = 'list'; return }
     if (!/^[a-z][a-z0-9_]*$/.test(name)) { renameError = 'Lowercase letters, digits, underscores only'; return }
     if (name.length > 64)                 { renameError = 'Max 64 characters'; return }
     if (projects.includes(name))          { renameError = 'Already exists'; return }
     busy = true; opError = ''
-    try    { await onrename(active, name); close() }
-    catch  (err) { opError = String(err); busy = false }
+    try    { await onrename(active, name); console.log('[ProjectSwitcher] onrename ok'); close() }
+    catch  (err) { console.error('[ProjectSwitcher] onrename failed', err); opError = String(err); busy = false }
   }
 
   function handleRenameKey(e: KeyboardEvent) {
@@ -97,11 +99,6 @@
   }
 </script>
 
-<!-- Click-outside to close -->
-<svelte:window onclick={(e) => {
-  if (open && !(e.target as Element)?.closest('.project-switcher')) close()
-}} />
-
 <div class="project-switcher">
   <button class="pill" onclick={toggle} class:open>
     <span class="pill-name">{active}</span>
@@ -112,6 +109,8 @@
   </button>
 
   {#if open}
+    <!-- Invisible backdrop — click outside the popover to close -->
+    <div class="backdrop" onclick={close} aria-hidden="true"></div>
     <div class="popover">
 
       {#if mode === 'list'}
@@ -210,6 +209,11 @@
 
 <style>
   .project-switcher { position: relative; }
+
+  /* Full-screen transparent backdrop — sits behind the popover, closes on click */
+  .backdrop {
+    position: fixed; inset: 0; z-index: 199;
+  }
 
   /* ── Pill button ── */
   .pill {

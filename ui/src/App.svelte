@@ -116,7 +116,7 @@
 
   /// Close all tabs then switch to a different project.
   async function switchProject(name: string) {
-    // Close all tabs cleanly (no dirty-check — user confirmed via switcher UI)
+    console.log('[switchProject] start', name)
     openTabs  = []
     activeTab = null
     tabCode   = {}
@@ -126,8 +126,10 @@
     dirtyTabs = []
 
     await invoke('switch_project', { name })
+    console.log('[switchProject] backend switched ok')
     activeProject = name
     await loadProjectData()
+    console.log('[switchProject] loadProjectData done, playgrounds=', playgrounds)
   }
 
   function contentTabId(filename: string) {
@@ -366,15 +368,33 @@
   // These throw on error so ProjectSwitcher can catch and display inline.
 
   async function onNewProject(name: string) {
-    await invoke('new_project', { name })
-    projects = await invoke<string[]>('list_projects')
-    await switchProject(name)
+    console.log('[new_project] start', name)
+    try {
+      await invoke('new_project', { name })
+      console.log('[new_project] created ok')
+      projects = await invoke<string[]>('list_projects')
+      console.log('[new_project] projects list', projects)
+      await switchProject(name)
+      console.log('[new_project] switched ok, activeProject=', activeProject)
+    } catch(err) {
+      console.error('[new_project] FAILED', err)
+      throw err
+    }
   }
 
   async function onRenameProject(oldName: string, newName: string) {
-    await invoke('rename_project', { oldName, newName })
-    projects = await invoke<string[]>('list_projects')
-    activeProject = newName
+    console.log('[rename_project] start', oldName, '->', newName)
+    try {
+      await invoke('rename_project', { oldName, newName })
+      console.log('[rename_project] renamed ok')
+      projects = await invoke<string[]>('list_projects')
+      console.log('[rename_project] projects list', projects)
+      activeProject = newName
+      console.log('[rename_project] activeProject updated')
+    } catch(err) {
+      console.error('[rename_project] FAILED', err)
+      throw err
+    }
   }
 
   async function onDeleteProject(name: string) {
