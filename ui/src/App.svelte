@@ -7,6 +7,8 @@
   import Editor from './lib/Editor.svelte'
   import Output from './lib/Output.svelte'
   import ProjectSwitcher from './lib/ProjectSwitcher.svelte'
+  import HelpModal from './lib/HelpModal.svelte'
+  import AboutModal from './lib/AboutModal.svelte'
   import type { RunBlock } from './lib/Output.svelte'
 
   // ── Constants ────────────────────────────────────────────────────────────────
@@ -80,6 +82,10 @@
   // ── New playground binding ────────────────────────────────────────────────────
   let creatingNew: boolean = $state(false)
 
+  // ── Modal state ───────────────────────────────────────────────────────────────
+  let showHelp:  boolean = $state(false)
+  let showAbout: boolean = $state(false)
+
   // ── Layout & panel sizing ─────────────────────────────────────────────────────
   let sidebarVisible                   = $state(true)
   let layoutMode: 'bottom' | 'right'   = $state('bottom')
@@ -141,6 +147,8 @@
       listen('menu:rename-project', () => { switcherPendingMode = 'rename' }),
       listen('menu:delete-project', () => { switcherPendingMode = 'delete-confirm' }),
       listen<string>('menu:switch-project', (e) => switchProject(e.payload)),
+      listen('menu:help',  () => { showHelp  = true }),
+      listen('menu:about', () => { showAbout = true }),
     ])
 
     window.addEventListener('keydown', handleKey)
@@ -673,6 +681,14 @@
 
   </div>
 </div>
+
+{#if showHelp}
+  <HelpModal onclose={() => showHelp = false} />
+{/if}
+
+{#if showAbout}
+  <AboutModal onclose={() => showAbout = false} />
+{/if}
 
 <style>
   .app {

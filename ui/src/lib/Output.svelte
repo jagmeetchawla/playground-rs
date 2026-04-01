@@ -91,8 +91,13 @@
             <!-- Compiler sub-block -->
             {#if block.compilerLines.length > 0}
               <div class="sub-block">
-                <div class="sub-header">Compiler</div>
-                <div class="sub-lines">
+                <div class="sub-header">
+                  <svg width="9" height="9" viewBox="0 0 10 10" fill="none" style="margin-right:3px;vertical-align:middle;opacity:0.6">
+                    <path d="M2 2l3 3-3 3M6 8h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Compiler
+                </div>
+                <div class="code-box compiler-box">
                   {#each block.compilerLines as line}
                     <div class="line {line.stream}">{line.line}</div>
                   {/each}
@@ -104,7 +109,7 @@
             {#if block.programLines.length > 0}
               <div class="sub-block">
                 <div class="sub-header">Output</div>
-                <div class="sub-lines">
+                <div class="code-box output-box">
                   {#each block.programLines as line}
                     <div class="line {line.stream}">{line.line}</div>
                   {/each}
@@ -223,24 +228,43 @@
   /* ── Block body ── */
   .run-body { padding: 0 0 6px; }
 
-  .sub-block { margin: 4px 8px 0; }
+  .sub-block { margin: 4px 0 0; }
 
   .sub-header {
     font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
     text-transform: uppercase; color: var(--text-tertiary);
-    padding: 4px 4px 2px;
+    padding: 4px 10px 4px;
+    display: flex; align-items: center;
   }
 
-  .sub-lines { padding: 0 4px; }
+  /* ── Code box (shared by compiler + output sub-blocks) ── */
+  .code-box {
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    padding: 6px 2px;
+    overflow-x: auto;
+  }
+
+  /* Compiler block — slightly darker / more distinct background */
+  .compiler-box {
+    background: rgba(0, 0, 0, 0.28);
+    border-color: rgba(255, 255, 255, 0.07);
+  }
+
+  /* Program output block — neutral surface, same family but lighter */
+  .output-box {
+    background: rgba(0, 0, 0, 0.14);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
 
   .line {
     font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65;
     white-space: pre-wrap; word-break: break-all;
-    padding: 0 6px; border-radius: var(--radius-xs);
+    padding: 0 8px; border-radius: var(--radius-xs);
   }
-  .line:hover { background: var(--bg-hover); }
+  .line:hover { background: rgba(255,255,255,0.04); }
   .line.stdout { color: var(--text); }
-  .line.stderr { color: var(--red); }
+  .line.stderr { color: #ff8080; }
   .line.info   { color: var(--text-tertiary); }
 
   .run-in-progress {

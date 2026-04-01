@@ -633,7 +633,7 @@ fn build_menu<R: tauri::Runtime>(
     projects: &[String],
     active: &str,
 ) -> tauri::Result<tauri::menu::Menu<R>> {
-    let app_submenu = SubmenuBuilder::new(handle, "Rust Playground")
+    let app_submenu = SubmenuBuilder::new(handle, "Rustic Playground")
         .item(&PredefinedMenuItem::about(handle, None, None)?)
         .separator()
         .item(&PredefinedMenuItem::hide(handle, None)?)
@@ -703,12 +703,21 @@ fn build_menu<R: tauri::Runtime>(
         .select_all()
         .build()?;
 
+    let help_menu = SubmenuBuilder::new(handle, "Help")
+        .item(&MenuItemBuilder::with_id("show_help", "Playground Help…")
+            .accelerator("CmdOrCtrl+Shift+/").build(handle)?)
+        .separator()
+        .item(&MenuItemBuilder::with_id("show_about", "About Rustic Playground")
+            .build(handle)?)
+        .build()?;
+
     MenuBuilder::new(handle)
         .item(&app_submenu)
         .item(&project_menu)
         .item(&playground_menu)
         .item(&run_menu)
         .item(&edit_menu)
+        .item(&help_menu)
         .build()
 }
 
@@ -798,6 +807,8 @@ pub fn run() {
                 "close_tab"        => Some("menu:close-tab"),
                 "run_playground"   => Some("menu:run"),
                 "stop_playground"  => Some("menu:stop"),
+                "show_help"        => Some("menu:help"),
+                "show_about"       => Some("menu:about"),
                 _ => None,
             };
             if let Some(name) = event_name {

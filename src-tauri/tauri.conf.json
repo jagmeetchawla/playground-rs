@@ -1,5 +1,5 @@
 {
-  "productName": "Rust Playground",
+  "productName": "Rustic Playground",
   "version": "0.1.0",
   "identifier": "com.playground-rs.app",
   "build": {
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Rust Playground",
+        "title": "Rustic Playground",
         "width": 1280,
         "height": 800,
         "minWidth": 800,
