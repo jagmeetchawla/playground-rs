@@ -1,8 +1,17 @@
 <p align="center">
   <img src="assets/app-icon-source.png" width="128" height="128" alt="Rustic Playground icon" />
+  <br><br>
+  <strong style="font-size: 1.5em;">Rustic Playground</strong>
+  <br><br>
+  A macOS desktop app for running Rust experiments — inspired by Swift Playgrounds.<br>
+  Write code, press <b>⌘R</b>, see output stream live. No terminal required.
+  <br><br>
+  Built with <a href="https://tauri.app">Tauri 2</a> + <a href="https://svelte.dev">Svelte 5</a> + <a href="https://microsoft.github.io/monaco-editor/">Monaco Editor</a>.
+  <br><br>
+  <img src="assets/screenshot.png" alt="Rustic Playground screenshot" />
 </p>
 
-# Rustic Playground
+<br>
 
 > [!WARNING]
 > ## ⚠️ DEVELOPER TOOL — NOT SANDBOXED — USE AT YOUR OWN RISK
@@ -25,16 +34,6 @@
 >
 > **You are responsible for the code you run.** This tool is for learning
 > and experimentation in a controlled environment you own.
-
----
-
-A macOS desktop app for running Rust experiments — inspired by Swift Playgrounds.
-Write code, press **⌘R**, see output stream live. No terminal required.
-
-Built with [Tauri 2](https://tauri.app) + [Svelte 5](https://svelte.dev) +
-[Monaco Editor](https://microsoft.github.io/monaco-editor/).
-
-![Rustic Playground](assets/screenshot.png)
 
 ## Features
 
