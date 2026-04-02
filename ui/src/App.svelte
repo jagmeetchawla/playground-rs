@@ -580,12 +580,22 @@
         }))
       } else if (msg.stream === 'stderr') {
         const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any)
-        updateLastRun(name, r => ({
-          ...r,
-          ...(r.programStarted
-            ? { programLines: [...r.programLines, { stream: 'stderr', line: msg.line, ts }] }
-            : { compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line, ts }] }),
-        }))
+        // Cargo prints "     Running `target/...`" on stderr when the binary starts.
+        // Use this to transition from 'compiling' → 'running' so the stdin input appears.
+        const isBinaryStart = /^\s*Running\s+`/.test(msg.line)
+        updateLastRun(name, r => {
+          const nowRunning = r.programStarted || isBinaryStart
+          if (isBinaryStart) {
+            // Transition to running but don't add the cargo "Running" line to output
+            return { ...r, programStarted: true, status: 'running' as const }
+          }
+          return {
+            ...r,
+            ...(nowRunning
+              ? { programLines: [...r.programLines, { stream: 'stderr', line: msg.line, ts }] }
+              : { compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line, ts }] }),
+          }
+        })
       }
     }
 
@@ -1103,6 +1113,7 @@
     bind:settings
     onclose={() => showSettings = false}
     onsave={(s) => { settings = s }}
+    onthemechange={(t) => { settings = { ...settings, theme: t } }}
   />
 {/if}
 

@@ -13,17 +13,30 @@
     settings = $bindable(),
     onclose,
     onsave,
+    onthemechange,
   }: {
     settings: Settings
     onclose: () => void
     onsave: (s: Settings) => void
+    onthemechange?: (theme: string) => void
   } = $props()
 
   // Local draft so changes are only applied on save
   let draft: Settings = $state({ ...settings })
+  const originalTheme = settings.theme
+
+  function setTheme(theme: string) {
+    draft.theme = theme
+    onthemechange?.(theme)
+  }
+
+  function cancel() {
+    onthemechange?.(originalTheme)
+    onclose()
+  }
 
   function handleKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') onclose()
+    if (e.key === 'Escape') cancel()
   }
 
   async function save() {
@@ -62,7 +75,7 @@
 <svelte:window onkeydown={handleKey} />
 
 <!-- Backdrop -->
-<div class="backdrop" onclick={onclose} aria-hidden="true"></div>
+<div class="backdrop" onclick={cancel} aria-hidden="true"></div>
 
 <div class="modal" role="dialog" aria-modal="true" aria-label="Settings">
   <div class="modal-header">
@@ -70,7 +83,7 @@
       <span class="rs-badge">RS</span>
       <span class="modal-title">Settings</span>
     </div>
-    <button class="close-btn" onclick={onclose} aria-label="Close">
+    <button class="close-btn" onclick={cancel} aria-label="Close">
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
         <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
       </svg>
@@ -126,22 +139,22 @@
           <button
             class="seg-btn"
             class:seg-active={draft.theme === 'system'}
-            onclick={() => draft.theme = 'system'}
+            onclick={() => setTheme('system')}
           >System</button>
           <button
             class="seg-btn"
             class:seg-active={draft.theme === 'light'}
-            onclick={() => draft.theme = 'light'}
+            onclick={() => setTheme('light')}
           >Light</button>
           <button
             class="seg-btn"
             class:seg-active={draft.theme === 'dark'}
-            onclick={() => draft.theme = 'dark'}
+            onclick={() => setTheme('dark')}
           >Dark</button>
           <button
             class="seg-btn"
             class:seg-active={draft.theme === 'rust'}
-            onclick={() => draft.theme = 'rust'}
+            onclick={() => setTheme('rust')}
           >Rust</button>
         </div>
       </div>
@@ -180,7 +193,7 @@
   <div class="modal-footer">
     <button class="btn btn-secondary" onclick={reset}>Reset Defaults</button>
     <div class="footer-right">
-      <button class="btn btn-secondary" onclick={onclose}>Cancel</button>
+      <button class="btn btn-secondary" onclick={cancel}>Cancel</button>
       <button class="btn btn-primary" onclick={save}>Save</button>
     </div>
   </div>

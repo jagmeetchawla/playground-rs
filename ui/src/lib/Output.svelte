@@ -411,7 +411,7 @@
   }
   .line:hover { background: rgba(255,255,255,0.04); }
   .line.stdout { color: var(--text); }
-  .line.stderr { color: #ff8080; }
+  .line.stderr { color: var(--red); }
   .line.info   { color: var(--text-tertiary); }
   .line.stdin  { color: var(--accent); opacity: 0.85; }
 
