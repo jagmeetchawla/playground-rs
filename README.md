@@ -8,7 +8,7 @@
   <br><br>
   Built with <a href="https://www.rust-lang.org">Rust</a> + <a href="https://tauri.app">Tauri 2</a> + <a href="https://svelte.dev">Svelte 5</a> + <a href="https://microsoft.github.io/monaco-editor/">Monaco Editor</a>.
   <br><br>
-  <img src="assets/screenshot_themes.png" alt="Rustic Playground — Dark, Rust, and Light themes" />
+  <img src="assets/screenshot_themes_v2.png" alt="Rustic Playground — Dark, Rust, and Light themes" />
   <br>
   <sub>Dark · Rust · Light</sub>
 </p>
