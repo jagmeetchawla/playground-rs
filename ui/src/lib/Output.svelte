@@ -3,7 +3,7 @@
 
   const dispatch = createEventDispatcher()
 
-  export type OutputLine = { stream: 'stdout' | 'stderr' | 'info' | 'stdin'; line: string }
+  export type OutputLine = { stream: 'stdout' | 'stderr' | 'info' | 'stdin'; line: string; ts?: string }
   export type RunBlock = {
     runNum: number
     command: string
@@ -67,6 +67,97 @@
       tick().then(() => stdinInput?.focus())
     }
   })
+
+  // ── Copy run output to clipboard ────────────────────────────────────────────
+
+  let copiedRun: number | null = $state(null)
+
+  function copyRunOutput(block: RunBlock, e: MouseEvent) {
+    e.stopPropagation()
+    const lines: string[] = []
+    if (block.compilerLines.length) {
+      lines.push('── Compiler ──')
+      block.compilerLines.forEach(l => lines.push(stripAnsi(l.line)))
+    }
+    if (block.programLines.length) {
+      lines.push('── Output ──')
+      block.programLines.forEach(l => {
+        const prefix = l.stream === 'stdin' ? '> ' : ''
+        lines.push(prefix + stripAnsi(l.line))
+      })
+    }
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      copiedRun = block.runNum
+      setTimeout(() => { copiedRun = null }, 1500)
+    })
+  }
+
+  // ── ANSI color parsing ──────────────────────────────────────────────────────
+
+  const ANSI_RE = /\x1b\[([0-9;]*)m/g
+
+  const ANSI_COLORS: Record<number, string> = {
+    30: '#555', 31: '#ff5555', 32: '#50fa7b', 33: '#f1fa8c',
+    34: '#6272a4', 35: '#ff79c6', 36: '#8be9fd', 37: '#ddd',
+    90: '#888', 91: '#ff8080', 92: '#69ff94', 93: '#ffffa5',
+    94: '#8a9cc5', 95: '#ff92df', 96: '#a4ffff', 97: '#fff',
+  }
+
+  function stripAnsi(text: string): string {
+    return text.replace(ANSI_RE, '')
+  }
+
+  function hasAnsi(text: string): boolean {
+    return ANSI_RE.test(text)
+  }
+
+  function escapeHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  }
+
+  function parseAnsi(text: string): string {
+    // Reset regex state
+    ANSI_RE.lastIndex = 0
+    if (!ANSI_RE.test(text)) return escapeHtml(text)
+    ANSI_RE.lastIndex = 0
+
+    let result = ''
+    let lastIndex = 0
+    let openSpans = 0
+    let match: RegExpExecArray | null
+
+    while ((match = ANSI_RE.exec(text)) !== null) {
+      // Add text before this escape
+      result += escapeHtml(text.slice(lastIndex, match.index))
+      lastIndex = ANSI_RE.lastIndex
+
+      const codes = match[1].split(';').map(Number).filter(n => !isNaN(n))
+      if (codes.length === 0 || codes.includes(0)) {
+        // Reset — close all open spans
+        while (openSpans > 0) { result += '</span>'; openSpans-- }
+      } else {
+        const styles: string[] = []
+        for (const code of codes) {
+          if (code === 1) styles.push('font-weight:bold')
+          else if (code === 2) styles.push('opacity:0.6')
+          else if (code === 3) styles.push('font-style:italic')
+          else if (code === 4) styles.push('text-decoration:underline')
+          else if (ANSI_COLORS[code]) styles.push(`color:${ANSI_COLORS[code]}`)
+          else if (code >= 40 && code <= 47) {
+            const bg = ANSI_COLORS[code - 10]
+            if (bg) styles.push(`background:${bg};padding:0 2px;border-radius:2px`)
+          }
+        }
+        if (styles.length) {
+          result += `<span style="${styles.join(';')}">`
+          openSpans++
+        }
+      }
+    }
+    result += escapeHtml(text.slice(lastIndex))
+    while (openSpans > 0) { result += '</span>'; openSpans-- }
+    return result
+  }
 </script>
 
 <div class="output-panel">
@@ -101,6 +192,15 @@
           <span class="run-cmd">{block.command}</span>
           <span class="run-time">{block.startedAt}</span>
           <span class="run-status {statusClass(block)}">{statusIcon(block)}</span>
+          <span
+            class="copy-btn"
+            class:copied={copiedRun === block.runNum}
+            title="Copy output"
+            role="button"
+            tabindex="-1"
+            onclick={(e) => copyRunOutput(block, e)}
+            onkeydown={(e) => { if (e.key === 'Enter') copyRunOutput(block, e) }}
+          >{copiedRun === block.runNum ? '✓' : '⎘'}</span>
         </button>
 
         <!-- Block body — only when expanded -->
@@ -117,7 +217,9 @@
                 </div>
                 <div class="code-box compiler-box">
                   {#each block.compilerLines as line}
-                    <div class="line {line.stream}">{line.line}</div>
+                    <div class="line {line.stream}" title={line.ts ?? ''}>
+                      {#if hasAnsi(line.line)}{@html parseAnsi(line.line)}{:else}{line.line}{/if}
+                    </div>
                   {/each}
                 </div>
               </div>
@@ -129,7 +231,9 @@
                 <div class="sub-header">Output</div>
                 <div class="code-box output-box">
                   {#each block.programLines as line}
-                    <div class="line {line.stream}">{line.line}</div>
+                    <div class="line {line.stream}" title={line.ts ?? ''}>
+                      {#if line.stream === 'stdin'}› {/if}{#if hasAnsi(line.line)}{@html parseAnsi(line.line)}{:else}{line.line}{/if}
+                    </div>
                   {/each}
                 </div>
               </div>
@@ -258,6 +362,15 @@
   .run-status.ok  { color: var(--green); }
   .run-status.err { color: var(--red); }
   .run-status.dim { color: var(--text-tertiary); }
+
+  .copy-btn {
+    font-size: 16px; color: var(--text-tertiary);
+    background: none; border: none; cursor: pointer;
+    padding: 0 4px; flex-shrink: 0;
+    transition: color 0.1s;
+  }
+  .copy-btn:hover { color: var(--text); }
+  .copy-btn.copied { color: var(--green); }
 
   /* ── Block body ── */
   .run-body { padding: 0 0 6px; }

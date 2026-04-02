@@ -473,16 +473,18 @@
           ...r, status: msg.code === 0 ? 'success' : 'error', exitCode: msg.code,
         }))
       } else if (msg.stream === 'stdout') {
+        const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any)
         updateLastRun(name, r => ({
           ...r, programStarted: true, status: 'running',
-          programLines: [...r.programLines, { stream: 'stdout', line: msg.line }],
+          programLines: [...r.programLines, { stream: 'stdout', line: msg.line, ts }],
         }))
       } else if (msg.stream === 'stderr') {
+        const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any)
         updateLastRun(name, r => ({
           ...r,
           ...(r.programStarted
-            ? { programLines: [...r.programLines, { stream: 'stderr', line: msg.line }] }
-            : { compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line }] }),
+            ? { programLines: [...r.programLines, { stream: 'stderr', line: msg.line, ts }] }
+            : { compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line, ts }] }),
         }))
       }
     }
@@ -622,9 +624,10 @@
     if (!activeTab) return
     const line = e.detail
     // Echo the input in the console as a stdin line
+    const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any)
     updateLastRun(activeTab, r => ({
       ...r,
-      programLines: [...r.programLines, { stream: 'stdin' as const, line }],
+      programLines: [...r.programLines, { stream: 'stdin' as const, line, ts }],
     }))
     // Send to the running process
     try {
