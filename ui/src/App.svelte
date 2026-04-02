@@ -1230,8 +1230,8 @@
   .btn-run:hover:not(:disabled) { background: var(--accent-hover); }
   .btn-run:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  .btn-stop { background: #3a3a3c; color: var(--text-secondary); }
-  .btn-stop:hover { background: var(--bg-elevated); }
+  .btn-stop { background: var(--red); color: #fff; }
+  .btn-stop:hover { opacity: 0.85; }
 
   .btn-export {
     background: var(--bg-input); color: var(--text-secondary);
