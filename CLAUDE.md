@@ -103,13 +103,12 @@ All runtime data lives under:
 4. Hide sidebar — ⌘⇧L
 5. Layout switch — bottom ↔ right output panel
 
-**v0.1.7** — in progress (settings + deferred v0.1.6 features + new):
-- Settings panel — font, theme, tab size, cargo path (⌘,)
-- Toolchain setup wizard — first-run rustup detection
-- Live error checking — `cargo check` squiggles (CodeMirror diagnostics)
-- Dependency manager UI
-- Playground templates
-- Output improvements (copy button, ANSI colors, timestamps)
+**v0.1.7** — shipped (settings, toolchain wizard, dependency manager, templates, console improvements):
+1. Settings panel — font size, font family, tab size, cargo path (⌘,)
+2. Toolchain setup wizard — first-run detection (green/yellow/red), re-check
+3. Dependency manager UI — add/remove crates from Cargo.toml toolbar
+4. Playground templates — 11 starter templates with auto-deps
+5. Console improvements — copy button, ANSI colors, timestamps
 
 ---
 

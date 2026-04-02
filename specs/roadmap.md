@@ -47,33 +47,18 @@ v0.1.6.3 — Interactive Console (stdin support)
 
 ---
 
-IN PROGRESS
-───────────
-
 v0.1.7 — Settings, Polish, and Deferred v0.1.6 Features
-  Status: in progress — started 2026-04-02
+  Status: complete — released 2026-04-02
 
-  Priority 1 — Settings panel (Cmd+,)
-    - Font size, font family, tab size
-    - Theme (system / light / dark)
-    - Cargo path override
-    - Backend: get_settings / save_settings commands, settings.json in App Support
-    - Frontend: SettingsPanel component, slide-in or modal
+  Shipped:
+  1. Settings panel (Cmd+,) — font size, font family, tab size, cargo path
+  2. Toolchain setup wizard — first-run detection (green/yellow/red), re-check
+  3. Dependency manager UI — add/remove crates from Cargo.toml toolbar
+  4. Playground templates — 11 starter templates with auto-deps
+  5. Console improvements — copy button, ANSI color support, timestamps
 
-  Priority 2 — Toolchain setup wizard
-    - First-run detection when cargo is not found
-    - Offer to run rustup-init or set manual path
-    - Store cargo_path and wizard_completed in config.json
-
-  Priority 3 — Live error checking
-    - cargo check --message-format json in background (~500 ms debounce)
-    - Push diagnostics to CodeMirror as squiggles
-    - Separate --target-dir to avoid lock conflicts
-
-  Priority 4 — New features
-    - Dependency manager UI (add/remove crates without editing Cargo.toml manually)
-    - Playground templates (select a starting point: async, CLI, data, web)
-    - Output improvements (copy button, timestamps per line, ANSI colour support)
+  Deferred to future version:
+  - Live error checking — cargo check squiggles (CodeMirror diagnostics)
 
 
 ---
