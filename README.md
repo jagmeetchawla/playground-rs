@@ -209,7 +209,7 @@ See the warning at the top of this file. Additionally:
 
 | Version | Highlights |
 |---|---|
-| v0.1.8 | Live error checking (Monaco markers), dark/light themes, project export, Rust Book polish, backend modularized into 6 modules, 70 unit tests |
+| v0.1.8 | New app icon, Rust theme, live error checking (Monaco markers), dark/light/system themes, project export, Rust Book polish, backend modularized into 6 modules, 70 unit tests |
 | v0.1.7 | Settings panel, toolchain setup wizard, dependency manager, 11 playground templates, console improvements (copy, ANSI colors, timestamps) |
 | v0.1.6.3 | Interactive console — stdin support for playgrounds |
 | v0.1.6.2 | Window state persistence (layout, panel sizes, tabs, window size) |

@@ -17,10 +17,12 @@ What
   Features delivered:
   1. Live error checking (cargo check squiggles) — DONE
   2. Autocomplete / LSP — SKIPPED (decided not to include)
-  3. Themes (dark / light / system) — DONE
+  3. Themes (dark / light / system / rust) — DONE
   4. Export / share — DONE (exports as standalone CLI playground)
   5. Rust Book examples polish — DONE (all 20 chapters, zero warnings)
   6. Backend modularization — DONE (lib.rs split into 6 modules)
+  7. New app icon — DONE (illustrated rustic playground with cargo crate, gear, fn() sign)
+  8. Rust theme — DONE (warm earthy palette: espresso bg, parchment text, Rust-red accents)
 
 Why
   The core editing and running experience is solid after v0.1.7. These features close
@@ -167,48 +169,43 @@ Backend (lib.rs)
 
 ---
 
-Feature 3 — Themes (Dark / Light / System)
-───────────────────────────────────────────
+Feature 3 — Themes (Dark / Light / System / Rust)
+──────────────────────────────────────────────────
 
 Problem
   The app is dark-only. Users working in bright environments or preferring
   light themes have no option.
 
 Goal
-  Add a theme toggle: System (follows macOS appearance), Dark, Light.
+  Add a theme toggle: System (follows macOS appearance), Dark, Light, Rust.
   The theme applies to both the Monaco editor and the surrounding app chrome.
+  Default: "system".
 
 Settings change
   Add to Settings struct and config.json:
-    theme: "system" | "dark" | "light"    // default: "system"
+    theme: "system" | "dark" | "light" | "rust"    // default: "system"
 
-  Settings panel gets a new "Theme" segmented control.
+  Settings panel has a 4-button segmented control: System | Light | Dark | Rust
 
-Monaco themes
-  - playground-dark (existing) — no changes needed
-  - playground-light (new) — define in Editor.svelte:
-      base: 'vs'
-      Background: #ffffff
-      Foreground: #1c1c1e
-      Colors: matching macOS light appearance (system grays, blue accents)
-      Token colors: Xcode-light-inspired (keywords pink, types teal,
-        strings red-orange, comments gray, numbers amber)
+Monaco themes (all defined in Editor.svelte)
+  - playground-dark — macOS dark (#1c1c1e bg, blue accents, Xcode-inspired tokens)
+  - playground-light — macOS light (#ffffff bg, blue accents, light Xcode tokens)
+  - playground-rust — warm earthy Rust-inspired palette:
+      Background: #1a1210 (deep espresso)
+      Foreground: #e8d5c4 (warm parchment)
+      Keywords: #ce422b (Rust red), Types: #d4a03c (oxidized gold)
+      Strings: #6b9e3c (patina green), Numbers: #c87832 (copper)
+      Macros: #e05a3a (bright rust), Attributes: #b07840 (bronze)
 
-App chrome (CSS)
-  - Define CSS custom properties for both themes:
-      --bg-primary, --bg-secondary, --bg-tertiary
-      --text-primary, --text-secondary
-      --border-color, --accent-color
-      --sidebar-bg, --toolbar-bg, --output-bg
-  - Apply via a .theme-dark / .theme-light class on <body>
-  - "system" listens to prefers-color-scheme media query and sets the class
-    accordingly, updating on OS appearance change
+App chrome (CSS — app.css)
+  - Three theme classes: .theme-dark, .theme-light, .theme-rust
+  - Applied via class on <body>, removed/added in $effect
+  - "system" listens to prefers-color-scheme media query
 
 Frontend (App.svelte)
-  - Pass theme to Editor as a prop
+  - resolvedTheme: system→dark/light based on OS, or direct dark/light/rust
+  - monacoTheme: rust→playground-rust, light→playground-light, else playground-dark
   - Editor $effect watches theme and calls monaco.editor.setTheme()
-  - Sidebar, Output, TabBar, toolbar all use CSS vars — no code changes
-    needed beyond defining the light-theme values
 
 ---
 
@@ -317,12 +314,13 @@ Feature 2 — Autocomplete / LSP
   [ ] LSP process is cleaned up on project switch and app close
 
 Feature 3 — Themes
-  [ ] "System" theme follows macOS light/dark appearance automatically
-  [ ] "Dark" theme matches current appearance (no regression)
-  [ ] "Light" theme has readable contrast and consistent styling
-  [ ] Theme change applies immediately to editor AND app chrome
-  [ ] Theme preference persists across restarts
-  [ ] Theme setting accessible from Settings panel (Cmd+,)
+  [x] "System" theme follows macOS light/dark appearance automatically
+  [x] "Dark" theme matches current appearance (no regression)
+  [x] "Light" theme has readable contrast and consistent styling
+  [x] "Rust" theme — warm earthy palette (espresso, parchment, Rust-red accents)
+  [x] Theme change applies immediately to editor AND app chrome
+  [x] Theme preference persists across restarts
+  [x] Theme setting accessible from Settings panel (Cmd+,)
 
 Feature 4 — Export / Share
   [ ] "Export as Cargo Project" creates a working standalone project
