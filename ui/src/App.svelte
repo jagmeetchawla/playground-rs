@@ -11,7 +11,9 @@
   import HelpModal from './lib/HelpModal.svelte'
   import AboutModal from './lib/AboutModal.svelte'
   import SettingsModal from './lib/SettingsModal.svelte'
+  import NewPlaygroundModal from './lib/NewPlaygroundModal.svelte'
   import type { Settings } from './lib/SettingsModal.svelte'
+  import type { Template } from './lib/templates'
   import type { RunBlock } from './lib/Output.svelte'
 
   // ── Constants ────────────────────────────────────────────────────────────────
@@ -509,11 +511,31 @@
 
   function requestNewPlayground() { creatingNew = true }
 
-  async function onNewPlayground(e: CustomEvent<string>) {
-    const name = e.detail
+  async function onNewPlayground(name: string, template: Template) {
     try {
-      await invoke('new_playground', { name })
+      await invoke('new_playground', { name, content: template.code })
+
+      // Auto-add dependencies if the template requires them
+      if (template.deps?.length) {
+        let cargoContent = await invoke<string>('get_cargo_toml')
+        for (const dep of template.deps) {
+          try {
+            cargoContent = await invoke<string>('add_dependency', {
+              content: cargoContent,
+              name: dep.name,
+              version: dep.version,
+            })
+          } catch {
+            // Dep may already exist — that's fine
+          }
+        }
+        // Update the editor if Cargo.toml tab is open
+        tabCode = { ...tabCode, [CARGO_TAB]: cargoContent }
+        cargoToml = cargoContent
+      }
+
       playgrounds = await invoke<string[]>('list_playgrounds')
+      creatingNew = false
       await openTab(name, { type: 'playground' })
     } catch (err) {
       console.error('Failed to create playground:', err)
@@ -798,10 +820,9 @@
           {playgrounds}
           selected={activeTab && tabMeta[activeTab]?.type === 'playground' ? activeTab : null}
           {dirtyTabs}
-          bind:creatingNew
           {cargoToml}
+          onNewPlayground={requestNewPlayground}
           on:select={(e) => openTab(e.detail, { type: 'playground' })}
-          on:new={onNewPlayground}
           on:rename={onRename}
           on:delete={onDelete}
           on:duplicate={onDuplicate}
@@ -940,6 +961,14 @@
     bind:settings
     onclose={() => showSettings = false}
     onsave={(s) => { settings = s }}
+  />
+{/if}
+
+{#if creatingNew}
+  <NewPlaygroundModal
+    existingNames={playgrounds}
+    onclose={() => creatingNew = false}
+    oncreate={onNewPlayground}
   />
 {/if}
 

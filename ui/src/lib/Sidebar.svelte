@@ -9,14 +9,14 @@
     playgrounds,
     selected,
     dirtyTabs,
-    creatingNew = $bindable(false),
     cargoToml = '',
+    onNewPlayground = () => {},
   }: {
     playgrounds: string[]
     selected: string | null
     dirtyTabs: string[]
-    creatingNew: boolean
     cargoToml: string
+    onNewPlayground?: () => void
   } = $props()
 
   // ── Sidebar tab ───────────────────────────────────────────────────────────────
@@ -34,42 +34,6 @@
       : playgrounds.filter(n => n.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
-  let newNameValue: string = $state('')
-  let newNameError: string = $state('')
-  let newInputEl: HTMLInputElement | null = $state(null)
-
-  $effect(() => {
-    if (creatingNew) {
-      newNameValue = ''
-      newNameError = ''
-      tick().then(() => newInputEl?.focus())
-    }
-  })
-
-  function confirmNew() {
-    const name = newNameValue.trim().toLowerCase()
-    if (!name) { cancelNew(); return }
-    if (!/^[a-z][a-z0-9_]*$/.test(name)) {
-      newNameError = 'Lowercase letters, digits, underscores only'
-      return
-    }
-    if (name.length > 64) { newNameError = 'Max 64 characters'; return }
-    creatingNew = false
-    newNameValue = ''
-    newNameError = ''
-    dispatch('new', name)
-  }
-
-  function cancelNew() {
-    creatingNew = false
-    newNameValue = ''
-    newNameError = ''
-  }
-
-  function handleNewKey(e: KeyboardEvent) {
-    if (e.key === 'Enter') { e.preventDefault(); confirmNew() }
-    if (e.key === 'Escape') cancelNew()
-  }
 
   function openContext(e: MouseEvent, name: string) {
     e.preventDefault()
@@ -311,7 +275,7 @@
 
     <div class="sidebar-header">
       <span class="sidebar-title">Playgrounds</span>
-      <button class="icon-btn" title="New playground (⌘N)" onclick={() => creatingNew = true}>
+      <button class="icon-btn" title="New playground (⌘N)" onclick={onNewPlayground}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
@@ -333,25 +297,6 @@
     </div>
 
     <ul class="playground-list">
-      {#if creatingNew}
-        <li class="new-item">
-          <span class="file-icon">RS</span>
-          <div class="new-input-wrap">
-            <input
-              class="new-input" type="text" placeholder="playground_name"
-              bind:value={newNameValue} bind:this={newInputEl}
-              onkeydown={handleNewKey}
-              onblur={() => setTimeout(() => { if (creatingNew) cancelNew() }, 150)}
-              onclick={(e) => e.stopPropagation()}
-            />
-            {#if newNameError}
-              <span class="new-error">{newNameError}</span>
-            {/if}
-          </div>
-          <button class="new-confirm" onclick={confirmNew} title="Create">↵</button>
-        </li>
-      {/if}
-
       {#each filtered as name (name)}
         {@const isDirty = dirtyTabs.includes(name)}
         <li
@@ -374,7 +319,7 @@
         </li>
       {/each}
 
-      {#if filtered.length === 0 && !creatingNew}
+      {#if filtered.length === 0}
         <li class="empty-hint">
           {searchQuery ? 'No matches' : 'No playgrounds yet'}
         </li>

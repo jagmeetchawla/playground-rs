@@ -448,12 +448,13 @@ fn save_playground(name: String, content: String, app: AppHandle) -> Result<(), 
 }
 
 #[tauri::command]
-fn new_playground(name: String, app: AppHandle) -> Result<(), String> {
+fn new_playground(name: String, content: Option<String>, app: AppHandle) -> Result<(), String> {
     let path = safe_playground_path(&name, &app)?;
     if path.exists() {
         return Err(format!("'{}' already exists", name));
     }
-    std::fs::write(&path, playground_template(&name)).map_err(|e| e.to_string())
+    let code = content.unwrap_or_else(|| playground_template(&name));
+    std::fs::write(&path, code).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -681,7 +682,10 @@ fn add_dependency(
     app: AppHandle,
 ) -> Result<String, String> {
     validate_crate_name(&name)?;
-    validate_version(&version)?;
+    // Skip version validation for inline table specs like { version = "1", features = [...] }
+    if !version.trim_start().starts_with('{') {
+        validate_version(&version)?;
+    }
 
     let mut doc = content
         .parse::<toml_edit::DocumentMut>()
@@ -697,7 +701,17 @@ fn add_dependency(
         return Err(format!("'{}' is already in [dependencies]", name));
     }
 
-    doc["dependencies"][&name] = toml_edit::value(&version);
+    // If version looks like an inline table (e.g. `{ version = "1", features = ["full"] }`),
+    // parse it as TOML value; otherwise treat it as a plain version string.
+    if version.trim_start().starts_with('{') {
+        let tmp = format!("x = {}", version);
+        let tmp_doc = tmp
+            .parse::<toml_edit::DocumentMut>()
+            .map_err(|e| format!("Invalid dependency spec: {}", e))?;
+        doc["dependencies"][&name] = tmp_doc["x"].clone();
+    } else {
+        doc["dependencies"][&name] = toml_edit::value(&version);
+    }
 
     let updated = doc.to_string();
     let path = workspace_dir(&app).join("Cargo.toml");
