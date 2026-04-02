@@ -1,4 +1,6 @@
 <script lang="ts">
+  import appIcon from './app-icon.png'
+
   let { onclose }: { onclose: () => void } = $props()
 
   function handleKey(e: KeyboardEvent) {
@@ -21,15 +23,7 @@
 
   <!-- Logo -->
   <div class="logo-wrap">
-    <div class="logo">
-      <span class="logo-rs">RS</span>
-      <!-- Crate / isometric box -->
-      <svg class="logo-crate" width="22" height="19" viewBox="0 0 14 12" fill="none">
-        <path d="M7 1L13 4L7 7L1 4Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-        <path d="M1 4L1 8.5L7 11.5L7 7Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-        <path d="M13 4L13 8.5L7 11.5L7 7Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-      </svg>
-    </div>
+    <img class="logo" src={appIcon} alt="Rustic Playground" width="80" height="80" />
   </div>
 
   <div class="about-body">
@@ -111,20 +105,10 @@
   /* ── Logo ── */
   .logo-wrap { margin-bottom: 16px; }
   .logo {
-    width: 64px; height: 64px;
-    background: linear-gradient(135deg, #1a1a1a 0%, #2a2218 100%);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 14px;
+    width: 80px; height: 80px;
+    border-radius: 18px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.6);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 3px;
   }
-  .logo-rs {
-    font-size: 11px; font-weight: 900; letter-spacing: 0.06em;
-    color: var(--rust-orange);
-    line-height: 1;
-  }
-  .logo-crate { color: rgba(255,255,255,0.45); }
 
   /* ── Body text ── */
   .about-body {
