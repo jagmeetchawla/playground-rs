@@ -23,6 +23,10 @@ v0.1.8 — Final Feature Release (pre-distribution)
   7. Test suite — 70 unit tests across 4 backend modules
   8. New app icon — illustrated rustic playground (cargo crate, gear, fn() sign)
   9. Rust theme — warm earthy palette (espresso bg, parchment text, Rust-red accents)
+  10. Fix: stdin input now appears as soon as binary starts (detect cargo "Running" line)
+  11. Fix: light theme stderr readability — use theme-aware --red variable (#d42020 in light)
+  12. Fix: live theme preview in settings — switches instantly on click, reverts on cancel
+  13. README: diagonal composite screenshot showing all three themes
 
 v0.1.7 — Settings, Polish, and Deferred v0.1.6 Features
   Status: complete — released 2026-04-02

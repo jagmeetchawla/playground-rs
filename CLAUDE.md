@@ -103,7 +103,7 @@ All runtime data lives under:
 
 ## Current Version Status
 
-**v0.1.8** — shipped (new app icon, Rust theme, live error checking, dark/light/system themes, export, Rust Book polish, backend modularization, 70 unit tests).
+**v0.1.8** — shipped (new app icon, Rust theme, live error checking, dark/light/system themes, export, Rust Book polish, backend modularization, 70 unit tests, stdin fix, light theme readability, live theme preview).
 
 After v0.1.8: pause features, ship website, DMG distribution, wiki, announcements.
 

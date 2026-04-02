@@ -297,12 +297,12 @@ Approach
 Acceptance Criteria
 
 Feature 1 — Live Error Checking
-  [ ] Red squiggles appear ~500 ms after typing stops on a syntax error
-  [ ] Squiggle hover shows the compiler error message
-  [ ] Squiggles clear when the error is fixed
-  [ ] No squiggles on Cargo.toml or content file tabs
-  [ ] Running cargo run while a check is in progress works (separate target dir)
-  [ ] Starting a Run cancels any in-flight check
+  [x] Red squiggles appear ~500 ms after typing stops on a syntax error
+  [x] Squiggle hover shows the compiler error message
+  [x] Squiggles clear when the error is fixed
+  [x] No squiggles on Cargo.toml or content file tabs
+  [x] Running cargo run while a check is in progress works (separate target dir)
+  [x] Starting a Run cancels any in-flight check
 
 Feature 2 — Autocomplete / LSP
   [ ] Completions appear when typing (e.g. after `std::` or `.`)
@@ -321,21 +321,27 @@ Feature 3 — Themes
   [x] Theme change applies immediately to editor AND app chrome
   [x] Theme preference persists across restarts
   [x] Theme setting accessible from Settings panel (Cmd+,)
+  [x] Live theme preview — switches instantly on click, reverts on cancel
+  [x] Light theme stderr/compiler output uses darker red (#d42020) for readability
 
 Feature 4 — Export / Share
-  [ ] "Export as Cargo Project" creates a working standalone project
-  [ ] Exported project compiles with `cargo run` independently
-  [ ] Content files are included in the export if they exist
-  [ ] "Copy to Clipboard" copies the full source code
-  [ ] Both actions show a toast confirmation
-  [ ] Export uses a native save dialog for destination
+  [x] "Export as Cargo Project" creates a working standalone project
+  [x] Exported project compiles with `cargo run` independently
+  [x] Content files are included in the export if they exist
+  [x] "Copy to Clipboard" copies the full source code
+  [x] Both actions show a toast confirmation
+  [x] Export uses a native save dialog for destination
 
 Feature 5 — Rust Book Polish
-  [ ] All 20 chapters compile without errors
-  [ ] Comments are clear and educational
-  [ ] Key concepts per chapter are demonstrated
-  [ ] Consistent code style across chapters
-  [ ] attribution.md present in each chapter
+  [x] All 20 chapters compile without errors
+  [x] Comments are clear and educational
+  [x] Key concepts per chapter are demonstrated
+  [x] Consistent code style across chapters
+  [x] attribution.md present in each chapter
+
+Bug Fixes (post-feature)
+  [x] Stdin input appears immediately when binary starts (detect cargo "Running" stderr line)
+  [x] Light theme compiler output readability — stderr uses theme-aware var(--red)
 
 ---
 
