@@ -6,7 +6,7 @@
   A macOS desktop app for running Rust experiments — inspired by Swift Playgrounds.<br>
   Write code, press <b>⌘R</b>, see output stream live. No terminal required.
   <br><br>
-  Built with <a href="https://tauri.app">Tauri 2</a> + <a href="https://svelte.dev">Svelte 5</a> + <a href="https://microsoft.github.io/monaco-editor/">Monaco Editor</a>.
+  Built with <a href="https://www.rust-lang.org">Rust</a> + <a href="https://tauri.app">Tauri 2</a> + <a href="https://svelte.dev">Svelte 5</a> + <a href="https://microsoft.github.io/monaco-editor/">Monaco Editor</a>.
   <br><br>
   <img src="assets/screenshot_themes.png" alt="Rustic Playground — Dark, Rust, and Light themes" />
   <br>
