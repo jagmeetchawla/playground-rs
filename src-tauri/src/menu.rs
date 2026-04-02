@@ -12,8 +12,6 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     playground_count: usize,
 ) -> tauri::Result<tauri::menu::Menu<R>> {
     let app_submenu = SubmenuBuilder::new(handle, "Rustic Playground")
-        .item(&PredefinedMenuItem::about(handle, None, None)?)
-        .separator()
         .item(
             &MenuItemBuilder::with_id("show_settings", "Settings…")
                 .accelerator("CmdOrCtrl+,")
