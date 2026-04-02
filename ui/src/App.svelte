@@ -135,7 +135,10 @@
 
   // ── Window state persistence ──────────────────────────────────────────────────
 
+  let _restoring = true   // suppresses saves during the onMount restore phase
+
   async function saveWindowState() {
+    if (_restoring) return
     const win  = getCurrentWindow()
     const size = await win.outerSize()   // PhysicalSize
     const sf   = await win.scaleFactor()
@@ -226,6 +229,7 @@
       // Always show the window — even if something above failed
       await tick()
       await getCurrentWindow().show()
+      _restoring = false   // open saves from this point on
     }
 
     window.addEventListener('keydown', handleKey)
@@ -238,12 +242,9 @@
   })
 
   // Save layout prefs whenever sidebar or layout mode changes
-  let _layoutInitDone = false
   $effect(() => {
-    // Touch reactive vars to subscribe; skip the very first run (initial mount)
     void sidebarVisible; void layoutMode
-    if (_layoutInitDone) saveWindowState()
-    else _layoutInitDone = true
+    saveWindowState()
   })
 
   // Rebuild the native menu whenever projects or playground count changes
