@@ -167,65 +167,66 @@
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
   onMount(async () => {
-    ;[activeProject, projects] = await Promise.all([
-      invoke<string>('get_active_project'),
-      invoke<string[]>('list_projects'),
-    ])
-    await loadProjectData()
-    toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+    let unlisteners: (() => void)[] = []
+    try {
+      ;[activeProject, projects] = await Promise.all([
+        invoke<string>('get_active_project'),
+        invoke<string[]>('list_projects'),
+      ])
+      await loadProjectData()
+      toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
 
-    // ── Restore window state ──────────────────────────────────────────────────
-    const ws = await invoke<any>('get_window_state')
+      // ── Restore window state ────────────────────────────────────────────────
+      const ws = await invoke<any>('get_window_state')
 
-    // Panel layout
-    sidebarVisible = ws.sidebar_visible ?? true
-    layoutMode     = ws.layout          ?? 'bottom'
-    sidebarW       = ws.sidebar_w       ?? 220
-    outputH        = ws.output_h        ?? 240
-    outputW        = ws.output_w        ?? 300
+      sidebarVisible = ws.sidebar_visible ?? true
+      layoutMode     = ws.layout          ?? 'bottom'
+      sidebarW       = ws.sidebar_w       ?? 220
+      outputH        = ws.output_h        ?? 240
+      outputW        = ws.output_w        ?? 300
 
-    // Window size
-    if (ws.window_width && ws.window_height) {
-      await getCurrentWindow().setSize(new LogicalSize(ws.window_width, ws.window_height))
-    }
-
-    // Restore tabs (skip any that no longer exist in the project)
-    if (Array.isArray(ws.open_tabs)) {
-      for (const t of ws.open_tabs) {
-        try {
-          if (t.tab_type === 'playground' && playgrounds.includes(t.id)) {
-            await openTab(t.id, { type: 'playground' })
-          } else if (t.tab_type === 'cargo') {
-            await openTab(CARGO_TAB, { type: 'cargo' })
-          } else if (t.tab_type === 'content' && t.filename) {
-            await openTab(t.id, { type: 'content', filename: t.filename })
-          }
-        } catch { /* file was deleted — skip silently */ }
+      if (ws.window_width && ws.window_height) {
+        await getCurrentWindow().setSize(new LogicalSize(ws.window_width, ws.window_height))
       }
-      // Restore active tab if it's still open
-      if (ws.active_tab && openTabs.includes(ws.active_tab)) {
-        activeTab = ws.active_tab
+
+      if (Array.isArray(ws.open_tabs)) {
+        for (const t of ws.open_tabs) {
+          try {
+            if (t.tab_type === 'playground' && playgrounds.includes(t.id)) {
+              await openTab(t.id, { type: 'playground' })
+            } else if (t.tab_type === 'cargo') {
+              await openTab(CARGO_TAB, { type: 'cargo' })
+            } else if (t.tab_type === 'content' && t.filename) {
+              await openTab(t.id, { type: 'content', filename: t.filename })
+            }
+          } catch { /* file was deleted — skip silently */ }
+        }
+        if (ws.active_tab && openTabs.includes(ws.active_tab)) {
+          activeTab = ws.active_tab
+        }
       }
+
+      unlisteners = await Promise.all([
+        listen('menu:save',      () => save()),
+        listen('menu:run',       () => run()),
+        listen('menu:stop',      () => stop()),
+        listen('menu:new',       () => requestNewPlayground()),
+        listen('menu:close-tab', () => closeTab(activeTab)),
+        listen('menu:new-project',    () => { switcherPendingMode = 'new' }),
+        listen('menu:rename-project', () => { switcherPendingMode = 'rename' }),
+        listen('menu:delete-project', () => { switcherPendingMode = 'delete-confirm' }),
+        listen<string>('menu:switch-project', (e) => switchProject(e.payload)),
+        listen('menu:help',              () => { showHelp  = true }),
+        listen('menu:about',             () => { showAbout = true }),
+        listen('menu:delete-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground') deletePending = activeTab }),
+      ])
+    } catch (e) {
+      console.error('onMount error:', e)
+    } finally {
+      // Always show the window — even if something above failed
+      await tick()
+      await getCurrentWindow().show()
     }
-
-    const unlisteners = await Promise.all([
-      listen('menu:save',      () => save()),
-      listen('menu:run',       () => run()),
-      listen('menu:stop',      () => stop()),
-      listen('menu:new',       () => requestNewPlayground()),
-      listen('menu:close-tab', () => closeTab(activeTab)),
-      listen('menu:new-project',    () => { switcherPendingMode = 'new' }),
-      listen('menu:rename-project', () => { switcherPendingMode = 'rename' }),
-      listen('menu:delete-project', () => { switcherPendingMode = 'delete-confirm' }),
-      listen<string>('menu:switch-project', (e) => switchProject(e.payload)),
-      listen('menu:help',              () => { showHelp  = true }),
-      listen('menu:about',             () => { showAbout = true }),
-      listen('menu:delete-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground') deletePending = activeTab }),
-    ])
-
-    // Let Svelte flush all restored state to the DOM before revealing the window
-    await tick()
-    await getCurrentWindow().show()
 
     window.addEventListener('keydown', handleKey)
     window.addEventListener('resize', onWindowResize)
