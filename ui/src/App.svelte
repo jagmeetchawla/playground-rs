@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import { invoke, Channel } from '@tauri-apps/api/core'
   import { listen } from '@tauri-apps/api/event'
   import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
@@ -222,6 +222,10 @@
       listen('menu:about',             () => { showAbout = true }),
       listen('menu:delete-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground') deletePending = activeTab }),
     ])
+
+    // Let Svelte flush all restored state to the DOM before revealing the window
+    await tick()
+    await getCurrentWindow().show()
 
     window.addEventListener('keydown', handleKey)
     window.addEventListener('resize', onWindowResize)
