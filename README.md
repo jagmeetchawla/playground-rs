@@ -28,7 +28,9 @@ A macOS desktop app for running Rust experiments — inspired by Swift Playgroun
 Write code, press **⌘R**, see output stream live. No terminal required.
 
 Built with [Tauri 2](https://tauri.app) + [Svelte 5](https://svelte.dev) +
-[CodeMirror 6](https://codemirror.net).
+[Monaco Editor](https://microsoft.github.io/monaco-editor/).
+
+![Rustic Playground](assets/screenshot.png)
 
 ## Features
 
