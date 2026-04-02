@@ -25,6 +25,8 @@ struct StdinHandle(tokio::sync::Mutex<Option<tokio::process::ChildStdin>>);
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Config {
     active_project: String,
+    #[serde(default)]
+    wizard_completed: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -110,12 +112,16 @@ fn load_config(app: &AppHandle) -> Config {
     }
     Config {
         active_project: "default".to_string(),
+        wizard_completed: false,
     }
 }
 
 fn save_config(app: &AppHandle, active_project: &str) -> Result<(), String> {
+    // Preserve wizard_completed from existing config
+    let existing = load_config(app);
     let config = Config {
         active_project: active_project.to_string(),
+        wizard_completed: existing.wizard_completed,
     };
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialise config: {}", e))?;
@@ -756,6 +762,154 @@ fn get_toolchain_info() -> serde_json::Value {
     serde_json::json!({ "path": path, "version": version })
 }
 
+/// Comprehensive toolchain check for the setup wizard.
+/// Returns status of rustup, cargo, rustc, and installed toolchains.
+#[tauri::command]
+fn check_toolchain(app: AppHandle) -> serde_json::Value {
+    let config = load_config(&app);
+
+    // Check rustup
+    let rustup_installed = std::process::Command::new("rustup")
+        .arg("--version")
+        .output()
+        .ok()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let rustup_version = if rustup_installed {
+        std::process::Command::new("rustup")
+            .arg("--version")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+    } else {
+        None
+    };
+
+    // Check cargo — use the user's configured path from settings
+    let settings = {
+        let path = settings_path(&app);
+        if path.exists() {
+            std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|s| serde_json::from_str::<Settings>(&s).ok())
+                .unwrap_or_default()
+        } else {
+            Settings::default()
+        }
+    };
+    let cargo = if settings.cargo_path.is_empty() {
+        cargo_path()
+    } else {
+        settings.cargo_path.clone()
+    };
+    let cargo_output = std::process::Command::new(&cargo)
+        .arg("--version")
+        .output()
+        .ok();
+    let cargo_installed = cargo_output
+        .as_ref()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let cargo_version = cargo_output
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string());
+
+    // Check rustc
+    let rustc_output = std::process::Command::new("rustc")
+        .arg("--version")
+        .output()
+        .ok();
+    let rustc_installed = rustc_output
+        .as_ref()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let rustc_version = rustc_output
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string());
+
+    // Get active toolchain if rustup is available
+    let active_toolchain = if rustup_installed {
+        std::process::Command::new("rustup")
+            .args(["show", "active-toolchain"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+    } else {
+        None
+    };
+
+    // Get installed toolchains list
+    let installed_toolchains: Vec<String> = if rustup_installed {
+        std::process::Command::new("rustup")
+            .args(["toolchain", "list"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    // Check for essential components
+    let has_rustfmt = std::process::Command::new("rustfmt")
+        .arg("--version")
+        .output()
+        .ok()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let has_clippy = std::process::Command::new("cargo-clippy")
+        .arg("--version")
+        .output()
+        .ok()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let all_good = cargo_installed && rustc_installed;
+
+    serde_json::json!({
+        "wizard_completed": config.wizard_completed,
+        "all_good": all_good,
+        "rustup": {
+            "installed": rustup_installed,
+            "version": rustup_version,
+        },
+        "cargo": {
+            "installed": cargo_installed,
+            "path": cargo,
+            "version": cargo_version,
+        },
+        "rustc": {
+            "installed": rustc_installed,
+            "version": rustc_version,
+        },
+        "active_toolchain": active_toolchain,
+        "installed_toolchains": installed_toolchains,
+        "components": {
+            "rustfmt": has_rustfmt,
+            "clippy": has_clippy,
+        }
+    })
+}
+
+/// Mark the toolchain wizard as completed so it doesn't show again.
+#[tauri::command]
+fn complete_wizard(app: AppHandle) -> Result<(), String> {
+    let existing = load_config(&app);
+    let config = Config {
+        active_project: existing.active_project,
+        wizard_completed: true,
+    };
+    let json = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialise config: {}", e))?;
+    std::fs::write(config_path(&app), json)
+        .map_err(|e| format!("Failed to write config.json: {}", e))
+}
+
 // ── Content file commands ─────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -1225,6 +1379,8 @@ pub fn run() {
             add_dependency,
             remove_dependency,
             get_toolchain_info,
+            check_toolchain,
+            complete_wizard,
             // Content files
             list_content_files,
             create_content_file,

@@ -12,6 +12,7 @@
   import AboutModal from './lib/AboutModal.svelte'
   import SettingsModal from './lib/SettingsModal.svelte'
   import NewPlaygroundModal from './lib/NewPlaygroundModal.svelte'
+  import ToolchainWizard from './lib/ToolchainWizard.svelte'
   import type { Settings } from './lib/SettingsModal.svelte'
   import type { Template } from './lib/templates'
   import type { RunBlock } from './lib/Output.svelte'
@@ -91,6 +92,7 @@
   let showHelp:        boolean       = $state(false)
   let showAbout:       boolean       = $state(false)
   let showSettings:    boolean       = $state(false)
+  let showWizard:      boolean       = $state(false)
 
   // ── Settings ──────────────────────────────────────────────────────────────────
   let settings: Settings = $state({
@@ -205,6 +207,12 @@
       await loadProjectData()
       toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
       settings = await invoke<Settings>('get_settings')
+
+      // Show wizard on first launch or if toolchain is missing
+      const tc = await invoke<{ wizard_completed: boolean; all_good: boolean }>('check_toolchain')
+      if (!tc.wizard_completed || !tc.all_good) {
+        showWizard = true
+      }
 
       // ── Restore window state ────────────────────────────────────────────────
       const ws = await invoke<any>('get_window_state')
@@ -734,7 +742,7 @@
         title="Settings (⌘,)"
         onclick={() => showSettings = true}
       >&#9881;&#65038;</button>
-      <span class="toolchain-pill" title={toolchainInfo.path}>
+      <button class="toolchain-pill" title="{toolchainInfo.path} — Click for toolchain details" onclick={() => showWizard = true}>
         <!-- Isometric crate — crates.io style -->
         <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
           <path d="M7 1L13 4L7 7L1 4Z"
@@ -745,7 +753,7 @@
                 stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
         </svg>
         cargo {toolchainLabel}
-      </span>
+      </button>
     </div>
 
     <div class="toolbar-right">
@@ -964,6 +972,10 @@
   />
 {/if}
 
+{#if showWizard}
+  <ToolchainWizard onclose={() => { showWizard = false }} />
+{/if}
+
 {#if creatingNew}
   <NewPlaygroundModal
     existingNames={playgrounds}
@@ -1097,7 +1109,14 @@
     color: var(--text-tertiary);
     background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.11);
     border-radius: 8px; padding: 0 8px;
-    cursor: default; white-space: nowrap;
+    cursor: pointer; white-space: nowrap;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+
+  .toolchain-pill:hover {
+    background: rgba(255,255,255,0.13);
+    border-color: rgba(255,255,255,0.18);
+    color: var(--text);
   }
 
   /* ── Main layout ── */
