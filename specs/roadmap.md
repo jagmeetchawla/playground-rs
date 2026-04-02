@@ -20,18 +20,28 @@ IN PROGRESS
 ───────────
 
 v0.1.6 — Editor Experience + App Polish
-  Status: specced 2026-04-01, not yet started
-  See specifications.md
+  Status: complete — released 2026-04-01
+  See specs/archive/ for completed spec
 
   Features:
   1. Stop button — actually kill the process (SIGTERM + SIGKILL fallback)
-  2. Live error checking — cargo check squiggles in Monaco (~500 ms debounce)
+  2. Live error checking — cargo check squiggles in CodeMirror (~500 ms debounce)
   3. Toolchain setup wizard — first-run rustup detection and install
   4. Settings panel — font, theme, tab size, cargo path (Cmd+,)
   5. Window state persistence — size, position, tabs, sidebar width
   6. Resizable panels — drag sidebar and output panel borders
   7. Hide Left Panel button — Cmd+Shift+L, matches Safari/Xcode
   8. Layout switch — toggle output panel bottom ↔ right
+
+v0.1.6.3 — Interactive Console (stdin support)
+  Status: complete — released 2026-04-02
+
+  Features:
+  1. Interactive stdin — pipe stdin to running playground process
+     - Backend: pipe child stdin, store handle, add `send_stdin` Tauri command
+     - Frontend: input field in Output panel when program is running
+     - User input echoed as visible line in console output
+     - Enables playgrounds that use std::io::stdin() for prompts/input
 
 ---
 

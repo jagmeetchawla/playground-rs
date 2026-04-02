@@ -94,6 +94,8 @@ All runtime data lives under:
 
 ## Current Version Status
 
+**v0.1.6.3** — shipped (interactive console / stdin support).
+
 **v0.1.6.2** — shipped (window state persistence). All 8 features from the v0.1.6 spec are complete:
 1. Stop button — SIGTERM + SIGKILL process kill
 2. Live error checking — `cargo check` squiggles (CodeMirror diagnostics)

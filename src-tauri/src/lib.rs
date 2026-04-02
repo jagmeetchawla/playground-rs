@@ -17,6 +17,11 @@ struct ActiveProject(Mutex<String>);
 /// call `process_group(0)` at spawn time).  None when nothing is running.
 struct RunningProcess(Mutex<Option<u32>>);
 
+/// Stdin handle for the currently running child process.
+/// Stored so the frontend can send interactive input via `send_stdin`.
+/// Uses `tokio::sync::Mutex` because writes hold the lock across `.await`.
+struct StdinHandle(tokio::sync::Mutex<Option<tokio::process::ChildStdin>>);
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Config {
     active_project: String,
@@ -476,6 +481,7 @@ async fn run_playground(
         ])
         .current_dir(&workspace)
         .env("PLAYGROUND_CONTENT", &content_path)
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0) // own process group so kill() hits cargo + spawned binary
@@ -486,6 +492,9 @@ async fn run_playground(
     if let Some(pid) = child.id() {
         *app.state::<RunningProcess>().0.lock().unwrap() = Some(pid);
     }
+
+    // Store stdin handle so the frontend can send interactive input.
+    *app.state::<StdinHandle>().0.lock().await = child.stdin.take();
 
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
@@ -513,8 +522,9 @@ async fn run_playground(
     let status = child.wait().await.map_err(|e| e.to_string())?;
     let _ = tokio::join!(stdout_task, stderr_task);
 
-    // Process finished — clear stored PID.
+    // Process finished — clear stored PID and stdin handle.
     *app.state::<RunningProcess>().0.lock().unwrap() = None;
+    *app.state::<StdinHandle>().0.lock().await = None;
 
     on_output
         .send(serde_json::json!({
@@ -545,6 +555,29 @@ async fn kill_playground(app: AppHandle) -> Result<(), String> {
             .await;
     }
     Ok(())
+}
+
+/// Send a line of input to the running playground's stdin.
+#[tauri::command]
+async fn send_stdin(line: String, app: AppHandle) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+
+    let state = app.state::<StdinHandle>();
+    let mut guard = state.0.lock().await;
+    if let Some(ref mut stdin) = *guard {
+        let data = format!("{}\n", line);
+        stdin
+            .write_all(data.as_bytes())
+            .await
+            .map_err(|e| format!("Failed to write to stdin: {}", e))?;
+        stdin
+            .flush()
+            .await
+            .map_err(|e| format!("Failed to flush stdin: {}", e))?;
+        Ok(())
+    } else {
+        Err("No running process".to_string())
+    }
 }
 
 // ── Cargo.toml commands ───────────────────────────────────────────────────────
@@ -930,6 +963,7 @@ pub fn run() {
             // Register active project in app state BEFORE calling ensure_project
             app.manage(ActiveProject(Mutex::new(active)));
             app.manage(RunningProcess(Mutex::new(None)));
+            app.manage(StdinHandle(tokio::sync::Mutex::new(None)));
 
             // Bootstrap the active project's directory structure if needed
             ensure_project(app.handle()).expect("Failed to initialise project");
@@ -1003,6 +1037,7 @@ pub fn run() {
             duplicate_playground,
             run_playground,
             kill_playground,
+            send_stdin,
             workspace_path,
             // Cargo / toolchain
             get_cargo_toml,

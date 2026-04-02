@@ -3,7 +3,7 @@
 
   const dispatch = createEventDispatcher()
 
-  export type OutputLine = { stream: 'stdout' | 'stderr' | 'info'; line: string }
+  export type OutputLine = { stream: 'stdout' | 'stderr' | 'info' | 'stdin'; line: string }
   export type RunBlock = {
     runNum: number
     command: string
@@ -49,6 +49,24 @@
     if (b.status === 'error')   return 'err'
     return 'dim'
   }
+
+  let stdinValue = $state('')
+  let stdinInput = $state<HTMLInputElement | null>(null)
+
+  function handleStdin(e: KeyboardEvent) {
+    if (e.key === 'Enter' && stdinValue.trim() !== '') {
+      dispatch('stdin', stdinValue)
+      stdinValue = ''
+    }
+  }
+
+  // Auto-focus the stdin input when a program starts running
+  $effect(() => {
+    const last = runs.at(-1)
+    if (last?.status === 'running' && stdinInput) {
+      tick().then(() => stdinInput?.focus())
+    }
+  })
 </script>
 
 <div class="output-panel">
@@ -118,10 +136,26 @@
             {/if}
 
             <!-- Running indicator inside the block -->
-            {#if block.status === 'compiling' || block.status === 'running'}
+            {#if block.status === 'compiling'}
               <div class="run-in-progress">
                 <span class="spinner-sm"></span>
-                <span class="dim">{block.status === 'compiling' ? 'Compiling…' : 'Running…'}</span>
+                <span class="dim">Compiling…</span>
+              </div>
+            {/if}
+
+            <!-- Stdin input — shown when program is running -->
+            {#if block.status === 'running'}
+              <div class="stdin-row">
+                <span class="stdin-prompt">›</span>
+                <input
+                  bind:this={stdinInput}
+                  bind:value={stdinValue}
+                  onkeydown={handleStdin}
+                  class="stdin-input"
+                  placeholder="Type input and press Enter…"
+                  spellcheck="false"
+                  autocomplete="off"
+                />
               </div>
             {/if}
 
@@ -266,6 +300,7 @@
   .line.stdout { color: var(--text); }
   .line.stderr { color: #ff8080; }
   .line.info   { color: var(--text-tertiary); }
+  .line.stdin  { color: var(--accent); opacity: 0.85; }
 
   .run-in-progress {
     display: flex; align-items: center; gap: 6px;
@@ -282,6 +317,25 @@
   }
 
   .dim { color: var(--text-tertiary); }
+
+  /* ── Stdin input ── */
+  .stdin-row {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 8px; margin: 4px 0 0;
+    border-top: 1px solid var(--border);
+  }
+  .stdin-prompt {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+    color: var(--accent); flex-shrink: 0; opacity: 0.7;
+  }
+  .stdin-input {
+    flex: 1; font-family: var(--font-mono); font-size: 11.5px;
+    background: rgba(0, 0, 0, 0.2); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-xs);
+    padding: 3px 6px; outline: none;
+  }
+  .stdin-input:focus { border-color: var(--accent); }
+  .stdin-input::placeholder { color: var(--text-tertiary); opacity: 0.5; }
 
   /* ── Empty state ── */
   .empty-state {

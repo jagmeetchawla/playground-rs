@@ -33,6 +33,7 @@ Built with [Tauri 2](https://tauri.app) + [Svelte 5](https://svelte.dev) +
 ## Features
 
 - **Live execution** — ⌘R compiles and runs; stdout/stderr streams in real time
+- **Interactive console** — playgrounds that use `stdin` get a live input field in the Console panel
 - **Multiple projects** — each project is an isolated Cargo workspace with its own `Cargo.toml`
 - **Multiple playgrounds** — every `.rs` file in `src/bin/` is its own runnable binary
 - **Content files** — attach any file to a project via the Files panel; access at runtime via the `PLAYGROUND_CONTENT` env var
@@ -195,6 +196,7 @@ See the warning at the top of this file. Additionally:
 
 | Version | Highlights |
 |---|---|
+| v0.1.6.3 | Interactive console — stdin support for playgrounds |
 | v0.1.6.2 | Window state persistence (layout, panel sizes, tabs, window size) |
 | v0.1.6.1 | Fix menu enabled/disabled sync for Delete Project / Delete Playground |
 | v0.1.6 | Help modal, About modal, app icon, rename to Rustic Playground |

@@ -596,6 +596,22 @@
     tabRunCount = { ...tabRunCount, [activeTab]: 0  }
   }
 
+  async function onStdin(e: CustomEvent<string>) {
+    if (!activeTab) return
+    const line = e.detail
+    // Echo the input in the console as a stdin line
+    updateLastRun(activeTab, r => ({
+      ...r,
+      programLines: [...r.programLines, { stream: 'stdin' as const, line }],
+    }))
+    // Send to the running process
+    try {
+      await invoke('send_stdin', { line })
+    } catch (err) {
+      console.error('send_stdin failed:', err)
+    }
+  }
+
   // ── Derived ──────────────────────────────────────────────────────────────────
   let runDisabled = $derived(
     !activeTab || isRunning || (tabMeta[activeTab ?? '']?.type ?? 'playground') !== 'playground'
@@ -808,6 +824,7 @@
           status={currentStatus}
           on:toggle={onToggle}
           on:clear={onClear}
+          on:stdin={onStdin}
         />
       </div>
     </div>

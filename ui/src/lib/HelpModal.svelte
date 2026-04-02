@@ -138,6 +138,9 @@ tokio = &#123; version = "1", features = ["full"] &#125;</pre>
       <ul>
         <li><strong>Compiler</strong> — rustc/cargo warnings and errors (dark background box)</li>
         <li><strong>Output</strong> — your program's stdout/stderr</li>
+        <li><strong>Interactive input</strong> — if your playground reads from <code>stdin</code>,
+          a text field appears while the program is running. Type your input and press
+          <kbd>Enter</kbd> to send it to the process</li>
       </ul>
       <p>Click the block header to collapse/expand previous runs. Click <strong>Clear</strong> to remove all history.</p>
     </section>

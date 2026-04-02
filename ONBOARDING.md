@@ -189,6 +189,10 @@ See [GitHub release v0.1.6](https://github.com/jagmeetchawla/playground-rs/relea
 
 See [GitHub release v0.1.6.1](https://github.com/jagmeetchawla/playground-rs/releases/tag/v0.1.6.1)
 
+### v0.1.6.3 — Interactive Console (stdin support)
+- **Interactive stdin**: playgrounds that read from `std::io::stdin()` now work — a text input field appears in the Console panel while the program is running. Type input and press Enter to send it to the process. User input is echoed in accent color to distinguish it from program output.
+- Backend pipes stdin to child process via `send_stdin` Tauri command; uses `tokio::sync::Mutex` for the async stdin handle.
+
 ---
 
 ## 8. What's In Progress / What's Pending
