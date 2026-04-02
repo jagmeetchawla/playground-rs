@@ -139,27 +139,28 @@
 
   async function saveWindowState() {
     if (_restoring) return
-    const win  = getCurrentWindow()
-    const size = await win.outerSize()   // PhysicalSize
-    const sf   = await win.scaleFactor()
-    invoke('save_window_state', {
-      state: {
-        sidebar_visible: sidebarVisible,
-        layout:          layoutMode,
-        sidebar_w:       sidebarW,
-        output_h:        outputH,
-        output_w:        outputW,
-        open_tabs:       openTabs.map(id => {
-          const meta = tabMeta[id]
-          if (meta?.type === 'content') return { id, tab_type: 'content', filename: meta.filename }
-          if (id === CARGO_TAB)         return { id, tab_type: 'cargo',   filename: null }
-          return                               { id, tab_type: 'playground', filename: null }
-        }),
-        active_tab:    activeTab,
-        window_width:  Math.round(size.width  / sf),
-        window_height: Math.round(size.height / sf),
-      }
-    }).catch(console.error)
+    try {
+      await invoke('save_window_state', {
+        state: {
+          sidebar_visible: sidebarVisible,
+          layout:          layoutMode,
+          sidebar_w:       sidebarW,
+          output_h:        outputH,
+          output_w:        outputW,
+          open_tabs:       openTabs.map(id => {
+            const meta = tabMeta[id]
+            if (meta?.type === 'content') return { id, tab_type: 'content', filename: meta.filename }
+            if (id === CARGO_TAB)         return { id, tab_type: 'cargo',   filename: null }
+            return                               { id, tab_type: 'playground', filename: null }
+          }),
+          active_tab:    activeTab,
+          window_width:  window.innerWidth,
+          window_height: window.innerHeight,
+        }
+      })
+    } catch(e) {
+      console.error('saveWindowState failed:', e)
+    }
   }
 
   let _resizeTimer: ReturnType<typeof setTimeout> | null = null
@@ -189,7 +190,9 @@
       outputW        = ws.output_w        ?? 300
 
       if (ws.window_width && ws.window_height) {
+        // saved as logical content-area pixels — restore as logical size
         await getCurrentWindow().setSize(new LogicalSize(ws.window_width, ws.window_height))
+          .catch(e => console.warn('setSize failed:', e))
       }
 
       if (Array.isArray(ws.open_tabs)) {
