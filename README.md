@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/app-icon-sorce.png" width="128" height="128" alt="Rustic Playground icon" />
+  <img src="assets/app-icon-source.png" width="128" height="128" alt="Rustic Playground icon" />
 </p>
 
 # Rustic Playground
