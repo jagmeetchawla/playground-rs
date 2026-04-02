@@ -108,14 +108,16 @@
   // ── Theme resolution ──────────────────────────────────────────────────────
   let systemDark = $state(window.matchMedia('(prefers-color-scheme: dark)').matches)
 
-  // Resolved theme: "dark" or "light" based on setting + OS preference
+  // Resolved theme: "dark", "light", or "rust" based on setting + OS preference
   let resolvedTheme = $derived(
     settings.theme === 'system' ? (systemDark ? 'dark' : 'light') : settings.theme
   )
 
   // Monaco theme name derived from resolved theme
   let monacoTheme = $derived(
-    resolvedTheme === 'light' ? 'playground-light' : 'playground-dark'
+    resolvedTheme === 'rust' ? 'playground-rust'
+      : resolvedTheme === 'light' ? 'playground-light'
+      : 'playground-dark'
   )
   let deletePending:   string | null = $state(null)
   let showAddDep:      boolean       = $state(false)
@@ -313,7 +315,7 @@
 
   // Apply theme class to document body whenever resolved theme changes
   $effect(() => {
-    document.body.classList.remove('theme-dark', 'theme-light')
+    document.body.classList.remove('theme-dark', 'theme-light', 'theme-rust')
     document.body.classList.add(`theme-${resolvedTheme}`)
   })
 

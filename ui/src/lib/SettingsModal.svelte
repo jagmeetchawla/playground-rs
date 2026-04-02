@@ -138,6 +138,11 @@
             class:seg-active={draft.theme === 'dark'}
             onclick={() => draft.theme = 'dark'}
           >Dark</button>
+          <button
+            class="seg-btn"
+            class:seg-active={draft.theme === 'rust'}
+            onclick={() => draft.theme = 'rust'}
+          >Rust</button>
         </div>
       </div>
     </section>

@@ -125,6 +125,51 @@
     }
   })
 
+  // ── Custom Rust theme — warm, earthy tones inspired by oxidized metal ──────
+  monaco.editor.defineTheme('playground-rust', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment',            foreground: '7a6b5d', fontStyle: 'italic' },
+      { token: 'keyword',            foreground: 'ce422b' },   // Rust red
+      { token: 'type',               foreground: 'd4a03c' },   // oxidized gold
+      { token: 'type.identifier',    foreground: 'd4a03c' },
+      { token: 'string',             foreground: '6b9e3c' },   // patina green
+      { token: 'string.escape',      foreground: '8bba5a' },
+      { token: 'number',             foreground: 'c87832' },   // copper
+      { token: 'number.float',       foreground: 'c87832' },
+      { token: 'operator',           foreground: 'e8d5c4' },   // parchment
+      { token: 'delimiter',          foreground: '8a7566' },
+      { token: 'attribute',          foreground: 'b07840' },   // bronze
+      { token: 'macro',              foreground: 'e05a3a' },   // bright rust
+      { token: 'identifier',         foreground: 'e8d5c4' },
+    ],
+    colors: {
+      'editor.background':                  '#1a1210',
+      'editor.foreground':                  '#e8d5c4',
+      'editorLineNumber.foreground':        '#3d3028',
+      'editorLineNumber.activeForeground':  '#8a7566',
+      'editor.lineHighlightBackground':     '#241c18',
+      'editor.lineHighlightBorder':         '#00000000',
+      'editor.selectionBackground':         '#ce422b35',
+      'editor.inactiveSelectionBackground': '#ce422b20',
+      'editorCursor.foreground':            '#ce422b',
+      'editorIndentGuide.background':       '#2e2420',
+      'editorIndentGuide.activeBackground': '#3d3028',
+      'editorBracketMatch.background':      '#ce422b25',
+      'editorBracketMatch.border':          '#ce422b60',
+      'editorGutter.background':            '#1a1210',
+      'editor.findMatchBackground':         '#d4a03c40',
+      'editor.findMatchHighlightBackground':'#d4a03c20',
+      'editorError.foreground':             '#e05a3a',
+      'editorWarning.foreground':           '#d4a03c',
+      'editorInfo.foreground':              '#c87832',
+      'scrollbarSlider.background':         '#ce825a20',
+      'scrollbarSlider.hoverBackground':    '#ce825a35',
+      'scrollbarSlider.activeBackground':   '#ce825a50',
+    }
+  })
+
   const dispatch = createEventDispatcher()
   let {
     code,

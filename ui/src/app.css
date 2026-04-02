@@ -65,6 +65,33 @@
   --rust-orange:     #ce422b;
 }
 
+.theme-rust {
+  /* Warm, earthy Rust-inspired palette */
+  --bg:              #1a1210;   /* deep espresso */
+  --bg-sidebar:      #241c18;   /* dark walnut */
+  --bg-elevated:     #2e2420;   /* warm charcoal */
+  --bg-tab:          #1a1210;
+  --bg-tab-active:   #241c18;
+  --bg-hover:        rgba(206,130,90,0.10);
+  --bg-input:        rgba(206,130,90,0.08);
+
+  --border:          rgba(206,130,90,0.15);
+  --border-strong:   rgba(206,130,90,0.25);
+
+  --text:            #e8d5c4;   /* warm parchment */
+  --text-secondary:  rgba(232,213,196,0.75);
+  --text-tertiary:   rgba(232,213,196,0.45);
+
+  --accent:          #ce422b;   /* Rust orange-red */
+  --accent-hover:    #e05a3a;
+  --accent-text:     #ffffff;
+
+  --red:             #e05a3a;
+  --amber:           #d4a03c;   /* oxidized gold */
+  --green:           #6b9e3c;   /* patina green */
+  --rust-orange:     #ce422b;
+}
+
 html, body, #app {
   height: 100%;
   background: var(--bg);
