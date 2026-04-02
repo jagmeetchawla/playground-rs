@@ -20,18 +20,20 @@ IN PROGRESS
 ───────────
 
 v0.1.6 — Editor Experience + App Polish
-  Status: complete — released 2026-04-01
+  Status: partially complete — released 2026-04-01
   See specs/archive/ for completed spec
 
-  Features:
+  Shipped (5 of 8):
   1. Stop button — actually kill the process (SIGTERM + SIGKILL fallback)
-  2. Live error checking — cargo check squiggles in CodeMirror (~500 ms debounce)
-  3. Toolchain setup wizard — first-run rustup detection and install
-  4. Settings panel — font, theme, tab size, cargo path (Cmd+,)
   5. Window state persistence — size, position, tabs, sidebar width
   6. Resizable panels — drag sidebar and output panel borders
   7. Hide Left Panel button — Cmd+Shift+L, matches Safari/Xcode
   8. Layout switch — toggle output panel bottom ↔ right
+
+  NOT shipped (moved to v0.1.7):
+  2. Live error checking — cargo check squiggles in CodeMirror
+  3. Toolchain setup wizard — first-run rustup detection and install
+  4. Settings panel — font, theme, tab size, cargo path (Cmd+,)
 
 v0.1.6.3 — Interactive Console (stdin support)
   Status: complete — released 2026-04-02
@@ -45,13 +47,33 @@ v0.1.6.3 — Interactive Console (stdin support)
 
 ---
 
-NEXT UP
-───────
+IN PROGRESS
+───────────
 
-v0.1.7 — Candidates (not yet specced)
-  - Dependency manager UI (add/remove crates from Cargo.toml without editing manually)
-  - Playground templates (select a starting point: async, CLI, data, web)
-  - Output improvements (copy button, timestamps per line, ANSI colour support)
+v0.1.7 — Settings, Polish, and Deferred v0.1.6 Features
+  Status: in progress — started 2026-04-02
+
+  Priority 1 — Settings panel (Cmd+,)
+    - Font size, font family, tab size
+    - Theme (system / light / dark)
+    - Cargo path override
+    - Backend: get_settings / save_settings commands, settings.json in App Support
+    - Frontend: SettingsPanel component, slide-in or modal
+
+  Priority 2 — Toolchain setup wizard
+    - First-run detection when cargo is not found
+    - Offer to run rustup-init or set manual path
+    - Store cargo_path and wizard_completed in config.json
+
+  Priority 3 — Live error checking
+    - cargo check --message-format json in background (~500 ms debounce)
+    - Push diagnostics to CodeMirror as squiggles
+    - Separate --target-dir to avoid lock conflicts
+
+  Priority 4 — New features
+    - Dependency manager UI (add/remove crates without editing Cargo.toml manually)
+    - Playground templates (select a starting point: async, CLI, data, web)
+    - Output improvements (copy button, timestamps per line, ANSI colour support)
 
 
 ---

@@ -96,19 +96,17 @@ All runtime data lives under:
 
 **v0.1.6.3** — shipped (interactive console / stdin support).
 
-**v0.1.6.2** — shipped (window state persistence). All 8 features from the v0.1.6 spec are complete:
+**v0.1.6** — shipped (5 of 8 features):
 1. Stop button — SIGTERM + SIGKILL process kill
-2. Live error checking — `cargo check` squiggles (CodeMirror diagnostics)
-3. Toolchain setup wizard — first-run rustup detection
-4. Settings panel — font, theme, tab size, cargo path (⌘,)
-5. Window state persistence — size, panel sizes, tabs survive restarts
-6. Resizable panels — drag sidebar/output borders
-7. Hide sidebar — ⌘⇧L
-8. Layout switch — bottom ↔ right output panel
+2. Window state persistence — size, panel sizes, tabs survive restarts
+3. Resizable panels — drag sidebar/output borders
+4. Hide sidebar — ⌘⇧L
+5. Layout switch — bottom ↔ right output panel
 
-> The spec in `specs/specifications.md` predates implementation (status: "not yet started") — it's the design doc, not a TODO list. All 8 features are done.
-
-**v0.1.7** candidates (not yet specced):
+**v0.1.7** — in progress (settings + deferred v0.1.6 features + new):
+- Settings panel — font, theme, tab size, cargo path (⌘,)
+- Toolchain setup wizard — first-run rustup detection
+- Live error checking — `cargo check` squiggles (CodeMirror diagnostics)
 - Dependency manager UI
 - Playground templates
 - Output improvements (copy button, ANSI colors, timestamps)

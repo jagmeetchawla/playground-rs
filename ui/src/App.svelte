@@ -10,6 +10,8 @@
   import ProjectSwitcher from './lib/ProjectSwitcher.svelte'
   import HelpModal from './lib/HelpModal.svelte'
   import AboutModal from './lib/AboutModal.svelte'
+  import SettingsModal from './lib/SettingsModal.svelte'
+  import type { Settings } from './lib/SettingsModal.svelte'
   import type { RunBlock } from './lib/Output.svelte'
 
   // ── Constants ────────────────────────────────────────────────────────────────
@@ -86,6 +88,15 @@
   // ── Modal state ───────────────────────────────────────────────────────────────
   let showHelp:        boolean       = $state(false)
   let showAbout:       boolean       = $state(false)
+  let showSettings:    boolean       = $state(false)
+
+  // ── Settings ──────────────────────────────────────────────────────────────────
+  let settings: Settings = $state({
+    font_size: 13,
+    font_family: 'Menlo',
+    tab_size: 4,
+    cargo_path: '',
+  })
   let deletePending:   string | null = $state(null)
   let toastMessage:    string | null = $state(null)
   let _toastTimer:     ReturnType<typeof setTimeout> | null = null
@@ -187,6 +198,7 @@
       ])
       await loadProjectData()
       toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+      settings = await invoke<Settings>('get_settings')
 
       // ── Restore window state ────────────────────────────────────────────────
       const ws = await invoke<any>('get_window_state')
@@ -230,6 +242,7 @@
         listen('menu:rename-project', () => { switcherPendingMode = 'rename' }),
         listen('menu:delete-project', () => { switcherPendingMode = 'delete-confirm' }),
         listen<string>('menu:switch-project', (e) => switchProject(e.payload)),
+        listen('menu:settings',          () => { showSettings = true }),
         listen('menu:help',              () => { showHelp  = true }),
         listen('menu:about',             () => { showAbout = true }),
         listen('menu:rust-book',         () => seedRustBook()),
@@ -650,6 +663,11 @@
     </div>
 
     <div class="toolbar-center">
+      <button
+        class="settings-btn"
+        title="Settings (⌘,)"
+        onclick={() => showSettings = true}
+      >&#9881;&#65038;</button>
       <span class="toolchain-pill" title={toolchainInfo.path}>
         <!-- Isometric crate — crates.io style -->
         <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
@@ -774,6 +792,9 @@
             <Editor
               code={currentCode}
               language={editorLanguage}
+              fontSize={settings.font_size}
+              fontFamily={settings.font_family}
+              tabSize={settings.tab_size}
               onSave={save}
               onRun={run}
               onNew={requestNewPlayground}
@@ -840,6 +861,14 @@
   <AboutModal onclose={() => showAbout = false} />
 {/if}
 
+{#if showSettings}
+  <SettingsModal
+    bind:settings
+    onclose={() => showSettings = false}
+    onsave={(s) => { settings = s }}
+  />
+{/if}
+
 {#if toastMessage}
   <div class="toast" role="status" aria-live="polite">{toastMessage}</div>
 {/if}
@@ -895,7 +924,7 @@
   /* ── Pill buttons — sidebar toggle + layout switch (Safari-style) ── */
   .toolbar-pill {
     display: inline-flex; align-items: center; justify-content: center;
-    height: 26px;
+    height: 28px;
     padding: 0 9px;
     border-radius: 8px;
     background: rgba(255,255,255,0.07);
@@ -923,7 +952,8 @@
 
   .btn {
     display: flex; align-items: center; gap: 5px;
-    padding: 5px 12px; font-size: 12px; font-weight: 600;
+    height: 28px; box-sizing: border-box;
+    padding: 0 12px; font-size: 12px; font-weight: 600;
     border-radius: var(--radius-sm);
     transition: background 0.12s, opacity 0.12s;
     flex-shrink: 0;
@@ -943,12 +973,27 @@
   .btn-stop { background: #3a3a3c; color: var(--text-secondary); }
   .btn-stop:hover { background: var(--bg-elevated); }
 
+  .settings-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    font-size: 21px; line-height: 1;
+    color: var(--text-tertiary);
+    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.11);
+    border-radius: 8px;
+    cursor: pointer; transition: color 0.12s, background 0.12s, border-color 0.12s;
+  }
+  .settings-btn:hover {
+    color: var(--text); background: rgba(255,255,255,0.13);
+    border-color: rgba(255,255,255,0.18);
+  }
+
   .toolchain-pill {
     display: flex; align-items: center; gap: 5px;
+    height: 28px; box-sizing: border-box;
     font-size: 11px; font-family: var(--font-mono);
     color: var(--text-tertiary);
-    background: var(--bg-elevated); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 3px 8px;
+    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.11);
+    border-radius: 8px; padding: 0 8px;
     cursor: default; white-space: nowrap;
   }
 

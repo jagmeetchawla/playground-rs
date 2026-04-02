@@ -27,6 +27,31 @@ struct Config {
     active_project: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct Settings {
+    font_size: u32,
+    font_family: String,
+    tab_size: u32,
+    #[serde(default = "default_cargo_path")]
+    cargo_path: String,
+}
+
+fn default_cargo_path() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    format!("{}/.cargo/bin/cargo", home)
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            font_size: 13,
+            font_family: "Menlo".to_string(),
+            tab_size: 4,
+            cargo_path: default_cargo_path(),
+        }
+    }
+}
+
 // ── Storage paths ─────────────────────────────────────────────────────────────
 
 /// Root of all projects — same path in dev and release.
@@ -63,6 +88,13 @@ fn window_state_path(app: &AppHandle) -> PathBuf {
         .app_data_dir()
         .expect("Could not resolve App Support directory")
         .join("window-state.json")
+}
+
+fn settings_path(app: &AppHandle) -> PathBuf {
+    app.path()
+        .app_data_dir()
+        .expect("Could not resolve App Support directory")
+        .join("settings.json")
 }
 
 // ── Config persistence ────────────────────────────────────────────────────────
@@ -786,6 +818,29 @@ fn save_window_state(state: WindowState, app: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to write window-state.json: {}", e))
 }
 
+// ── Settings persistence ──────────────────────────────────────────────────────
+
+#[tauri::command]
+fn get_settings(app: AppHandle) -> Settings {
+    let path = settings_path(&app);
+    if path.exists() {
+        if let Ok(s) = std::fs::read_to_string(&path) {
+            if let Ok(settings) = serde_json::from_str::<Settings>(&s) {
+                return settings;
+            }
+        }
+    }
+    Settings::default()
+}
+
+#[tauri::command]
+fn save_settings(settings: Settings, app: AppHandle) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialise settings: {}", e))?;
+    std::fs::write(settings_path(&app), json)
+        .map_err(|e| format!("Failed to write settings.json: {}", e))
+}
+
 // ── Menu builder ─────────────────────────────────────────────────────────────
 
 /// Builds the full macOS menu bar.  Called once on startup and again via
@@ -798,6 +853,12 @@ fn build_menu<R: tauri::Runtime>(
 ) -> tauri::Result<tauri::menu::Menu<R>> {
     let app_submenu = SubmenuBuilder::new(handle, "Rustic Playground")
         .item(&PredefinedMenuItem::about(handle, None, None)?)
+        .separator()
+        .item(
+            &MenuItemBuilder::with_id("show_settings", "Settings…")
+                .accelerator("CmdOrCtrl+,")
+                .build(handle)?,
+        )
         .separator()
         .item(&PredefinedMenuItem::hide(handle, None)?)
         .item(&PredefinedMenuItem::hide_others(handle, None)?)
@@ -1005,6 +1066,7 @@ pub fn run() {
                 "run_playground" => Some("menu:run"),
                 "stop_playground" => Some("menu:stop"),
                 "menu_delete_playground" => Some("menu:delete-playground"),
+                "show_settings" => Some("menu:settings"),
                 "show_help" => Some("menu:help"),
                 "show_about" => Some("menu:about"),
                 "seed_rust_book" => Some("menu:rust-book"),
@@ -1027,6 +1089,8 @@ pub fn run() {
             book_chapters::seed_rust_book,
             get_window_state,
             save_window_state,
+            get_settings,
+            save_settings,
             // Playground management
             list_playgrounds,
             load_playground,

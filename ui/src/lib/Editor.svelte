@@ -84,12 +84,18 @@
   let {
     code,
     language = 'rust',
+    fontSize = 13,
+    fontFamily = 'Menlo',
+    tabSize = 4,
     onSave = () => {},
     onRun = () => {},
     onNew = () => {},
   }: {
     code: string
     language?: string
+    fontSize?: number
+    fontFamily?: string
+    tabSize?: number
     onSave?: () => void
     onRun?: () => void
     onNew?: () => void
@@ -107,15 +113,15 @@
       value: code,
       language,
       theme: 'playground-dark',
-      fontSize: 13,
-      fontFamily: "'Menlo', 'Monaco', 'SF Mono', 'Courier New', monospace",
+      fontSize,
+      fontFamily: `'${fontFamily}', monospace`,
       fontLigatures: false,
       lineNumbers: 'on',
       lineNumbersMinChars: 3,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       automaticLayout: true,
-      tabSize: 4,
+      tabSize,
       insertSpaces: true,
       wordWrap: 'off',
       padding: { top: 20, bottom: 20 },
@@ -164,6 +170,17 @@
     if (model && model.getLanguageId() !== lang) {
       monaco.editor.setModelLanguage(model, lang)
     }
+  })
+
+  // Sync editor settings when they change (e.g. from Settings panel)
+  $effect(() => {
+    if (!editor) return
+    editor.updateOptions({
+      fontSize,
+      fontFamily: `'${fontFamily}', monospace`,
+      tabSize,
+    })
+    editor.getModel()?.updateOptions({ tabSize })
   })
 
   onDestroy(() => { editor?.dispose() })
