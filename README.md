@@ -38,6 +38,11 @@ Built with [Tauri 2](https://tauri.app) + [Svelte 5](https://svelte.dev) +
 - **Multiple playgrounds** — every `.rs` file in `src/bin/` is its own runnable binary
 - **Content files** — attach any file to a project via the Files panel; access at runtime via the `PLAYGROUND_CONTENT` env var
 - **Cargo.toml editor** — edit dependencies directly in the app
+- **Dependency manager** — add/remove crates from a toolbar without editing TOML manually
+- **Playground templates** — 11 starter templates (Hello World, Async, Web Request, Serde JSON, and more) with auto-deps
+- **Settings panel** — font size, font family, tab size, cargo path (⌘,)
+- **Toolchain setup wizard** — first-run detection of rustup/cargo/rustc with install guidance
+- **Console improvements** — copy button, ANSI color support, timestamps
 - **Window state persistence** — layout, panel sizes, open tabs, and window size survive restarts
 - **Rust Book examples** — load all 20 chapters of _The Rust Programming Language_ as ready-to-run playgrounds (**Help → Load Rust Book Examples…**)
 
@@ -180,7 +185,10 @@ playground-rs/
             ├── Editor.svelte
             ├── Output.svelte
             ├── HelpModal.svelte
-            └── AboutModal.svelte
+            ├── AboutModal.svelte
+            ├── SettingsModal.svelte
+            ├── NewPlaygroundModal.svelte
+            └── ToolchainWizard.svelte
 ```
 
 ## Security Model
@@ -196,6 +204,7 @@ See the warning at the top of this file. Additionally:
 
 | Version | Highlights |
 |---|---|
+| v0.1.7 | Settings panel, toolchain setup wizard, dependency manager, 11 playground templates, console improvements (copy, ANSI colors, timestamps) |
 | v0.1.6.3 | Interactive console — stdin support for playgrounds |
 | v0.1.6.2 | Window state persistence (layout, panel sizes, tabs, window size) |
 | v0.1.6.1 | Fix menu enabled/disabled sync for Delete Project / Delete Playground |
