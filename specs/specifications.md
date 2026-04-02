@@ -12,19 +12,26 @@ Product
 What
   A native macOS desktop app — built with Tauri — that wraps the existing Rust playground
   runner in a Swift Playgrounds-inspired UI. v0.1.8 is the final feature release before
-  shifting focus to distribution (website, DMG, wiki, announcements). It adds live compiler
-  diagnostics, autocomplete via rust-analyzer, light/dark themes, playground export, and
-  polishes the Rust Book examples.
+  shifting focus to distribution (website, DMG, wiki, announcements).
+
+  Features delivered:
+  1. Live error checking (cargo check squiggles) — DONE
+  2. Autocomplete / LSP — SKIPPED (decided not to include)
+  3. Themes (dark / light / system) — DONE
+  4. Export / share — DONE (exports as standalone CLI playground)
+  5. Rust Book examples polish — DONE (all 20 chapters, zero warnings)
+  6. Backend modularization — DONE (lib.rs split into 6 modules)
 
 Why
-  The core editing and running experience is solid after v0.1.7. These five features close
+  The core editing and running experience is solid after v0.1.7. These features close
   the gap between "playground" and "real editor": squiggles surface errors without running,
-  autocomplete makes exploration faster, themes match user preference, and export lets users
-  take their code elsewhere. After this, the app is ready for public release.
+  themes match user preference, and export lets users take their code elsewhere.
+  After this, the app is ready for public release.
 
 Note
-  The editor is Monaco (not CodeMirror 6). The CLAUDE.md tech stack table is stale on this
-  point — the actual codebase uses Monaco throughout.
+  The editor is Monaco. The backend is modularised: lib.rs (~550 lines) is the coordination
+  hub, with playground_commands.rs, cargo_commands.rs, content_commands.rs, export.rs,
+  menu.rs, and book_chapters.rs as separate modules.
 
 ---
 

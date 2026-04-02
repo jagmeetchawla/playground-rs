@@ -435,7 +435,8 @@ fn main() {
             vec![
                 (
                     "structs",
-                    r#"// Ch 5 – Defining and Using Structs
+                    r#"#![allow(dead_code)]
+// Ch 5 – Defining and Using Structs
 
 #[derive(Debug)]
 struct User {
@@ -582,7 +583,8 @@ fn main() {
             vec![
                 (
                     "enums",
-                    r#"// Ch 6 – Enums
+                    r#"#![allow(dead_code)]
+// Ch 6 – Enums
 // Enums define a type that can be one of several variants.
 // Variants can carry data — replacing many struct patterns.
 
@@ -741,7 +743,8 @@ fn main() {
             vec![
                 (
                     "inline_modules",
-                    r#"// Ch 7 – Modules (inline style)
+                    r#"#![allow(dead_code)]
+// Ch 7 – Modules (inline style)
 // Modules organise code into namespaces and control visibility.
 // In a real project each mod lives in its own file — see cli_guide.rs.
 
@@ -895,7 +898,8 @@ fn main() {
             vec![
                 (
                     "vectors",
-                    r#"// Ch 8 – Vectors
+                    r#"#![allow(dead_code)]
+// Ch 8 – Vectors
 // Vec<T>: growable, heap-allocated, same-type sequence.
 
 fn main() {
@@ -1170,7 +1174,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             vec![
                 (
                     "generics",
-                    r#"// Ch 10 – Generic Types
+                    r#"#![allow(dead_code)]
+// Ch 10 – Generic Types
 // Generics write code once that works across multiple types.
 
 // Generic function — T must implement PartialOrd
@@ -1215,7 +1220,8 @@ fn main() {
                 ),
                 (
                     "traits",
-                    r#"// Ch 10 – Traits
+                    r#"#![allow(dead_code)]
+// Ch 10 – Traits
 // Traits define shared behaviour — like interfaces in other languages.
 
 trait Summary {
@@ -1838,7 +1844,8 @@ fn main() {
             vec![
                 (
                     "box_t",
-                    r#"// Ch 15 – Box<T>
+                    r#"#![allow(dead_code)]
+// Ch 15 – Box<T>
 // Box stores a value on the heap. Use when:
 //  • You have a large value and don't want to copy it
 //  • You need a recursive type (unknown size at compile time)
@@ -2340,7 +2347,8 @@ fn main() {
                 ),
                 (
                     "bindings_and_guards",
-                    r#"// Ch 18 – Match Guards, @ Bindings, Refutability
+                    r#"#![allow(dead_code)]
+// Ch 18 – Match Guards, @ Bindings, Refutability
 
 #[derive(Debug)]
 enum Msg { Hello { id: i32 }, Quit }
@@ -2399,7 +2407,8 @@ fn main() {
             vec![
                 (
                     "unsafe_rust",
-                    r#"// Ch 19 – Unsafe Rust
+                    r#"#![allow(dead_code)]
+// Ch 19 – Unsafe Rust
 // unsafe { } unlocks five additional powers:
 //   1. Dereference raw pointers
 //   2. Call unsafe functions
@@ -2440,7 +2449,7 @@ fn main() {
         println!("*r2 after write = {}", *r2);
         dangerous_fn();
         COUNTER += 1;
-        println!("COUNTER = {COUNTER}");
+        println!("COUNTER = {}", *std::ptr::addr_of!(COUNTER));
     }
 
     // Safe abstraction over unsafe internals
@@ -2512,7 +2521,8 @@ fn main() {
                 ),
                 (
                     "macros",
-                    r#"// Ch 19 – Macros
+                    r#"#![allow(dead_code)]
+// Ch 19 – Macros
 // macro_rules! defines declarative macros via pattern matching on token trees.
 // They expand at compile time — zero runtime cost, can be variadic.
 
@@ -2574,7 +2584,8 @@ fn main() {
             vec![
                 (
                     "threadpool",
-                    r#"// Ch 20 – Thread Pool (the heart of the final project)
+                    r#"#![allow(dead_code)]
+// Ch 20 – Thread Pool (the heart of the final project)
 // The web server in Ch 20 is built around a ThreadPool that dispatches
 // incoming HTTP connections to a fixed pool of worker threads.
 // Here we implement and exercise the ThreadPool without the HTTP layer.

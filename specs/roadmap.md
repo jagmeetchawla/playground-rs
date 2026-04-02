@@ -9,6 +9,19 @@ Active specs live in specifications.md. Completed specs live in archive/.
 RELEASED
 ────────
 
+v0.1.8 — Final Feature Release (pre-distribution)
+  Status: complete — released 2026-04-02
+  See specs/archive/ for completed spec
+
+  Shipped:
+  1. Live error checking — cargo check squiggles in Monaco (300 ms debounce + one-in-flight queue)
+  2. Autocomplete / LSP — SKIPPED (decided not to include)
+  3. Themes — dark / light / system toggle (Monaco + app chrome)
+  4. Export / share — export as standalone CLI playground, copy to clipboard
+  5. Rust Book examples polish — all 20 chapters compile with zero warnings
+  6. Backend modularization — lib.rs split into 6 focused modules
+  7. Test suite — 70 unit tests across 4 backend modules
+
 v0.1.7 — Settings, Polish, and Deferred v0.1.6 Features
   Status: complete — released 2026-04-02
   See specs/archive/ for completed spec
@@ -41,19 +54,8 @@ v0.1.5 — Multiple Projects + Unified Storage
 
 ---
 
-IN PROGRESS
-───────────
-
-v0.1.8 — Final Feature Release (pre-distribution)
-  Status: in progress
-  See specs/specifications.md
-
-  Planned:
-  1. Live error checking — cargo check squiggles in Monaco (500 ms debounce)
-  2. Autocomplete / LSP — rust-analyzer integration for completions, hover, signatures
-  3. Themes — dark / light / system toggle (Monaco + app chrome)
-  4. Export / share — export as standalone Cargo project or copy to clipboard
-  5. Rust Book examples polish — review and improve all 20 chapters
+NEXT
+────
 
   After v0.1.8: pause features, build website, DMG distribution, wiki, announcements.
 

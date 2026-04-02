@@ -206,7 +206,7 @@ fn main() {
     }
 
     // Chaining: group numbers by even/odd
-    let (evens, odds): (Vec<_>, Vec<_>) = numbers.iter().partition(|n| *n % 2 == 0);
+    let (evens, odds): (Vec<&i32>, Vec<&i32>) = numbers.iter().partition(|n| *n % 2 == 0);
     println!("\\nEvens: {evens:?}");
     println!("Odds:  {odds:?}");
 }

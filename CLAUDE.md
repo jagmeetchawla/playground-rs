@@ -23,10 +23,10 @@
 | Frontend | Svelte 5 (runes) | `$state`, `$derived`, `$effect` — NOT Svelte 4 options API |
 | Editor | Monaco | `architecture.md` references React + Monaco — React is stale, Monaco is correct |
 | Build | Vite + pnpm | Frontend bundler |
-| Backend | Rust (lib.rs) | All Tauri commands in one file |
+| Backend | Rust (modular) | Tauri commands split across lib.rs + 6 modules |
 | Permissions | Tauri 2 capabilities | `src-tauri/capabilities/default.json` |
 
-> **Important:** `specs/architecture.md` references React + Monaco — that's the v1.0 design doc, never implemented. The actual codebase uses Svelte 5 + CodeMirror 6.
+> **Important:** `specs/architecture.md` was the v1.0 design doc — now updated to reflect the actual implementation. The codebase uses Svelte 5 + Monaco.
 
 ---
 
@@ -73,16 +73,25 @@ All runtime data lives under:
 
 | Path | Purpose |
 |---|---|
-| `src-tauri/src/lib.rs` | All Tauri commands — projects, playgrounds, content files, menu, window state (~940 lines) |
-| `src-tauri/src/book_chapters.rs` | `seed_rust_book` command — all 20 Rust Book chapter data and seeding logic (~2,500 lines) |
+| `src-tauri/src/lib.rs` | App state, paths, validation, config/settings, window state, run() entry (~550 lines) |
+| `src-tauri/src/playground_commands.rs` | Project CRUD + playground CRUD + run/kill/check/cancel/stdin (~450 lines) |
+| `src-tauri/src/cargo_commands.rs` | Cargo.toml management, toolchain checks, setup wizard (~300 lines) |
+| `src-tauri/src/content_commands.rs` | Content file CRUD commands (~120 lines) |
+| `src-tauri/src/export.rs` | CLI_MAIN_RS const + export_project command (~230 lines) |
+| `src-tauri/src/menu.rs` | macOS menu bar builder + rebuild_menu command (~150 lines) |
+| `src-tauri/src/book_chapters.rs` | `seed_rust_book` command — all 20 Rust Book chapter data (~2,700 lines) |
 | `src-tauri/tauri.conf.json` | App config: identifier, window defaults, bundle settings |
 | `src-tauri/capabilities/default.json` | Tauri 2 IPC permissions — every API call needs an entry here |
 | `ui/src/App.svelte` | Root layout, all global state, menu event listeners, window state persistence |
 | `ui/src/lib/Sidebar.svelte` | Project/playground/file tree, drag-drop, context menus |
-| `ui/src/lib/Editor.svelte` | CodeMirror 6 wrapper, tab management, save/dirty tracking |
+| `ui/src/lib/Editor.svelte` | Monaco wrapper, theme sync, diagnostics markers |
 | `ui/src/lib/Output.svelte` | Console panel, run blocks, streaming output |
+| `ui/src/lib/SettingsModal.svelte` | Settings panel (editor, appearance, toolchain) |
+| `ui/src/lib/NewPlaygroundModal.svelte` | New playground dialog with template picker |
+| `ui/src/lib/templates.ts` | 11 starter templates with auto-deps |
 | `ui/src/lib/HelpModal.svelte` | Help overlay (⌘⇧/) |
 | `ui/src/lib/AboutModal.svelte` | About dialog |
+| `ui/src/app.css` | Global CSS variables (dark/light theme definitions) |
 | `specs/specifications.md` | Active spec — read before any feature work |
 | `specs/roadmap.md` | Released / in-progress / next-up / parked ideas |
 | `specs/conventions.md` | Naming rules, code style |
@@ -94,14 +103,7 @@ All runtime data lives under:
 
 ## Current Version Status
 
-**v0.1.7** — shipped (settings, toolchain wizard, dependency manager, templates, console improvements).
-
-**v0.1.8** — in progress (final feature release before distribution):
-1. Live error checking — cargo check squiggles in Monaco (500 ms debounce)
-2. Autocomplete / LSP — rust-analyzer completions, hover, signature help
-3. Themes — dark / light / system toggle (Monaco + app chrome)
-4. Export / share — export as standalone Cargo project, copy to clipboard
-5. Rust Book examples polish — review and improve all 20 chapters
+**v0.1.8** — shipped (live error checking, themes, export, Rust Book polish, backend modularization, 70 unit tests).
 
 After v0.1.8: pause features, ship website, DMG distribution, wiki, announcements.
 

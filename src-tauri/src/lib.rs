@@ -1,47 +1,48 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::ipc::Channel;
-use tauri::menu::{
-    CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder,
-};
 use tauri::{AppHandle, Emitter, Manager};
 
 mod book_chapters;
+mod cargo_commands;
+mod content_commands;
+mod export;
+mod menu;
+mod playground_commands;
 
 // ── App state ─────────────────────────────────────────────────────────────────
 
 /// Holds the currently active project name.  Managed via `app.manage()`.
-struct ActiveProject(Mutex<String>);
+pub(crate) struct ActiveProject(pub(crate) Mutex<String>);
 
 /// PID of the currently running `cargo run` child process (= its PGID, since we
 /// call `process_group(0)` at spawn time).  None when nothing is running.
-struct RunningProcess(Mutex<Option<u32>>);
+pub(crate) struct RunningProcess(pub(crate) Mutex<Option<u32>>);
 
 /// Stdin handle for the currently running child process.
 /// Stored so the frontend can send interactive input via `send_stdin`.
 /// Uses `tokio::sync::Mutex` because writes hold the lock across `.await`.
-struct StdinHandle(tokio::sync::Mutex<Option<tokio::process::ChildStdin>>);
+pub(crate) struct StdinHandle(pub(crate) tokio::sync::Mutex<Option<tokio::process::ChildStdin>>);
 
 /// PID of the currently running `cargo check` background process.
 /// Used to cancel a previous check when a new one starts.
-struct CheckProcess(Mutex<Option<u32>>);
+pub(crate) struct CheckProcess(pub(crate) Mutex<Option<u32>>);
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct Config {
-    active_project: String,
+pub(crate) struct Config {
+    pub(crate) active_project: String,
     #[serde(default)]
-    wizard_completed: bool,
+    pub(crate) wizard_completed: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
-struct Settings {
-    font_size: u32,
-    font_family: String,
-    tab_size: u32,
+pub(crate) struct Settings {
+    pub(crate) font_size: u32,
+    pub(crate) font_family: String,
+    pub(crate) tab_size: u32,
     #[serde(default = "default_cargo_path")]
-    cargo_path: String,
+    pub(crate) cargo_path: String,
     #[serde(default = "default_theme")]
-    theme: String,
+    pub(crate) theme: String,
 }
 
 fn default_theme() -> String {
@@ -76,20 +77,20 @@ pub(crate) fn projects_dir(app: &AppHandle) -> PathBuf {
 }
 
 /// Active project directory: projects/<active_project_name>/
-fn workspace_dir(app: &AppHandle) -> PathBuf {
+pub(crate) fn workspace_dir(app: &AppHandle) -> PathBuf {
     let name = app.state::<ActiveProject>().0.lock().unwrap().clone();
     projects_dir(app).join(name)
 }
 
-fn bin_dir(app: &AppHandle) -> PathBuf {
+pub(crate) fn bin_dir(app: &AppHandle) -> PathBuf {
     workspace_dir(app).join("src").join("bin")
 }
 
-fn content_dir(app: &AppHandle) -> PathBuf {
+pub(crate) fn content_dir(app: &AppHandle) -> PathBuf {
     workspace_dir(app).join("content")
 }
 
-fn config_path(app: &AppHandle) -> PathBuf {
+pub(crate) fn config_path(app: &AppHandle) -> PathBuf {
     app.path()
         .app_data_dir()
         .expect("Could not resolve App Support directory")
@@ -103,7 +104,7 @@ fn window_state_path(app: &AppHandle) -> PathBuf {
         .join("window-state.json")
 }
 
-fn settings_path(app: &AppHandle) -> PathBuf {
+pub(crate) fn settings_path(app: &AppHandle) -> PathBuf {
     app.path()
         .app_data_dir()
         .expect("Could not resolve App Support directory")
@@ -112,7 +113,7 @@ fn settings_path(app: &AppHandle) -> PathBuf {
 
 // ── Config persistence ────────────────────────────────────────────────────────
 
-fn load_config(app: &AppHandle) -> Config {
+pub(crate) fn load_config(app: &AppHandle) -> Config {
     let path = config_path(app);
     if path.exists() {
         if let Ok(s) = std::fs::read_to_string(&path) {
@@ -127,7 +128,7 @@ fn load_config(app: &AppHandle) -> Config {
     }
 }
 
-fn save_config(app: &AppHandle, active_project: &str) -> Result<(), String> {
+pub(crate) fn save_config(app: &AppHandle, active_project: &str) -> Result<(), String> {
     // Preserve wizard_completed from existing config
     let existing = load_config(app);
     let config = Config {
@@ -142,7 +143,7 @@ fn save_config(app: &AppHandle, active_project: &str) -> Result<(), String> {
 
 // ── Project templates ─────────────────────────────────────────────────────────
 
-fn project_cargo_toml(name: &str) -> String {
+pub(crate) fn project_cargo_toml(name: &str) -> String {
     format!(
         "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n# Add dependencies here — every playground can use them.\n[dependencies]\n",
         name
@@ -150,7 +151,7 @@ fn project_cargo_toml(name: &str) -> String {
 }
 
 /// New playground template — includes the PLAYGROUND_CONTENT hint.
-fn playground_template(name: &str) -> String {
+pub(crate) fn playground_template(name: &str) -> String {
     format!(
         "// Files in your content folder are available via:\n// let dir = std::env::var(\"PLAYGROUND_CONTENT\").unwrap_or_default();\n\nfn main() {{\n    println!(\"Hello from {}!\");\n}}\n",
         name
@@ -187,7 +188,7 @@ fn ensure_project(app: &AppHandle) -> Result<(), String> {
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
-fn validate_name(name: &str) -> Result<(), String> {
+pub(crate) fn validate_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("Name cannot be empty".into());
     }
@@ -211,7 +212,7 @@ fn validate_name(name: &str) -> Result<(), String> {
 }
 
 /// Validates a content filename: no path separators, no null bytes, not . or ..
-fn validate_filename(filename: &str) -> Result<(), String> {
+pub(crate) fn validate_filename(filename: &str) -> Result<(), String> {
     if filename.is_empty() {
         return Err("Filename cannot be empty".into());
     }
@@ -224,7 +225,7 @@ fn validate_filename(filename: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBuf, String> {
     validate_name(name)?;
     let dir = bin_dir(app);
     let path = dir.join(format!("{}.rs", name));
@@ -239,14 +240,14 @@ fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBuf, String> 
     Ok(path)
 }
 
-fn safe_content_path(filename: &str, app: &AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn safe_content_path(filename: &str, app: &AppHandle) -> Result<PathBuf, String> {
     validate_filename(filename)?;
     Ok(content_dir(app).join(filename))
 }
 
 // ── Content file helpers ──────────────────────────────────────────────────────
 
-fn is_text_file(filename: &str) -> bool {
+pub(crate) fn is_text_file(filename: &str) -> bool {
     let ext = std::path::Path::new(filename)
         .extension()
         .and_then(|e| e.to_str())
@@ -288,7 +289,7 @@ pub struct ContentFile {
 
 // ── Toolchain ─────────────────────────────────────────────────────────────────
 
-fn cargo_path() -> String {
+pub(crate) fn cargo_path() -> String {
     let candidates = vec![
         dirs_next::home_dir()
             .map(|h| h.join(".cargo/bin/cargo"))
@@ -314,1086 +315,6 @@ fn which_cargo() -> Option<PathBuf> {
                 Some(PathBuf::from(s))
             }
         })
-}
-
-// ── Project commands ──────────────────────────────────────────────────────────
-
-#[tauri::command]
-fn list_projects(app: AppHandle) -> Result<Vec<String>, String> {
-    let dir = projects_dir(&app);
-    if !dir.exists() {
-        return Ok(vec![]);
-    }
-    let mut names: Vec<String> = std::fs::read_dir(&dir)
-        .map_err(|e| e.to_string())?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_dir())
-        .filter_map(|e| e.file_name().into_string().ok())
-        .collect();
-    names.sort();
-    Ok(names)
-}
-
-#[tauri::command]
-fn get_active_project(app: AppHandle) -> String {
-    app.state::<ActiveProject>().0.lock().unwrap().clone()
-}
-
-#[tauri::command]
-fn new_project(name: String, app: AppHandle) -> Result<(), String> {
-    validate_name(&name)?;
-    let project_path = projects_dir(&app).join(&name);
-    if project_path.exists() {
-        return Err(format!("Project '{}' already exists", name));
-    }
-    let bin = project_path.join("src").join("bin");
-    std::fs::create_dir_all(&bin).map_err(|e| format!("Failed to create project: {}", e))?;
-    std::fs::write(project_path.join("Cargo.toml"), project_cargo_toml(&name))
-        .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
-    std::fs::write(bin.join("hello.rs"), playground_template("hello"))
-        .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
-    std::fs::create_dir_all(project_path.join("content"))
-        .map_err(|e| format!("Failed to create content dir: {}", e))?;
-    Ok(())
-}
-
-#[tauri::command]
-fn switch_project(name: String, app: AppHandle) -> Result<(), String> {
-    let project_path = projects_dir(&app).join(&name);
-    if !project_path.exists() {
-        return Err(format!("Project '{}' does not exist", name));
-    }
-    *app.state::<ActiveProject>().0.lock().unwrap() = name.clone();
-    save_config(&app, &name)
-}
-
-#[tauri::command]
-fn rename_project(old_name: String, new_name: String, app: AppHandle) -> Result<(), String> {
-    validate_name(&new_name)?;
-    let old_path = projects_dir(&app).join(&old_name);
-    let new_path = projects_dir(&app).join(&new_name);
-    if !old_path.exists() {
-        return Err(format!("Project '{}' does not exist", old_name));
-    }
-    if new_path.exists() {
-        return Err(format!("Project '{}' already exists", new_name));
-    }
-    std::fs::rename(&old_path, &new_path)
-        .map_err(|e| format!("Failed to rename project: {}", e))?;
-    // If this is the active project, update in-memory state and config
-    let is_active = *app.state::<ActiveProject>().0.lock().unwrap() == old_name;
-    if is_active {
-        *app.state::<ActiveProject>().0.lock().unwrap() = new_name.clone();
-        save_config(&app, &new_name)?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-fn delete_project(name: String, app: AppHandle) -> Result<(), String> {
-    let project_path = projects_dir(&app).join(&name);
-    if !project_path.exists() {
-        return Err(format!("Project '{}' does not exist", name));
-    }
-    std::fs::remove_dir_all(&project_path).map_err(|e| format!("Failed to delete project: {}", e))
-}
-
-#[tauri::command]
-fn duplicate_project(name: String, app: AppHandle) -> Result<String, String> {
-    let src = projects_dir(&app).join(&name);
-    if !src.exists() {
-        return Err(format!("Project '{}' does not exist", name));
-    }
-    // Find an available name
-    let mut new_name = format!("{}_copy", name);
-    let mut i = 2usize;
-    while projects_dir(&app).join(&new_name).exists() {
-        new_name = format!("{}_copy{}", name, i);
-        i += 1;
-    }
-    copy_dir_all(&src, &projects_dir(&app).join(&new_name))
-        .map_err(|e| format!("Failed to duplicate project: {}", e))?;
-    Ok(new_name)
-}
-
-fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(dst)?;
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let name = entry.file_name();
-        // Skip build artifacts
-        if name.to_string_lossy() == "target" {
-            continue;
-        }
-        if entry.file_type()?.is_dir() {
-            copy_dir_all(&entry.path(), &dst.join(&name))?;
-        } else {
-            std::fs::copy(entry.path(), dst.join(&name))?;
-        }
-    }
-    Ok(())
-}
-
-// ── Playground commands ───────────────────────────────────────────────────────
-
-#[tauri::command]
-fn list_playgrounds(app: AppHandle) -> Vec<String> {
-    let dir = bin_dir(&app);
-    let mut names: Vec<String> = match std::fs::read_dir(&dir) {
-        Ok(entries) => entries
-            .filter_map(|e| e.ok())
-            .map(|e| e.file_name().to_string_lossy().to_string())
-            .filter(|f| f.ends_with(".rs"))
-            .map(|f| f.trim_end_matches(".rs").to_string())
-            .collect(),
-        Err(_) => vec![],
-    };
-    names.sort();
-    names
-}
-
-#[tauri::command]
-fn load_playground(name: String, app: AppHandle) -> Result<String, String> {
-    let path = safe_playground_path(&name, &app)?;
-    std::fs::read_to_string(&path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn save_playground(name: String, content: String, app: AppHandle) -> Result<(), String> {
-    let path = safe_playground_path(&name, &app)?;
-    std::fs::write(&path, content).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn new_playground(name: String, content: Option<String>, app: AppHandle) -> Result<(), String> {
-    let path = safe_playground_path(&name, &app)?;
-    if path.exists() {
-        return Err(format!("'{}' already exists", name));
-    }
-    let code = content.unwrap_or_else(|| playground_template(&name));
-    std::fs::write(&path, code).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn rename_playground(old_name: String, new_name: String, app: AppHandle) -> Result<(), String> {
-    let old_path = safe_playground_path(&old_name, &app)?;
-    let new_path = safe_playground_path(&new_name, &app)?;
-    if new_path.exists() {
-        return Err(format!("'{}' already exists", new_name));
-    }
-    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn delete_playground(name: String, app: AppHandle) -> Result<(), String> {
-    let path = safe_playground_path(&name, &app)?;
-    std::fs::remove_file(&path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn duplicate_playground(name: String, app: AppHandle) -> Result<String, String> {
-    let src = safe_playground_path(&name, &app)?;
-    let new_name = format!("{}_copy", name);
-    let dst = safe_playground_path(&new_name, &app)?;
-    std::fs::copy(&src, &dst).map_err(|e| e.to_string())?;
-    Ok(new_name)
-}
-
-#[tauri::command]
-fn workspace_path(app: AppHandle) -> String {
-    workspace_dir(&app).to_string_lossy().to_string()
-}
-
-#[tauri::command]
-async fn run_playground(
-    name: String,
-    on_output: Channel<serde_json::Value>,
-    app: AppHandle,
-) -> Result<(), String> {
-    use std::process::Stdio;
-    use tokio::io::{AsyncBufReadExt, BufReader};
-    use tokio::process::Command;
-
-    validate_name(&name)?;
-
-    let cargo = cargo_path();
-    let workspace = workspace_dir(&app);
-    let playground_target = workspace.join("target").join("playground-runs");
-    let content_path = content_dir(&app);
-
-    let mut child = Command::new(&cargo)
-        .args([
-            "run",
-            "--bin",
-            &name,
-            "--target-dir",
-            playground_target.to_str().unwrap(),
-        ])
-        .current_dir(&workspace)
-        .env("PLAYGROUND_CONTENT", &content_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .process_group(0) // own process group so kill() hits cargo + spawned binary
-        .spawn()
-        .map_err(|e| format!("Failed to start cargo: {}", e))?;
-
-    // Store PID (= PGID) so kill_playground can send signals to the whole group.
-    if let Some(pid) = child.id() {
-        *app.state::<RunningProcess>().0.lock().unwrap() = Some(pid);
-    }
-
-    // Store stdin handle so the frontend can send interactive input.
-    *app.state::<StdinHandle>().0.lock().await = child.stdin.take();
-
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
-
-    let ch_out = on_output.clone();
-    let stdout_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            ch_out
-                .send(serde_json::json!({ "stream": "stdout", "line": line }))
-                .ok();
-        }
-    });
-
-    let ch_err = on_output.clone();
-    let stderr_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            ch_err
-                .send(serde_json::json!({ "stream": "stderr", "line": line }))
-                .ok();
-        }
-    });
-
-    let status = child.wait().await.map_err(|e| e.to_string())?;
-    let _ = tokio::join!(stdout_task, stderr_task);
-
-    // Process finished — clear stored PID and stdin handle.
-    *app.state::<RunningProcess>().0.lock().unwrap() = None;
-    *app.state::<StdinHandle>().0.lock().await = None;
-
-    on_output
-        .send(serde_json::json!({
-            "stream": "complete",
-            "code": status.code().unwrap_or(-1)
-        }))
-        .ok();
-
-    Ok(())
-}
-
-/// Kill the currently running cargo process (and its spawned binary) by sending
-/// SIGTERM to the whole process group, waiting 300 ms, then SIGKILL.
-#[tauri::command]
-async fn kill_playground(app: AppHandle) -> Result<(), String> {
-    let maybe_pid = app.state::<RunningProcess>().0.lock().unwrap().take();
-    if let Some(pid) = maybe_pid {
-        // Send SIGTERM to the entire process group (-<pgid>)
-        let _ = tokio::process::Command::new("kill")
-            .args(["-TERM", &format!("-{}", pid)])
-            .status()
-            .await;
-        // Give processes 300 ms to clean up, then force-kill.
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-        let _ = tokio::process::Command::new("kill")
-            .args(["-KILL", &format!("-{}", pid)])
-            .status()
-            .await;
-    }
-    Ok(())
-}
-
-/// Run `cargo check` in the background and stream diagnostics to the frontend.
-/// Cancels any previously running check before starting a new one.
-#[tauri::command]
-async fn check_playground(
-    name: String,
-    code: String,
-    on_diagnostics: Channel<serde_json::Value>,
-    app: AppHandle,
-) -> Result<(), String> {
-    use std::process::Stdio;
-    use tokio::io::{AsyncBufReadExt, BufReader};
-    use tokio::process::Command;
-
-    validate_name(&name)?;
-
-    // Save the code first so cargo check sees the latest version
-    let workspace = workspace_dir(&app);
-    let file = workspace
-        .join("src")
-        .join("bin")
-        .join(format!("{}.rs", name));
-    std::fs::write(&file, &code).map_err(|e| format!("Failed to save: {}", e))?;
-
-    // Cancel any previous check
-    let prev_pid = app.state::<CheckProcess>().0.lock().unwrap().take();
-    if let Some(pid) = prev_pid {
-        let _ = tokio::process::Command::new("kill")
-            .args(["-TERM", &format!("-{}", pid)])
-            .status()
-            .await;
-    }
-
-    let cargo = cargo_path();
-    let check_target = workspace.join("target").join("check-runs");
-
-    let mut child = Command::new(&cargo)
-        .args([
-            "check",
-            "--bin",
-            &name,
-            "--message-format",
-            "json",
-            "--target-dir",
-            check_target.to_str().unwrap(),
-        ])
-        .current_dir(&workspace)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .process_group(0)
-        .spawn()
-        .map_err(|e| format!("Failed to start cargo check: {}", e))?;
-
-    if let Some(pid) = child.id() {
-        *app.state::<CheckProcess>().0.lock().unwrap() = Some(pid);
-    }
-
-    let stdout = child.stdout.take().unwrap();
-    let mut lines = BufReader::new(stdout).lines();
-
-    // Parse cargo's JSON output for compiler messages
-    while let Ok(Some(line)) = lines.next_line().await {
-        if let Ok(msg) = serde_json::from_str::<serde_json::Value>(&line) {
-            if msg.get("reason").and_then(|r| r.as_str()) == Some("compiler-message") {
-                if let Some(message) = msg.get("message") {
-                    let severity = message
-                        .get("level")
-                        .and_then(|l| l.as_str())
-                        .unwrap_or("error");
-
-                    let text = message
-                        .get("message")
-                        .and_then(|m| m.as_str())
-                        .unwrap_or("");
-
-                    // Extract the primary span
-                    if let Some(spans) = message.get("spans").and_then(|s| s.as_array()) {
-                        if let Some(span) = spans
-                            .iter()
-                            .find(|s| s.get("is_primary").and_then(|p| p.as_bool()) == Some(true))
-                        {
-                            on_diagnostics
-                                .send(serde_json::json!({
-                                    "type": "diagnostic",
-                                    "severity": severity,
-                                    "message": text,
-                                    "line": span.get("line_start").and_then(|n| n.as_u64()).unwrap_or(1),
-                                    "col": span.get("column_start").and_then(|n| n.as_u64()).unwrap_or(1),
-                                    "end_line": span.get("line_end").and_then(|n| n.as_u64()).unwrap_or(1),
-                                    "end_col": span.get("column_end").and_then(|n| n.as_u64()).unwrap_or(1),
-                                }))
-                                .ok();
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    let _ = child.wait().await;
-    *app.state::<CheckProcess>().0.lock().unwrap() = None;
-
-    on_diagnostics
-        .send(serde_json::json!({ "type": "done" }))
-        .ok();
-
-    Ok(())
-}
-
-/// Cancel any in-flight `cargo check` background process.
-#[tauri::command]
-async fn cancel_check(app: AppHandle) -> Result<(), String> {
-    let maybe_pid = app.state::<CheckProcess>().0.lock().unwrap().take();
-    if let Some(pid) = maybe_pid {
-        let _ = tokio::process::Command::new("kill")
-            .args(["-TERM", &format!("-{}", pid)])
-            .status()
-            .await;
-    }
-    Ok(())
-}
-
-/// Send a line of input to the running playground's stdin.
-#[tauri::command]
-async fn send_stdin(line: String, app: AppHandle) -> Result<(), String> {
-    use tokio::io::AsyncWriteExt;
-
-    let state = app.state::<StdinHandle>();
-    let mut guard = state.0.lock().await;
-    if let Some(ref mut stdin) = *guard {
-        let data = format!("{}\n", line);
-        stdin
-            .write_all(data.as_bytes())
-            .await
-            .map_err(|e| format!("Failed to write to stdin: {}", e))?;
-        stdin
-            .flush()
-            .await
-            .map_err(|e| format!("Failed to flush stdin: {}", e))?;
-        Ok(())
-    } else {
-        Err("No running process".to_string())
-    }
-}
-
-// ── Cargo.toml commands ───────────────────────────────────────────────────────
-
-#[tauri::command]
-fn get_cargo_toml(app: AppHandle) -> Result<String, String> {
-    let path = workspace_dir(&app).join("Cargo.toml");
-    std::fs::read_to_string(&path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn save_cargo_toml(content: String, app: AppHandle) -> Result<(), String> {
-    // Validate TOML before saving
-    content
-        .parse::<toml_edit::DocumentMut>()
-        .map_err(|e| format!("Invalid TOML: {}", e))?;
-    let path = workspace_dir(&app).join("Cargo.toml");
-    std::fs::write(&path, content).map_err(|e| e.to_string())
-}
-
-/// Validate a crate name: must start with a letter, contain only [a-zA-Z0-9_-].
-fn validate_crate_name(name: &str) -> Result<(), String> {
-    if name.is_empty() {
-        return Err("Crate name cannot be empty".to_string());
-    }
-    if !name.chars().next().unwrap().is_ascii_alphabetic() {
-        return Err("Crate name must start with a letter".to_string());
-    }
-    if !name
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-    {
-        return Err(
-            "Crate name can only contain letters, digits, hyphens, and underscores".to_string(),
-        );
-    }
-    Ok(())
-}
-
-/// Validate a version string: basic semver-ish check.
-fn validate_version(version: &str) -> Result<(), String> {
-    if version == "*" {
-        return Ok(());
-    }
-    // Allow optional leading operator: ^, ~, =, >=, <=, >
-    let v = version
-        .trim_start_matches(|c: char| "^~=><".contains(c))
-        .trim();
-    if v.is_empty() {
-        return Err("Version cannot be empty after operator".to_string());
-    }
-    // Each dot-separated part must be numeric or *
-    for part in v.split('.') {
-        if part != "*" && part.parse::<u64>().is_err() {
-            return Err(format!("Invalid version component: '{}'", part));
-        }
-    }
-    Ok(())
-}
-
-/// Add a dependency to the active project's Cargo.toml.
-/// Accepts the current editor content so it's always in sync.
-/// Returns the updated file content (format-preserving).
-#[tauri::command]
-fn add_dependency(
-    content: String,
-    name: String,
-    version: String,
-    app: AppHandle,
-) -> Result<String, String> {
-    validate_crate_name(&name)?;
-    // Skip version validation for inline table specs like { version = "1", features = [...] }
-    if !version.trim_start().starts_with('{') {
-        validate_version(&version)?;
-    }
-
-    let mut doc = content
-        .parse::<toml_edit::DocumentMut>()
-        .map_err(|e| format!("Invalid Cargo.toml: {}", e))?;
-
-    // Ensure [dependencies] table exists
-    if !doc.contains_key("dependencies") {
-        doc["dependencies"] = toml_edit::Item::Table(toml_edit::Table::new());
-    }
-
-    // Check if already present
-    if doc["dependencies"].get(&name).is_some() {
-        return Err(format!("'{}' is already in [dependencies]", name));
-    }
-
-    // If version looks like an inline table (e.g. `{ version = "1", features = ["full"] }`),
-    // parse it as TOML value; otherwise treat it as a plain version string.
-    if version.trim_start().starts_with('{') {
-        let tmp = format!("x = {}", version);
-        let tmp_doc = tmp
-            .parse::<toml_edit::DocumentMut>()
-            .map_err(|e| format!("Invalid dependency spec: {}", e))?;
-        doc["dependencies"][&name] = tmp_doc["x"].clone();
-    } else {
-        doc["dependencies"][&name] = toml_edit::value(&version);
-    }
-
-    let updated = doc.to_string();
-    let path = workspace_dir(&app).join("Cargo.toml");
-    std::fs::write(&path, &updated).map_err(|e| e.to_string())?;
-    Ok(updated)
-}
-
-/// Remove a dependency from the active project's Cargo.toml.
-/// Accepts the current editor content so it's always in sync.
-/// Returns the updated file content.
-#[tauri::command]
-fn remove_dependency(content: String, name: String, app: AppHandle) -> Result<String, String> {
-    let mut doc = content
-        .parse::<toml_edit::DocumentMut>()
-        .map_err(|e| format!("Invalid Cargo.toml: {}", e))?;
-
-    if let Some(deps) = doc.get_mut("dependencies").and_then(|d| d.as_table_mut()) {
-        if deps.remove(&name).is_none() {
-            return Err(format!("'{}' not found in [dependencies]", name));
-        }
-    } else {
-        return Err("No [dependencies] table found".to_string());
-    }
-
-    let updated = doc.to_string();
-    let path = workspace_dir(&app).join("Cargo.toml");
-    std::fs::write(&path, &updated).map_err(|e| e.to_string())?;
-    Ok(updated)
-}
-
-#[tauri::command]
-fn get_toolchain_info() -> serde_json::Value {
-    let path = cargo_path();
-    let version = std::process::Command::new(&path)
-        .arg("--version")
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .unwrap_or_else(|| "cargo (not found)".to_string())
-        .trim()
-        .to_string();
-    serde_json::json!({ "path": path, "version": version })
-}
-
-/// Comprehensive toolchain check for the setup wizard.
-/// Returns status of rustup, cargo, rustc, and installed toolchains.
-#[tauri::command]
-fn check_toolchain(app: AppHandle) -> serde_json::Value {
-    let config = load_config(&app);
-
-    // Check rustup
-    let rustup_installed = std::process::Command::new("rustup")
-        .arg("--version")
-        .output()
-        .ok()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-
-    let rustup_version = if rustup_installed {
-        std::process::Command::new("rustup")
-            .arg("--version")
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| s.trim().to_string())
-    } else {
-        None
-    };
-
-    // Check cargo — use the user's configured path from settings
-    let settings = {
-        let path = settings_path(&app);
-        if path.exists() {
-            std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|s| serde_json::from_str::<Settings>(&s).ok())
-                .unwrap_or_default()
-        } else {
-            Settings::default()
-        }
-    };
-    let cargo = if settings.cargo_path.is_empty() {
-        cargo_path()
-    } else {
-        settings.cargo_path.clone()
-    };
-    let cargo_output = std::process::Command::new(&cargo)
-        .arg("--version")
-        .output()
-        .ok();
-    let cargo_installed = cargo_output
-        .as_ref()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    let cargo_version = cargo_output
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string());
-
-    // Check rustc
-    let rustc_output = std::process::Command::new("rustc")
-        .arg("--version")
-        .output()
-        .ok();
-    let rustc_installed = rustc_output
-        .as_ref()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    let rustc_version = rustc_output
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string());
-
-    // Get active toolchain if rustup is available
-    let active_toolchain = if rustup_installed {
-        std::process::Command::new("rustup")
-            .args(["show", "active-toolchain"])
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| s.trim().to_string())
-    } else {
-        None
-    };
-
-    // Get installed toolchains list
-    let installed_toolchains: Vec<String> = if rustup_installed {
-        std::process::Command::new("rustup")
-            .args(["toolchain", "list"])
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| {
-                s.lines()
-                    .map(|l| l.trim().to_string())
-                    .filter(|l| !l.is_empty())
-                    .collect()
-            })
-            .unwrap_or_default()
-    } else {
-        vec![]
-    };
-
-    // Check for essential components
-    let has_rustfmt = std::process::Command::new("rustfmt")
-        .arg("--version")
-        .output()
-        .ok()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-
-    let has_clippy = std::process::Command::new("cargo-clippy")
-        .arg("--version")
-        .output()
-        .ok()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-
-    let all_good = cargo_installed && rustc_installed;
-
-    serde_json::json!({
-        "wizard_completed": config.wizard_completed,
-        "all_good": all_good,
-        "rustup": {
-            "installed": rustup_installed,
-            "version": rustup_version,
-        },
-        "cargo": {
-            "installed": cargo_installed,
-            "path": cargo,
-            "version": cargo_version,
-        },
-        "rustc": {
-            "installed": rustc_installed,
-            "version": rustc_version,
-        },
-        "active_toolchain": active_toolchain,
-        "installed_toolchains": installed_toolchains,
-        "components": {
-            "rustfmt": has_rustfmt,
-            "clippy": has_clippy,
-        }
-    })
-}
-
-/// Mark the toolchain wizard as completed so it doesn't show again.
-#[tauri::command]
-fn complete_wizard(app: AppHandle) -> Result<(), String> {
-    let existing = load_config(&app);
-    let config = Config {
-        active_project: existing.active_project,
-        wizard_completed: true,
-    };
-    let json = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("Failed to serialise config: {}", e))?;
-    std::fs::write(config_path(&app), json)
-        .map_err(|e| format!("Failed to write config.json: {}", e))
-}
-
-// ── Content file commands ─────────────────────────────────────────────────────
-
-#[tauri::command]
-fn list_content_files(app: AppHandle) -> Result<Vec<ContentFile>, String> {
-    let dir = content_dir(&app);
-    if !dir.exists() {
-        return Ok(vec![]);
-    }
-    let mut files: Vec<ContentFile> = std::fs::read_dir(&dir)
-        .map_err(|e| e.to_string())?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
-        .map(|e| {
-            let filename = e.file_name().to_string_lossy().to_string();
-            let size_bytes = e.metadata().map(|m| m.len()).unwrap_or(0);
-            let is_text = is_text_file(&filename);
-            ContentFile {
-                filename,
-                size_bytes,
-                is_text,
-            }
-        })
-        .collect();
-    files.sort_by(|a, b| a.filename.cmp(&b.filename));
-    Ok(files)
-}
-
-#[tauri::command]
-fn create_content_file(filename: String, app: AppHandle) -> Result<(), String> {
-    let path = safe_content_path(&filename, &app)?;
-    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-    if path.exists() {
-        return Err(format!("'{}' already exists", filename));
-    }
-    std::fs::write(&path, "").map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn read_content_file(filename: String, app: AppHandle) -> Result<String, String> {
-    let path = safe_content_path(&filename, &app)?;
-    std::fs::read_to_string(&path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn save_content_file(filename: String, content: String, app: AppHandle) -> Result<(), String> {
-    let path = safe_content_path(&filename, &app)?;
-    std::fs::write(&path, content).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn delete_content_file(filename: String, app: AppHandle) -> Result<(), String> {
-    let path = safe_content_path(&filename, &app)?;
-    std::fs::remove_file(&path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn rename_content_file(
-    old_filename: String,
-    new_filename: String,
-    app: AppHandle,
-) -> Result<(), String> {
-    let old_path = safe_content_path(&old_filename, &app)?;
-    let new_path = safe_content_path(&new_filename, &app)?;
-    if new_path.exists() {
-        return Err(format!("'{}' already exists", new_filename));
-    }
-    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn import_content_file(src_path: String, app: AppHandle) -> Result<String, String> {
-    let src = std::path::Path::new(&src_path);
-    let filename = src
-        .file_name()
-        .and_then(|f| f.to_str())
-        .ok_or_else(|| "Invalid source path".to_string())?
-        .to_string();
-    validate_filename(&filename)?;
-
-    let dir = content_dir(&app);
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-
-    // Resolve name collision with _1, _2, … suffix
-    let mut final_name = filename.clone();
-    let mut counter = 1u32;
-    while dir.join(&final_name).exists() {
-        let stem = std::path::Path::new(&filename)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or(&filename);
-        let ext = std::path::Path::new(&filename)
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| format!(".{}", e))
-            .unwrap_or_default();
-        final_name = format!("{}_{}{}", stem, counter, ext);
-        counter += 1;
-    }
-
-    let dst = dir.join(&final_name);
-    std::fs::copy(src, &dst).map_err(|e| e.to_string())?;
-    Ok(final_name)
-}
-
-#[tauri::command]
-fn reveal_in_finder(path: String) -> Result<(), String> {
-    std::process::Command::new("open")
-        .args(["-R", &path])
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-fn get_content_file_path(filename: String, app: AppHandle) -> Result<String, String> {
-    let path = safe_content_path(&filename, &app)?;
-    Ok(path.to_string_lossy().to_string())
-}
-
-// ── Export ────────────────────────────────────────────────────────────────────
-
-/// The exact main.rs from the v0.1 CLI playground runner (commit 231314e),
-/// with PLAYGROUND_CONTENT env var added for content file support.
-const CLI_MAIN_RS: &str = r##"use std::io::{self, Write};
-use std::path::PathBuf;
-use std::process::{Command, exit};
-use clap::{Parser, Subcommand};
-
-#[derive(Parser)]
-#[command(
-    name = "playground",
-    about = "Run a Rust playground file from src/bin/",
-    version
-)]
-struct Cli {
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// List all available playgrounds
-    #[command(alias = "ls")]
-    List,
-
-    /// Print version information
-    #[command(alias = "v")]
-    Version,
-
-    /// Run a playground by name (default when no subcommand given)
-    #[command(external_subcommand)]
-    Run(Vec<String>),
-}
-
-fn list_playgrounds() -> Vec<String> {
-    let dir = PathBuf::from("src/bin");
-    if !dir.exists() {
-        return vec![];
-    }
-    let mut names: Vec<String> = std::fs::read_dir(&dir)
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .filter_map(|e| {
-            let path = e.path();
-            if path.extension()?.to_str()? == "rs" {
-                path.file_stem()?.to_str().map(|s| s.to_string())
-            } else {
-                None
-            }
-        })
-        .collect();
-    names.sort();
-    names
-}
-
-fn print_list() {
-    let playgrounds = list_playgrounds();
-    if playgrounds.is_empty() {
-        println!("No playgrounds found. Add a .rs file to src/bin/.");
-    } else {
-        println!("Available playgrounds:\n");
-        for name in &playgrounds {
-            println!("  {}", name);
-        }
-    }
-}
-
-fn pick_playground() -> String {
-    let playgrounds = list_playgrounds();
-
-    if playgrounds.is_empty() {
-        eprintln!("No playgrounds found. Add a .rs file to src/bin/.");
-        exit(1);
-    }
-
-    println!("Available playgrounds:\n");
-    for (i, name) in playgrounds.iter().enumerate() {
-        println!("  [{}] {}", i + 1, name);
-    }
-
-    loop {
-        print!("\nPick a playground: ");
-        io::stdout().flush().unwrap();
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-        let input = input.trim();
-
-        if let Ok(n) = input.parse::<usize>() {
-            if n >= 1 && n <= playgrounds.len() {
-                return playgrounds[n - 1].clone();
-            }
-        } else if playgrounds.contains(&input.to_string()) {
-            return input.to_string();
-        }
-
-        eprintln!("Invalid choice. Enter a number (1-{}) or a name.", playgrounds.len());
-    }
-}
-
-fn run_playground(name: &str, args: &[String]) {
-    let bin_path = PathBuf::from("src/bin").join(format!("{}.rs", name));
-    if !bin_path.exists() {
-        eprintln!("Error: playground `{}` not found (looked for {})", name, bin_path.display());
-        exit(1);
-    }
-
-    // Set PLAYGROUND_CONTENT so playgrounds can find their content files
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .unwrap_or_else(|_| ".".to_string());
-    let content_path = std::path::Path::new(&manifest_dir).join("content");
-
-    let status = Command::new("cargo")
-        .args(["run", "--bin", name, "--"])
-        .args(args)
-        .env("PLAYGROUND_CONTENT", &content_path)
-        .status()
-        .expect("failed to invoke cargo");
-
-    exit(status.code().unwrap_or(0));
-}
-
-fn main() {
-    let cli = Cli::parse();
-
-    match cli.command {
-        None => {
-            let name = pick_playground();
-            run_playground(&name, &[]);
-        }
-        Some(Commands::List) => print_list(),
-        Some(Commands::Version) => {
-            println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-        }
-        Some(Commands::Run(args)) => {
-            run_playground(&args[0], &args[1..]);
-        }
-    }
-}
-"##;
-
-/// Export the active project as a standalone CLI playground (v0.1 CLI style).
-/// Creates dest/<project>/ with merged Cargo.toml (deps + clap), src/main.rs,
-/// src/bin/*.rs, and content/ files.
-#[tauri::command]
-fn export_project(dest: String, app: AppHandle) -> Result<String, String> {
-    let workspace = workspace_dir(&app);
-    let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
-
-    let export_dir = PathBuf::from(&dest).join(&project_name);
-    let export_src = export_dir.join("src");
-    let export_bin = export_src.join("bin");
-    std::fs::create_dir_all(&export_bin).map_err(|e| e.to_string())?;
-
-    // Read original Cargo.toml for edition and deps
-    let orig_toml =
-        std::fs::read_to_string(workspace.join("Cargo.toml")).map_err(|e| e.to_string())?;
-    let doc = orig_toml
-        .parse::<toml_edit::DocumentMut>()
-        .map_err(|e| format!("Failed to parse Cargo.toml: {}", e))?;
-
-    let edition = doc
-        .get("package")
-        .and_then(|p| p.get("edition"))
-        .and_then(|e| e.as_str())
-        .unwrap_or("2021");
-
-    // Build merged Cargo.toml: project deps + clap + default-run
-    let mut export_toml = toml_edit::DocumentMut::new();
-    export_toml["package"] = toml_edit::Item::Table(toml_edit::Table::new());
-    export_toml["package"]["name"] = toml_edit::value(&project_name);
-    export_toml["package"]["version"] = toml_edit::value("0.1.0");
-    export_toml["package"]["edition"] = toml_edit::value(edition);
-    export_toml["package"]["default-run"] = toml_edit::value(&project_name);
-
-    // Merge deps: start with original, ensure clap is present
-    let mut deps_table = if let Some(deps) = doc.get("dependencies") {
-        deps.clone()
-    } else {
-        toml_edit::Item::Table(toml_edit::Table::new())
-    };
-    if deps_table.get("clap").is_none() {
-        let mut clap_table = toml_edit::InlineTable::new();
-        clap_table.insert("version", "4".into());
-        let mut features = toml_edit::Array::new();
-        features.push("derive");
-        clap_table.insert("features", toml_edit::Value::Array(features));
-        deps_table["clap"] = toml_edit::Item::Value(toml_edit::Value::InlineTable(clap_table));
-    }
-    export_toml["dependencies"] = deps_table;
-
-    std::fs::write(export_dir.join("Cargo.toml"), export_toml.to_string())
-        .map_err(|e| e.to_string())?;
-
-    // Write the CLI main.rs (the v0.1 runner with clap)
-    std::fs::write(export_src.join("main.rs"), CLI_MAIN_RS).map_err(|e| e.to_string())?;
-
-    // Copy all playground files from src/bin/
-    let bin_src = workspace.join("src").join("bin");
-    if bin_src.exists() {
-        for entry in std::fs::read_dir(&bin_src)
-            .map_err(|e| e.to_string())?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|ext| ext == "rs").unwrap_or(false))
-        {
-            std::fs::copy(entry.path(), export_bin.join(entry.file_name()))
-                .map_err(|e| e.to_string())?;
-        }
-    }
-
-    // Copy content files if they exist
-    let content_src = content_dir(&app);
-    if content_src.exists() {
-        let content_dest = export_dir.join("content");
-        if let Ok(entries) = std::fs::read_dir(&content_src) {
-            for entry in entries
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
-            {
-                std::fs::create_dir_all(&content_dest).map_err(|e| e.to_string())?;
-                std::fs::copy(entry.path(), content_dest.join(entry.file_name()))
-                    .map_err(|e| e.to_string())?;
-            }
-        }
-    }
-
-    Ok(export_dir.to_string_lossy().to_string())
 }
 
 // ── Window state persistence ──────────────────────────────────────────────────
@@ -1478,150 +399,6 @@ fn save_settings(settings: Settings, app: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to write settings.json: {}", e))
 }
 
-// ── Menu builder ─────────────────────────────────────────────────────────────
-
-/// Builds the full macOS menu bar.  Called once on startup and again via
-/// `rebuild_projects_menu` whenever the project list or active project changes.
-fn build_menu<R: tauri::Runtime>(
-    handle: &impl tauri::Manager<R>,
-    projects: &[String],
-    active: &str,
-    playground_count: usize,
-) -> tauri::Result<tauri::menu::Menu<R>> {
-    let app_submenu = SubmenuBuilder::new(handle, "Rustic Playground")
-        .item(&PredefinedMenuItem::about(handle, None, None)?)
-        .separator()
-        .item(
-            &MenuItemBuilder::with_id("show_settings", "Settings…")
-                .accelerator("CmdOrCtrl+,")
-                .build(handle)?,
-        )
-        .separator()
-        .item(&PredefinedMenuItem::hide(handle, None)?)
-        .item(&PredefinedMenuItem::hide_others(handle, None)?)
-        .item(&PredefinedMenuItem::show_all(handle, None)?)
-        .separator()
-        .item(&PredefinedMenuItem::quit(handle, None)?)
-        .build()?;
-
-    // Build the dynamic per-project check items first so they outlive the builder.
-    let check_items: Vec<tauri::menu::CheckMenuItem<R>> = projects
-        .iter()
-        .map(|name| {
-            CheckMenuItemBuilder::with_id(format!("switch_project::{}", name), name.as_str())
-                .checked(name.as_str() == active)
-                .build(handle)
-        })
-        .collect::<tauri::Result<Vec<_>>>()?;
-
-    let new_project_item = MenuItemBuilder::with_id("new_project", "New Project…")
-        .accelerator("CmdOrCtrl+Shift+N")
-        .build(handle)?;
-    let rename_project_item =
-        MenuItemBuilder::with_id("rename_project", "Rename Project…").build(handle)?;
-    let delete_project_item = MenuItemBuilder::with_id("delete_project", "Delete Project…")
-        .enabled(projects.len() > 1)
-        .build(handle)?;
-
-    let mut proj_builder = SubmenuBuilder::new(handle, "Project")
-        .item(&new_project_item)
-        .separator();
-    for item in &check_items {
-        proj_builder = proj_builder.item(item);
-    }
-    let project_menu = proj_builder
-        .separator()
-        .item(&rename_project_item)
-        .item(&delete_project_item)
-        .build()?;
-
-    let playground_menu = SubmenuBuilder::new(handle, "Playground")
-        .item(
-            &MenuItemBuilder::with_id("new_playground", "New Playground")
-                .accelerator("CmdOrCtrl+N")
-                .build(handle)?,
-        )
-        .separator()
-        .item(
-            &MenuItemBuilder::with_id("save", "Save")
-                .accelerator("CmdOrCtrl+S")
-                .build(handle)?,
-        )
-        .separator()
-        .item(
-            &MenuItemBuilder::with_id("close_tab", "Close Tab")
-                .accelerator("CmdOrCtrl+W")
-                .build(handle)?,
-        )
-        .separator()
-        .item(
-            &MenuItemBuilder::with_id("menu_delete_playground", "Delete Playground…")
-                .enabled(playground_count > 0)
-                .build(handle)?,
-        )
-        .build()?;
-
-    let run_menu = SubmenuBuilder::new(handle, "Run")
-        .item(
-            &MenuItemBuilder::with_id("run_playground", "Run")
-                .accelerator("CmdOrCtrl+R")
-                .build(handle)?,
-        )
-        .item(
-            &MenuItemBuilder::with_id("stop_playground", "Stop")
-                .accelerator("CmdOrCtrl+.")
-                .build(handle)?,
-        )
-        .build()?;
-
-    let edit_menu = SubmenuBuilder::new(handle, "Edit")
-        .undo()
-        .redo()
-        .separator()
-        .cut()
-        .copy()
-        .paste()
-        .separator()
-        .select_all()
-        .build()?;
-
-    let help_menu = SubmenuBuilder::new(handle, "Help")
-        .item(
-            &MenuItemBuilder::with_id("show_help", "Playground Help…")
-                .accelerator("CmdOrCtrl+Shift+/")
-                .build(handle)?,
-        )
-        .separator()
-        .item(
-            &MenuItemBuilder::with_id("seed_rust_book", "Load Rust Book Examples…")
-                .build(handle)?,
-        )
-        .separator()
-        .item(&MenuItemBuilder::with_id("show_about", "About Rustic Playground").build(handle)?)
-        .build()?;
-
-    MenuBuilder::new(handle)
-        .item(&app_submenu)
-        .item(&project_menu)
-        .item(&playground_menu)
-        .item(&run_menu)
-        .item(&edit_menu)
-        .item(&help_menu)
-        .build()
-}
-
-#[tauri::command]
-fn rebuild_menu(
-    projects: Vec<String>,
-    active: String,
-    playground_count: usize,
-    app: AppHandle,
-) -> Result<(), String> {
-    let menu = build_menu(&app, &projects, &active, playground_count).map_err(|e| e.to_string())?;
-    app.set_menu(menu).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 // ── App entry ─────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1684,7 +461,7 @@ pub fn run() {
             };
             let active_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
             // On startup we don't know playground count yet; frontend will call rebuild_menu shortly
-            let menu = build_menu(app.handle(), &initial_projects, &active_name, usize::MAX)?;
+            let menu = menu::build_menu(app.handle(), &initial_projects, &active_name, usize::MAX)?;
             app.set_menu(menu)?;
             Ok(())
         })
@@ -1717,54 +494,377 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             // Project management
-            list_projects,
-            get_active_project,
-            new_project,
-            switch_project,
-            rename_project,
-            delete_project,
-            duplicate_project,
-            rebuild_menu,
+            playground_commands::list_projects,
+            playground_commands::get_active_project,
+            playground_commands::new_project,
+            playground_commands::switch_project,
+            playground_commands::rename_project,
+            playground_commands::delete_project,
+            playground_commands::duplicate_project,
+            menu::rebuild_menu,
             book_chapters::seed_rust_book,
             get_window_state,
             save_window_state,
             get_settings,
             save_settings,
             // Playground management
-            list_playgrounds,
-            load_playground,
-            save_playground,
-            new_playground,
-            rename_playground,
-            delete_playground,
-            duplicate_playground,
-            run_playground,
-            kill_playground,
-            send_stdin,
-            check_playground,
-            cancel_check,
-            workspace_path,
+            playground_commands::list_playgrounds,
+            playground_commands::load_playground,
+            playground_commands::save_playground,
+            playground_commands::new_playground,
+            playground_commands::rename_playground,
+            playground_commands::delete_playground,
+            playground_commands::duplicate_playground,
+            playground_commands::run_playground,
+            playground_commands::kill_playground,
+            playground_commands::send_stdin,
+            playground_commands::check_playground,
+            playground_commands::cancel_check,
+            playground_commands::workspace_path,
             // Cargo / toolchain
-            get_cargo_toml,
-            save_cargo_toml,
-            add_dependency,
-            remove_dependency,
-            get_toolchain_info,
-            check_toolchain,
-            complete_wizard,
+            cargo_commands::get_cargo_toml,
+            cargo_commands::save_cargo_toml,
+            cargo_commands::add_dependency,
+            cargo_commands::remove_dependency,
+            cargo_commands::get_toolchain_info,
+            cargo_commands::check_toolchain,
+            cargo_commands::complete_wizard,
             // Content files
-            list_content_files,
-            create_content_file,
-            read_content_file,
-            save_content_file,
-            delete_content_file,
-            rename_content_file,
-            import_content_file,
-            reveal_in_finder,
-            get_content_file_path,
+            content_commands::list_content_files,
+            content_commands::create_content_file,
+            content_commands::read_content_file,
+            content_commands::save_content_file,
+            content_commands::delete_content_file,
+            content_commands::rename_content_file,
+            content_commands::import_content_file,
+            content_commands::reveal_in_finder,
+            content_commands::get_content_file_path,
             // Export
-            export_project,
+            export::export_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── validate_name ────────────────────────────────────────────────────
+
+    #[test]
+    fn validate_name_accepts_simple_lowercase() {
+        assert!(validate_name("hello").is_ok());
+    }
+
+    #[test]
+    fn validate_name_accepts_underscores_and_digits() {
+        assert!(validate_name("my_project_2").is_ok());
+    }
+
+    #[test]
+    fn validate_name_rejects_empty() {
+        let err = validate_name("").unwrap_err();
+        assert!(err.contains("empty"), "got: {}", err);
+    }
+
+    #[test]
+    fn validate_name_rejects_uppercase() {
+        assert!(validate_name("Hello").is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_leading_digit() {
+        assert!(validate_name("2fast").is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_leading_underscore() {
+        assert!(validate_name("_hidden").is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_hyphens() {
+        assert!(validate_name("my-project").is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_spaces() {
+        assert!(validate_name("my project").is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_path_traversal() {
+        assert!(validate_name("../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_too_long() {
+        let long = "a".repeat(65);
+        let err = validate_name(&long).unwrap_err();
+        assert!(err.contains("too long") || err.contains("64"), "got: {}", err);
+    }
+
+    #[test]
+    fn validate_name_accepts_max_length() {
+        let name = "a".repeat(64);
+        assert!(validate_name(&name).is_ok());
+    }
+
+    #[test]
+    fn validate_name_rejects_special_chars() {
+        assert!(validate_name("hello!").is_err());
+        assert!(validate_name("hello@world").is_err());
+        assert!(validate_name("hello.rs").is_err());
+    }
+
+    // ── validate_filename ────────────────────────────────────────────────
+
+    #[test]
+    fn validate_filename_accepts_normal_files() {
+        assert!(validate_filename("readme.md").is_ok());
+        assert!(validate_filename("data.csv").is_ok());
+        assert!(validate_filename("My File.txt").is_ok());
+    }
+
+    #[test]
+    fn validate_filename_rejects_empty() {
+        assert!(validate_filename("").is_err());
+    }
+
+    #[test]
+    fn validate_filename_rejects_forward_slash() {
+        assert!(validate_filename("path/file.txt").is_err());
+    }
+
+    #[test]
+    fn validate_filename_rejects_backslash() {
+        assert!(validate_filename("path\\file.txt").is_err());
+    }
+
+    #[test]
+    fn validate_filename_rejects_null_byte() {
+        assert!(validate_filename("file\0.txt").is_err());
+    }
+
+    #[test]
+    fn validate_filename_rejects_dot() {
+        assert!(validate_filename(".").is_err());
+    }
+
+    #[test]
+    fn validate_filename_rejects_dotdot() {
+        assert!(validate_filename("..").is_err());
+    }
+
+    #[test]
+    fn validate_filename_accepts_dotfiles() {
+        assert!(validate_filename(".gitignore").is_ok());
+        assert!(validate_filename("..hidden").is_ok());
+    }
+
+    // ── is_text_file ─────────────────────────────────────────────────────
+
+    #[test]
+    fn is_text_file_recognises_common_extensions() {
+        assert!(is_text_file("readme.md"));
+        assert!(is_text_file("data.json"));
+        assert!(is_text_file("style.css"));
+        assert!(is_text_file("app.js"));
+        assert!(is_text_file("main.rs"));
+        assert!(is_text_file("Cargo.toml"));
+        assert!(is_text_file("config.yaml"));
+        assert!(is_text_file("config.yml"));
+        assert!(is_text_file("script.sh"));
+        assert!(is_text_file("data.csv"));
+        assert!(is_text_file("output.log"));
+        assert!(is_text_file("notes.txt"));
+    }
+
+    #[test]
+    fn is_text_file_rejects_binary_extensions() {
+        assert!(!is_text_file("image.png"));
+        assert!(!is_text_file("photo.jpg"));
+        assert!(!is_text_file("archive.zip"));
+        assert!(!is_text_file("program.exe"));
+        assert!(!is_text_file("data.bin"));
+    }
+
+    #[test]
+    fn is_text_file_rejects_no_extension() {
+        assert!(!is_text_file("Makefile"));
+        assert!(!is_text_file("README"));
+    }
+
+    #[test]
+    fn is_text_file_case_insensitive() {
+        assert!(is_text_file("README.MD"));
+        assert!(is_text_file("config.JSON"));
+        assert!(is_text_file("style.CSS"));
+    }
+
+    // ── project_cargo_toml ───────────────────────────────────────────────
+
+    #[test]
+    fn project_cargo_toml_contains_project_name() {
+        let toml = project_cargo_toml("my_project");
+        assert!(toml.contains("name = \"my_project\""));
+    }
+
+    #[test]
+    fn project_cargo_toml_has_required_sections() {
+        let toml = project_cargo_toml("test");
+        assert!(toml.contains("[package]"));
+        assert!(toml.contains("[dependencies]"));
+        assert!(toml.contains("edition = \"2021\""));
+    }
+
+    #[test]
+    fn project_cargo_toml_parses_as_valid_toml() {
+        let toml = project_cargo_toml("valid_project");
+        assert!(toml.parse::<toml_edit::DocumentMut>().is_ok());
+    }
+
+    // ── playground_template ──────────────────────────────────────────────
+
+    #[test]
+    fn playground_template_contains_fn_main() {
+        let code = playground_template("test");
+        assert!(code.contains("fn main()"));
+    }
+
+    #[test]
+    fn playground_template_contains_name_in_println() {
+        let code = playground_template("my_playground");
+        assert!(code.contains("my_playground"));
+    }
+
+    #[test]
+    fn playground_template_mentions_playground_content() {
+        let code = playground_template("test");
+        assert!(code.contains("PLAYGROUND_CONTENT"));
+    }
+
+    // ── Settings ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn settings_default_values() {
+        let s = Settings::default();
+        assert_eq!(s.font_size, 13);
+        assert_eq!(s.font_family, "Menlo");
+        assert_eq!(s.tab_size, 4);
+        assert_eq!(s.theme, "system");
+        assert!(!s.cargo_path.is_empty());
+    }
+
+    #[test]
+    fn settings_roundtrip_serde() {
+        let s = Settings {
+            font_size: 16,
+            font_family: "Fira Code".to_string(),
+            tab_size: 2,
+            cargo_path: "/usr/bin/cargo".to_string(),
+            theme: "dark".to_string(),
+        };
+        let json = serde_json::to_string(&s).unwrap();
+        let s2: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(s2.font_size, 16);
+        assert_eq!(s2.font_family, "Fira Code");
+        assert_eq!(s2.tab_size, 2);
+        assert_eq!(s2.cargo_path, "/usr/bin/cargo");
+        assert_eq!(s2.theme, "dark");
+    }
+
+    #[test]
+    fn settings_deserialize_with_missing_theme_gets_default() {
+        let json = r#"{"font_size":13,"font_family":"Menlo","tab_size":4,"cargo_path":"/usr/bin/cargo"}"#;
+        let s: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(s.theme, "system");
+    }
+
+    #[test]
+    fn settings_deserialize_with_missing_cargo_path_gets_default() {
+        let json = r#"{"font_size":13,"font_family":"Menlo","tab_size":4}"#;
+        let s: Settings = serde_json::from_str(json).unwrap();
+        assert!(!s.cargo_path.is_empty());
+        assert!(s.cargo_path.contains("cargo"));
+    }
+
+    // ── Config ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn config_roundtrip_serde() {
+        let c = Config {
+            active_project: "my_project".to_string(),
+            wizard_completed: true,
+        };
+        let json = serde_json::to_string(&c).unwrap();
+        let c2: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(c2.active_project, "my_project");
+        assert!(c2.wizard_completed);
+    }
+
+    #[test]
+    fn config_wizard_completed_defaults_to_false() {
+        let json = r#"{"active_project":"default"}"#;
+        let c: Config = serde_json::from_str(json).unwrap();
+        assert!(!c.wizard_completed);
+    }
+
+    // ── WindowState ──────────────────────────────────────────────────────
+
+    #[test]
+    fn window_state_defaults() {
+        let ws = WindowState::default();
+        assert!(ws.sidebar_visible);
+        assert_eq!(ws.layout, "bottom");
+        assert_eq!(ws.sidebar_w, 220);
+        assert_eq!(ws.window_width, 1280);
+        assert_eq!(ws.window_height, 800);
+        assert!(ws.open_tabs.is_empty());
+        assert!(ws.active_tab.is_none());
+    }
+
+    #[test]
+    fn window_state_roundtrip_serde() {
+        let ws = WindowState {
+            sidebar_visible: false,
+            layout: "right".to_string(),
+            sidebar_w: 300,
+            output_h: 200,
+            output_w: 400,
+            open_tabs: vec![SavedTab {
+                id: "pg:hello".to_string(),
+                tab_type: "playground".to_string(),
+                filename: None,
+            }],
+            active_tab: Some("pg:hello".to_string()),
+            window_width: 1920,
+            window_height: 1080,
+        };
+        let json = serde_json::to_string(&ws).unwrap();
+        let ws2: WindowState = serde_json::from_str(&json).unwrap();
+        assert!(!ws2.sidebar_visible);
+        assert_eq!(ws2.layout, "right");
+        assert_eq!(ws2.open_tabs.len(), 1);
+        assert_eq!(ws2.open_tabs[0].id, "pg:hello");
+        assert_eq!(ws2.active_tab, Some("pg:hello".to_string()));
+    }
+
+    // ── ContentFile ──────────────────────────────────────────────────────
+
+    #[test]
+    fn content_file_serializes_correctly() {
+        let cf = ContentFile {
+            filename: "data.csv".to_string(),
+            size_bytes: 1024,
+            is_text: true,
+        };
+        let json = serde_json::to_string(&cf).unwrap();
+        assert!(json.contains("\"filename\":\"data.csv\""));
+        assert!(json.contains("\"size_bytes\":1024"));
+        assert!(json.contains("\"is_text\":true"));
+    }
 }
