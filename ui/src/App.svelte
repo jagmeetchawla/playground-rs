@@ -98,6 +98,10 @@
     cargo_path: '',
   })
   let deletePending:   string | null = $state(null)
+  let showAddDep:      boolean       = $state(false)
+  let depName:         string        = $state('')
+  let depVersion:      string        = $state('')
+  let depError:        string | null = $state(null)
   let toastMessage:    string | null = $state(null)
   let _toastTimer:     ReturnType<typeof setTimeout> | null = null
 
@@ -403,8 +407,13 @@
     if (meta.type === 'content') {
       await invoke('save_content_file', { filename: meta.filename, content: tabCode[activeTab] })
     } else if (meta.type === 'cargo') {
-      await invoke('save_cargo_toml', { content: tabCode[activeTab] })
-      cargoToml = tabCode[activeTab]
+      try {
+        await invoke('save_cargo_toml', { content: tabCode[activeTab] })
+        cargoToml = tabCode[activeTab]
+      } catch (err) {
+        showToast(String(err), 6000)
+        return
+      }
     } else {
       await invoke('save_playground', { name: activeTab, content: tabCode[activeTab] })
     }
@@ -629,6 +638,38 @@
   let runDisabled = $derived(
     !activeTab || isRunning || (tabMeta[activeTab ?? '']?.type ?? 'playground') !== 'playground'
   )
+  let isCargoTab = $derived(activeTab === CARGO_TAB)
+
+  // ── Dependency management ───────────────────────────────────────────────────
+
+  async function addDep() {
+    const name = depName.trim()
+    const version = depVersion.trim() || '*'
+    if (!name) { depError = 'Crate name is required'; return }
+    depError = null
+    try {
+      const content = tabCode[CARGO_TAB] ?? cargoToml
+      const updated = await invoke<string>('add_dependency', { content, name, version })
+      tabCode = { ...tabCode, [CARGO_TAB]: updated }
+      cargoToml = updated
+      dirtyTabs = dirtyTabs.filter(n => n !== CARGO_TAB)
+      depName = ''; depVersion = ''; showAddDep = false
+    } catch (err) {
+      depError = String(err)
+    }
+  }
+
+  async function removeDep(name: string) {
+    try {
+      const content = tabCode[CARGO_TAB] ?? cargoToml
+      const updated = await invoke<string>('remove_dependency', { content, name })
+      tabCode = { ...tabCode, [CARGO_TAB]: updated }
+      cargoToml = updated
+      dirtyTabs = dirtyTabs.filter(n => n !== CARGO_TAB)
+    } catch (err) {
+      console.error('remove_dependency failed:', err)
+    }
+  }
 </script>
 
 <div class="app">
@@ -787,6 +828,36 @@
           on:activate={(e) => openTab(e.detail, tabMeta[e.detail] ?? { type: 'playground' })}
           on:close={(e) => closeTab(e.detail)}
         />
+        {#if isCargoTab}
+          <div class="dep-toolbar">
+            {#if showAddDep}
+              <div class="dep-form">
+                <input
+                  class="dep-input"
+                  bind:value={depName}
+                  placeholder="crate name"
+                  spellcheck="false"
+                  onkeydown={(e) => { if (e.key === 'Enter') addDep(); if (e.key === 'Escape') { showAddDep = false; depError = null } }}
+                />
+                <input
+                  class="dep-input dep-version"
+                  bind:value={depVersion}
+                  placeholder="version (e.g. 1.0)"
+                  spellcheck="false"
+                  onkeydown={(e) => { if (e.key === 'Enter') addDep(); if (e.key === 'Escape') { showAddDep = false; depError = null } }}
+                />
+                <button class="dep-btn dep-btn-add" onclick={addDep}>Add</button>
+                <button class="dep-btn dep-btn-cancel" onclick={() => { showAddDep = false; depError = null }}>Cancel</button>
+              </div>
+              {#if depError}
+                <div class="dep-error">{depError}</div>
+              {/if}
+            {:else}
+              <button class="dep-btn dep-btn-add" onclick={() => { showAddDep = true; depName = ''; depVersion = ''; depError = null }}>+ Add Dependency</button>
+            {/if}
+          </div>
+        {/if}
+
         <div class="editor-wrap">
           {#if activeTab}
             <Editor
@@ -1047,6 +1118,45 @@
 
   .editor-wrap {
     flex: 1; display: flex; overflow: hidden;
+  }
+
+  /* ── Dependency toolbar ── */
+  .dep-toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    padding: 6px 10px;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .dep-form {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .dep-input {
+    font-family: var(--font-mono); font-size: 12px;
+    background: rgba(0,0,0,0.25); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-xs);
+    padding: 4px 8px; outline: none;
+  }
+  .dep-input:focus { border-color: var(--accent); }
+  .dep-input::placeholder { color: var(--text-tertiary); opacity: 0.5; }
+  .dep-version { width: 120px; }
+  .dep-btn {
+    font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: var(--radius-xs);
+    cursor: pointer; transition: background 0.1s, border-color 0.1s;
+  }
+  .dep-btn-add {
+    color: #fff; background: var(--accent); border: 1px solid var(--accent);
+  }
+  .dep-btn-add:hover { filter: brightness(1.15); }
+  .dep-btn-cancel {
+    color: var(--text-secondary);
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+  }
+  .dep-btn-cancel:hover { background: rgba(255,255,255,0.1); border-color: var(--border-strong); }
+  .dep-error {
+    font-size: 11px; color: var(--red); padding: 2px 0;
+    width: 100%;
   }
 
   /* ── Output wrap ── */

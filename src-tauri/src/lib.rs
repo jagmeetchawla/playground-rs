@@ -622,8 +622,110 @@ fn get_cargo_toml(app: AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 fn save_cargo_toml(content: String, app: AppHandle) -> Result<(), String> {
+    // Validate TOML before saving
+    content
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| format!("Invalid TOML: {}", e))?;
     let path = workspace_dir(&app).join("Cargo.toml");
     std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+/// Validate a crate name: must start with a letter, contain only [a-zA-Z0-9_-].
+fn validate_crate_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Crate name cannot be empty".to_string());
+    }
+    if !name.chars().next().unwrap().is_ascii_alphabetic() {
+        return Err("Crate name must start with a letter".to_string());
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(
+            "Crate name can only contain letters, digits, hyphens, and underscores".to_string(),
+        );
+    }
+    Ok(())
+}
+
+/// Validate a version string: basic semver-ish check.
+fn validate_version(version: &str) -> Result<(), String> {
+    if version == "*" {
+        return Ok(());
+    }
+    // Allow optional leading operator: ^, ~, =, >=, <=, >
+    let v = version
+        .trim_start_matches(|c: char| "^~=><".contains(c))
+        .trim();
+    if v.is_empty() {
+        return Err("Version cannot be empty after operator".to_string());
+    }
+    // Each dot-separated part must be numeric or *
+    for part in v.split('.') {
+        if part != "*" && part.parse::<u64>().is_err() {
+            return Err(format!("Invalid version component: '{}'", part));
+        }
+    }
+    Ok(())
+}
+
+/// Add a dependency to the active project's Cargo.toml.
+/// Accepts the current editor content so it's always in sync.
+/// Returns the updated file content (format-preserving).
+#[tauri::command]
+fn add_dependency(
+    content: String,
+    name: String,
+    version: String,
+    app: AppHandle,
+) -> Result<String, String> {
+    validate_crate_name(&name)?;
+    validate_version(&version)?;
+
+    let mut doc = content
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| format!("Invalid Cargo.toml: {}", e))?;
+
+    // Ensure [dependencies] table exists
+    if !doc.contains_key("dependencies") {
+        doc["dependencies"] = toml_edit::Item::Table(toml_edit::Table::new());
+    }
+
+    // Check if already present
+    if doc["dependencies"].get(&name).is_some() {
+        return Err(format!("'{}' is already in [dependencies]", name));
+    }
+
+    doc["dependencies"][&name] = toml_edit::value(&version);
+
+    let updated = doc.to_string();
+    let path = workspace_dir(&app).join("Cargo.toml");
+    std::fs::write(&path, &updated).map_err(|e| e.to_string())?;
+    Ok(updated)
+}
+
+/// Remove a dependency from the active project's Cargo.toml.
+/// Accepts the current editor content so it's always in sync.
+/// Returns the updated file content.
+#[tauri::command]
+fn remove_dependency(content: String, name: String, app: AppHandle) -> Result<String, String> {
+    let mut doc = content
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| format!("Invalid Cargo.toml: {}", e))?;
+
+    if let Some(deps) = doc.get_mut("dependencies").and_then(|d| d.as_table_mut()) {
+        if deps.remove(&name).is_none() {
+            return Err(format!("'{}' not found in [dependencies]", name));
+        }
+    } else {
+        return Err("No [dependencies] table found".to_string());
+    }
+
+    let updated = doc.to_string();
+    let path = workspace_dir(&app).join("Cargo.toml");
+    std::fs::write(&path, &updated).map_err(|e| e.to_string())?;
+    Ok(updated)
 }
 
 #[tauri::command]
@@ -1106,6 +1208,8 @@ pub fn run() {
             // Cargo / toolchain
             get_cargo_toml,
             save_cargo_toml,
+            add_dependency,
+            remove_dependency,
             get_toolchain_info,
             // Content files
             list_content_files,
