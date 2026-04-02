@@ -142,6 +142,34 @@ tokio = &#123; version = "1", features = ["full"] &#125;</pre>
       <p>Click the block header to collapse/expand previous runs. Click <strong>Clear</strong> to remove all history.</p>
     </section>
 
+    <!-- Rust Book attribution -->
+    <section class="attribution-section">
+      <h2>📖 Rust Book Examples</h2>
+      <p>
+        The chapter examples loaded via <strong>Help → Load Rust Book Examples…</strong>
+        are based on the curriculum of
+        <strong>"The Rust Programming Language"</strong>
+        by Steve Klabnik and Carol Nichols, with contributions from the Rust Community.
+      </p>
+      <table class="attr-table">
+        <tbody>
+          <tr><td>Book (free online)</td><td><a href="https://doc.rust-lang.org/book/" target="_blank" rel="noreferrer">doc.rust-lang.org/book</a></td></tr>
+          <tr><td>Source</td><td><a href="https://github.com/rust-lang/book" target="_blank" rel="noreferrer">github.com/rust-lang/book</a></td></tr>
+          <tr><td>License</td><td>MIT / Apache-2.0</td></tr>
+          <tr><td>Copyright</td><td>Rust Project Developers (2010)</td></tr>
+        </tbody>
+      </table>
+      <p>
+        The playground code is original educational Rust written to illustrate each
+        chapter's concepts — not verbatim from the book. Rustic Playground is not
+        affiliated with or endorsed by the Rust Project.
+      </p>
+      <p class="attr-note">
+        An <code>attribution.md</code> file is placed in every chapter's Files folder for
+        offline reference.
+      </p>
+    </section>
+
     <!-- Security -->
     <section class="warn-section">
       <h2>⚠ Security Notice</h2>
@@ -277,6 +305,41 @@ tokio = &#123; version = "1", features = ["full"] &#125;</pre>
     font-family: var(--font-mono); font-size: 11.5px;
     color: var(--text); line-height: 1.7;
     white-space: pre;
+  }
+
+  /* Rust Book attribution section */
+  .attribution-section {
+    background: rgba(80, 140, 255, 0.05);
+    border: 1px solid rgba(80, 140, 255, 0.18);
+    border-radius: 6px;
+    padding: 12px 14px;
+    gap: 10px;
+  }
+  .attribution-section h2 { color: #7aadff; }
+  .attr-table {
+    border-collapse: collapse;
+    font-size: 12px;
+    width: 100%;
+  }
+  .attr-table td {
+    padding: 3px 12px 3px 0;
+    color: var(--text-secondary);
+    vertical-align: middle;
+  }
+  .attr-table td:first-child {
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    width: 120px;
+  }
+  .attr-table a {
+    color: #7aadff;
+    text-decoration: none;
+  }
+  .attr-table a:hover { text-decoration: underline; }
+  .attr-note {
+    font-size: 11.5px !important;
+    color: var(--text-tertiary) !important;
+    font-style: italic;
   }
 
   /* Security warning section */

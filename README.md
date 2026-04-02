@@ -1,4 +1,4 @@
-# playground-rs
+# Rustic Playground
 
 > [!WARNING]
 > ## ⚠️ DEVELOPER TOOL — NOT SANDBOXED — USE AT YOUR OWN RISK
@@ -15,8 +15,6 @@
 > - There is **no isolation** between playground code and your system
 > - A playground that deletes files, exfiltrates data, or forks a bomb will
 >   actually do those things
-> - The app stores your playgrounds in
->   `~/Library/Application Support/com.playground-rs.app/` — writable by the app
 >
 > **No binary is distributed.** You must compile this yourself from source.
 > If you received a pre-built binary from an untrusted source, do not run it.
@@ -26,153 +24,186 @@
 
 ---
 
-# playground-rs
-
 A macOS desktop app for running Rust experiments — inspired by Swift Playgrounds.
-Drop any `.rs` file into the workspace, write code, hit **Run**, see output.
+Write code, press **⌘R**, see output stream live. No terminal required.
 
 Built with [Tauri 2](https://tauri.app) + [Svelte 5](https://svelte.dev) +
-[Monaco Editor](https://microsoft.github.io/monaco-editor/) (the VS Code editor engine).
+[CodeMirror 6](https://codemirror.net).
+
+## Features
+
+- **Live execution** — ⌘R compiles and runs; stdout/stderr streams in real time
+- **Multiple projects** — each project is an isolated Cargo workspace with its own `Cargo.toml`
+- **Multiple playgrounds** — every `.rs` file in `src/bin/` is its own runnable binary
+- **Content files** — attach any file to a project via the Files panel; access at runtime via the `PLAYGROUND_CONTENT` env var
+- **Cargo.toml editor** — edit dependencies directly in the app
+- **Window state persistence** — layout, panel sizes, open tabs, and window size survive restarts
+- **Rust Book examples** — load all 20 chapters of _The Rust Programming Language_ as ready-to-run playgrounds (**Help → Load Rust Book Examples…**)
 
 ## Requirements
 
-- macOS 11+
-- [Rust + Cargo](https://rustup.rs) — the app will offer to install this on first launch if missing
-- [Node.js](https://nodejs.org) 18+ and npm — to build the frontend
-- [Tauri CLI](https://tauri.app/start/): `cargo install tauri-cli --version "^2.0"`
+| Tool | Version |
+|---|---|
+| macOS | 13 Ventura or later |
+| Rust toolchain | stable — install via [rustup.rs](https://rustup.rs) |
+| Node.js | 18+ |
+| pnpm | 8+ |
+| Tauri CLI | `cargo install tauri-cli --version "^2.0"` |
 
-## Build & run
+## Build & Run
 
 ```sh
 git clone https://github.com/jagmeetchawla/playground-rs
 cd playground-rs
+cd ui && pnpm install && cd ..
 cargo tauri dev        # development mode — hot reload
-cargo tauri build      # production .app + .dmg in src-tauri/target/release/bundle/
+cargo tauri build      # release .app in src-tauri/target/release/bundle/
 ```
 
-## How it works
+## How It Works
 
-The app manages a self-contained Cargo workspace at:
+Each **project** is a Cargo workspace stored at:
+
 ```
-~/Library/Application Support/com.playground-rs.app/workspace/
-├── Cargo.toml           ← shared dependencies for all playgrounds
+~/Library/Application Support/com.playground-rs.app/projects/<name>/
+├── Cargo.toml        ← shared dependencies for all playgrounds in this project
 ├── src/bin/
-│   ├── hello.rs         ← seeded on first launch
-│   └── <your_file>.rs
-└── content/
-    ├── hello/           ← files your hello playground can read at runtime
-    └── <name>/          ← one folder per playground
+│   ├── hello.rs      ← seeded on first launch
+│   └── <name>.rs     ← one file per playground
+└── content/          ← runtime assets (accessible via PLAYGROUND_CONTENT)
 ```
 
-Each `.rs` file is a standalone Cargo binary target with a `fn main()`.
-The Tauri backend runs `cargo run --bin <name>` and streams stdout/stderr
-live to the output panel.
+Each `.rs` file is a standalone binary target with a `fn main()`.
+The backend runs `cargo run --bin <name>` and streams stdout/stderr live.
 
-## Working with files and assets
+## Content Files
 
-Each playground has its own **content folder** — the same concept as Swift
-Playgrounds' assets bundle. Any file you need your playground to read at runtime
-goes there: CSV data, JSON configs, text fixtures, images, whatever.
-
-### Accessing content files from your code
-
-When the app runs your playground it injects a `PLAYGROUND_CONTENT` environment
-variable pointing to that playground's content folder:
+Each project has a **content folder** — the same concept as Swift Playgrounds' assets bundle.
+Drop any file there and access it from your playground code:
 
 ```rust
 use std::{env, fs};
 
 fn main() {
     let dir = env::var("PLAYGROUND_CONTENT").unwrap_or_default();
-
-    // Read a file from the content folder
     let data = fs::read_to_string(format!("{dir}/data.csv")).unwrap();
     println!("{data}");
 }
 ```
 
-### Managing content files
-
-Use the sidebar to manage each playground's content folder:
-
 | Action | How |
-|--------|-----|
-| See a playground's files | Click the `▸` chevron next to any playground name |
-| Add a new file | Click `[+ Add File]` inside the expanded content section |
-| Import an existing file | Drag a file from Finder onto the playground in the sidebar |
-| Open a text file for editing | Click it — opens as an editor tab |
-| Open an image or binary | Click it — opens with the default macOS app |
+|---|---|
+| View a project's files | Click `▸` next to the project name in the sidebar |
+| Add a new file | Click `[+ Add File]` in the expanded files section |
+| Import from Finder | Drag a file onto the project row in the sidebar |
+| Edit a text file | Click it — opens as an editor tab |
+| Open a binary / image | Click it — opens with the default macOS app |
 | Rename / Delete / Reveal | Right-click the file |
 
-Any new file you create inside the app is saved to the playground's content
-folder — keeping all the data that belongs to a playground in one place.
+## Keyboard Shortcuts
 
-## GUI usage
+| Shortcut | Action |
+|---|---|
+| ⌘R | Run the active playground |
+| ⌘. | Stop the running process |
+| ⌘S | Save the active file |
+| ⌘N | New playground |
+| ⌘W | Close active tab |
+| ⌘⇧N | New project |
+| ⌘⇧/ | Help |
 
-| Action | How |
-|--------|-----|
-| Run playground | `▶ Run` button or `Cmd+R` |
-| Stop | `■ Stop` button or `Cmd+.` |
-| Save | `💾 Save` button or `Cmd+S` |
-| New playground | `+` in sidebar or `Cmd+N` |
-| Rename / Delete / Duplicate | Right-click playground in sidebar |
-| Browse content files | Click `▸` next to playground name |
-| Add a content file | `[+ Add File]` in the expanded content section |
-| Import file from Finder | Drag onto playground in sidebar |
+## Adding Dependencies
 
-## CLI usage (no GUI)
-
-The original CLI runner still works:
-
-```sh
-cargo run hello           # run a playground
-cargo run list            # list all playgrounds
-cargo run                 # interactive picker
-```
-
-## Adding dependencies
-
-Edit `Cargo.toml` in the workspace directory — all playgrounds share it:
+All playgrounds in a project share one `Cargo.toml`. Click the **Cargo.toml** entry
+at the bottom of the sidebar to edit it directly:
 
 ```toml
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-rand = "0.8"
+rand  = "0.8"
+tokio = { version = "1", features = ["full"] }
 ```
 
-## Project structure
+## Rust Book Examples
+
+**Help → Load Rust Book Examples…** creates one project per chapter of
+[_The Rust Programming Language_](https://doc.rust-lang.org/book/),
+all ready to run with ⌘R.
+
+| # | Project | Approach |
+|---|---|---|
+| 1 | `ch01_getting_started` | hello world, format strings, variables |
+| 2 | `ch02_guessing_game` | rand, Ordering, match, loop |
+| 3 | `ch03_concepts` | data types, functions, control flow |
+| 4 | `ch04_ownership` | move semantics, references, slices |
+| 5 | `ch05_structs` | structs, methods, Display |
+| 6 | `ch06_enums` | enums, match, if let |
+| 7 | `ch07_modules` | inline modules, paths, use — plus CLI guide for file-based modules |
+| 8 | `ch08_collections` | Vec, String, HashMap |
+| 9 | `ch09_errors` | panic!, Result, ? operator |
+| 10 | `ch10_generics` | generics, traits, lifetimes |
+| 11 | `ch11_testing` | #[test], assert macros — plus `cargo test` instructions |
+| 12 | `ch12_minigrep` | working grep using the Files panel, plus CLI guide |
+| 13 | `ch13_closures` | closures, iterators, combinators |
+| 14 | `ch14_cargo` | cfg!, build metadata — plus workspace/publish CLI guide |
+| 15 | `ch15_smart_pointers` | Box, Rc, RefCell |
+| 16 | `ch16_concurrency` | threads, channels, Arc/Mutex |
+| 17 | `ch17_oop` | encapsulation, trait objects, state pattern |
+| 18 | `ch18_patterns` | pattern syntax, match guards, @ bindings |
+| 19 | `ch19_advanced` | unsafe Rust, advanced traits, macros |
+| 20 | `ch20_web_server` | thread pool (fully runnable) — plus web server CLI guide |
+
+Chapters that require a multi-file project or command-line arguments include a
+`cli_guide.rs` playground that prints step-by-step terminal instructions when run.
+Every chapter project also contains an `attribution.md` in its Files panel.
+
+> **Attribution** — Examples are based on the curriculum of _The Rust Programming Language_
+> by Steve Klabnik and Carol Nichols ([source](https://github.com/rust-lang/book),
+> MIT / Apache-2.0, © Rust Project Developers 2010).
+> Playground code is original educational Rust.
+> Rustic Playground is not affiliated with or endorsed by the Rust Project.
+
+## Project Structure
 
 ```
 playground-rs/
-├── src/
-│   ├── main.rs           ← CLI runner (still works)
-│   └── bin/              ← dev-mode playgrounds (used by cargo tauri dev)
-├── src-tauri/            ← Tauri backend (Rust)
-│   ├── src/lib.rs        ← commands: list, load, save, run, new, rename,
-│   │                        content file CRUD, PLAYGROUND_CONTENT injection
-│   ├── tauri.conf.json
-│   └── entitlements.plist
-├── ui/                   ← Svelte 5 frontend
-│   └── src/
-│       ├── App.svelte
-│       ├── lib/Sidebar.svelte    ← playground list + content file browser
-│       ├── lib/Editor.svelte     ← Monaco; rust + json + markdown + plaintext
-│       └── lib/Output.svelte     ← block-based run console
-└── specs/                ← architecture, conventions, acceptance criteria
-    └── archive/          ← versioned spec snapshots (v0 → current)
+├── src-tauri/
+│   ├── src/lib.rs            ← all Tauri commands (projects, playgrounds, content files, seeding)
+│   ├── capabilities/         ← Tauri 2 permission definitions
+│   └── tauri.conf.json
+└── ui/
+    └── src/
+        ├── App.svelte        ← main layout, state, event wiring
+        └── lib/
+            ├── Sidebar.svelte
+            ├── Editor.svelte
+            ├── Output.svelte
+            ├── HelpModal.svelte
+            └── AboutModal.svelte
 ```
 
-## Security model
+## Security Model
 
-See the warning at the top of this file. In addition:
+See the warning at the top of this file. Additionally:
 
-- All playground names are validated as `[a-z][a-z0-9_]*` before any
-  filesystem or process operation — path traversal is blocked at the API layer
+- Playground names are validated as `[a-z][a-z0-9_]*` — path traversal is blocked at the API layer
 - The Tauri IPC bridge only accepts calls from the app's own WebView origin
-- `cargo` is invoked via its absolute path (`~/.cargo/bin/cargo`), not via
-  shell string interpolation
-- Playground runs use a separate `--target-dir` to avoid lock conflicts with
-  the Tauri dev build
+- `cargo` is invoked via its absolute path (`~/.cargo/bin/cargo`), not via shell string interpolation
+- Playground runs use a separate `target/playground-runs/` directory to avoid lock conflicts
+
+## Release History
+
+| Version | Highlights |
+|---|---|
+| v0.1.6.2 | Window state persistence (layout, panel sizes, tabs, window size) |
+| v0.1.6.1 | Fix menu enabled/disabled sync for Delete Project / Delete Playground |
+| v0.1.6 | Help modal, About modal, app icon, rename to Rustic Playground |
+| v0.1.5 | Content files panel, drag-and-drop import, binary file support |
+| v0.1.4 | Project management (new, rename, delete, duplicate, switch) |
+| v0.1.3 | Cargo.toml editor tab |
+| v0.1.2 | Tab bar, multiple open files, unsaved-change indicators |
+| v0.1.1 | Sidebar, playground CRUD, live output streaming |
+| v0.1.0 | Initial release |
 
 ## License
 

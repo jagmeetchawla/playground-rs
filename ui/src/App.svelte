@@ -87,6 +87,14 @@
   let showHelp:        boolean       = $state(false)
   let showAbout:       boolean       = $state(false)
   let deletePending:   string | null = $state(null)
+  let toastMessage:    string | null = $state(null)
+  let _toastTimer:     ReturnType<typeof setTimeout> | null = null
+
+  function showToast(msg: string, durationMs = 4000) {
+    toastMessage = msg
+    if (_toastTimer) clearTimeout(_toastTimer)
+    _toastTimer = setTimeout(() => { toastMessage = null }, durationMs)
+  }
 
   // ── Layout & panel sizing ─────────────────────────────────────────────────────
   let sidebarVisible                   = $state(true)
@@ -144,9 +152,9 @@
         state: {
           sidebar_visible: sidebarVisible,
           layout:          layoutMode,
-          sidebar_w:       sidebarW,
-          output_h:        outputH,
-          output_w:        outputW,
+          sidebar_w:       Math.round(sidebarW),
+          output_h:        Math.round(outputH),
+          output_w:        Math.round(outputW),
           open_tabs:       openTabs.map(id => {
             const meta = tabMeta[id]
             if (meta?.type === 'content') return { id, tab_type: 'content', filename: meta.filename }
@@ -154,8 +162,8 @@
             return                               { id, tab_type: 'playground', filename: null }
           }),
           active_tab:    activeTab,
-          window_width:  window.innerWidth,
-          window_height: window.innerHeight,
+          window_width:  Math.round(window.innerWidth),
+          window_height: Math.round(window.innerHeight),
         }
       })
     } catch(e) {
@@ -224,6 +232,7 @@
         listen<string>('menu:switch-project', (e) => switchProject(e.payload)),
         listen('menu:help',              () => { showHelp  = true }),
         listen('menu:about',             () => { showAbout = true }),
+        listen('menu:rust-book',         () => seedRustBook()),
         listen('menu:delete-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground') deletePending = activeTab }),
       ])
     } catch (e) {
@@ -282,6 +291,23 @@
     activeProject = name
     await loadProjectData()
     syncMenuProjects()
+  }
+
+  async function seedRustBook() {
+    try {
+      const created = await invoke<string[]>('seed_rust_book')
+      projects = await invoke<string[]>('list_projects')
+      if (created.length > 0) {
+        // Switch to the first chapter so the user lands somewhere useful
+        await switchProject(created[0])
+        showToast(`✅ Loaded ${created.length} Rust Book chapter${created.length > 1 ? 's' : ''}. Starting with ${created[0]}.`)
+      } else {
+        showToast('ℹ️ Rust Book chapters are already loaded.')
+      }
+    } catch (e) {
+      console.error('seedRustBook failed:', e)
+      showToast('❌ Failed to load Rust Book examples.')
+    }
   }
 
   function contentTabId(filename: string) { return `content:${filename}` }
@@ -797,6 +823,10 @@
   <AboutModal onclose={() => showAbout = false} />
 {/if}
 
+{#if toastMessage}
+  <div class="toast" role="status" aria-live="polite">{toastMessage}</div>
+{/if}
+
 {#if deletePending}
   <div class="confirm-backdrop" onclick={() => deletePending = null} aria-hidden="true"></div>
   <div class="confirm-dialog" role="alertdialog" aria-modal="true">
@@ -1007,6 +1037,31 @@
   }
 
   .shortcut-desc { font-size: 12px; color: var(--text-tertiary); }
+
+  /* ── Toast notification ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 400;
+    background: rgba(30, 32, 40, 0.94);
+    color: #e8e8e8;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 13px;
+    line-height: 1.4;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+    pointer-events: none;
+    white-space: nowrap;
+    animation: toast-in 0.18s ease;
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0);   }
+  }
 
   /* ── Delete confirm dialog ── */
   .confirm-backdrop {
