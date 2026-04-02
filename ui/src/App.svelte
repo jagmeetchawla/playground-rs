@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { invoke, Channel } from '@tauri-apps/api/core'
   import { listen } from '@tauri-apps/api/event'
+  import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
   import Sidebar from './lib/Sidebar.svelte'
   import TabBar from './lib/TabBar.svelte'
   import Editor from './lib/Editor.svelte'
@@ -127,7 +128,42 @@
     }
   }
 
-  function stopDrag() { dragging = null }
+  function stopDrag() {
+    dragging = null
+    saveWindowState()
+  }
+
+  // ── Window state persistence ──────────────────────────────────────────────────
+
+  async function saveWindowState() {
+    const win  = getCurrentWindow()
+    const size = await win.outerSize()   // PhysicalSize
+    const sf   = await win.scaleFactor()
+    invoke('save_window_state', {
+      state: {
+        sidebar_visible: sidebarVisible,
+        layout:          layoutMode,
+        sidebar_w:       sidebarW,
+        output_h:        outputH,
+        output_w:        outputW,
+        open_tabs:       openTabs.map(id => {
+          const meta = tabMeta[id]
+          if (meta?.type === 'content') return { id, tab_type: 'content', filename: meta.filename }
+          if (id === CARGO_TAB)         return { id, tab_type: 'cargo',   filename: null }
+          return                               { id, tab_type: 'playground', filename: null }
+        }),
+        active_tab:    activeTab,
+        window_width:  Math.round(size.width  / sf),
+        window_height: Math.round(size.height / sf),
+      }
+    }).catch(console.error)
+  }
+
+  let _resizeTimer: ReturnType<typeof setTimeout> | null = null
+  function onWindowResize() {
+    if (_resizeTimer) clearTimeout(_resizeTimer)
+    _resizeTimer = setTimeout(() => saveWindowState(), 1000)
+  }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
   onMount(async () => {
@@ -137,6 +173,40 @@
     ])
     await loadProjectData()
     toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+
+    // ── Restore window state ──────────────────────────────────────────────────
+    const ws = await invoke<any>('get_window_state')
+
+    // Panel layout
+    sidebarVisible = ws.sidebar_visible ?? true
+    layoutMode     = ws.layout          ?? 'bottom'
+    sidebarW       = ws.sidebar_w       ?? 220
+    outputH        = ws.output_h        ?? 240
+    outputW        = ws.output_w        ?? 300
+
+    // Window size
+    if (ws.window_width && ws.window_height) {
+      await getCurrentWindow().setSize(new LogicalSize(ws.window_width, ws.window_height))
+    }
+
+    // Restore tabs (skip any that no longer exist in the project)
+    if (Array.isArray(ws.open_tabs)) {
+      for (const t of ws.open_tabs) {
+        try {
+          if (t.tab_type === 'playground' && playgrounds.includes(t.id)) {
+            await openTab(t.id, { type: 'playground' })
+          } else if (t.tab_type === 'cargo') {
+            await openTab(CARGO_TAB, { type: 'cargo' })
+          } else if (t.tab_type === 'content' && t.filename) {
+            await openTab(t.id, { type: 'content', filename: t.filename })
+          }
+        } catch { /* file was deleted — skip silently */ }
+      }
+      // Restore active tab if it's still open
+      if (ws.active_tab && openTabs.includes(ws.active_tab)) {
+        activeTab = ws.active_tab
+      }
+    }
 
     const unlisteners = await Promise.all([
       listen('menu:save',      () => save()),
@@ -154,10 +224,21 @@
     ])
 
     window.addEventListener('keydown', handleKey)
+    window.addEventListener('resize', onWindowResize)
     return () => {
       window.removeEventListener('keydown', handleKey)
+      window.removeEventListener('resize', onWindowResize)
       unlisteners.forEach(u => u())
     }
+  })
+
+  // Save layout prefs whenever sidebar or layout mode changes
+  let _layoutInitDone = false
+  $effect(() => {
+    // Touch reactive vars to subscribe; skip the very first run (initial mount)
+    void sidebarVisible; void layoutMode
+    if (_layoutInitDone) saveWindowState()
+    else _layoutInitDone = true
   })
 
   // Rebuild the native menu whenever projects or playground count changes
@@ -241,6 +322,7 @@
       openTabs = [...openTabs, name]
     }
     activeTab = name
+    saveWindowState()
   }
 
   function closeTab(name: string | null) {
@@ -261,6 +343,7 @@
     if (activeTab === name) {
       activeTab = openTabs[idx] ?? openTabs[idx - 1] ?? null
     }
+    saveWindowState()
   }
 
   // ── File operations ──────────────────────────────────────────────────────────

@@ -49,6 +49,13 @@ fn config_path(app: &AppHandle) -> PathBuf {
         .join("config.json")
 }
 
+fn window_state_path(app: &AppHandle) -> PathBuf {
+    app.path()
+        .app_data_dir()
+        .expect("Could not resolve App Support directory")
+        .join("window-state.json")
+}
+
 // ── Config persistence ────────────────────────────────────────────────────────
 
 fn load_config(app: &AppHandle) -> Config {
@@ -624,6 +631,65 @@ fn get_content_file_path(filename: String, app: AppHandle) -> Result<String, Str
     Ok(path.to_string_lossy().to_string())
 }
 
+// ── Window state persistence ──────────────────────────────────────────────────
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct SavedTab {
+    id:       String,
+    tab_type: String,            // "playground" | "cargo" | "content"
+    filename: Option<String>,    // only for content tabs
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct WindowState {
+    sidebar_visible: bool,
+    layout:          String,     // "bottom" | "right"
+    sidebar_w:       u32,
+    output_h:        u32,
+    output_w:        u32,
+    open_tabs:       Vec<SavedTab>,
+    active_tab:      Option<String>,
+    window_width:    u32,
+    window_height:   u32,
+}
+
+impl Default for WindowState {
+    fn default() -> Self {
+        WindowState {
+            sidebar_visible: true,
+            layout:          "bottom".to_string(),
+            sidebar_w:       220,
+            output_h:        240,
+            output_w:        300,
+            open_tabs:       vec![],
+            active_tab:      None,
+            window_width:    1280,
+            window_height:   800,
+        }
+    }
+}
+
+#[tauri::command]
+fn get_window_state(app: AppHandle) -> WindowState {
+    let path = window_state_path(&app);
+    if path.exists() {
+        if let Ok(s) = std::fs::read_to_string(&path) {
+            if let Ok(ws) = serde_json::from_str::<WindowState>(&s) {
+                return ws;
+            }
+        }
+    }
+    WindowState::default()
+}
+
+#[tauri::command]
+fn save_window_state(state: WindowState, app: AppHandle) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(&state)
+        .map_err(|e| format!("Failed to serialise window state: {}", e))?;
+    std::fs::write(window_state_path(&app), json)
+        .map_err(|e| format!("Failed to write window-state.json: {}", e))
+}
+
 // ── Menu builder ─────────────────────────────────────────────────────────────
 
 /// Builds the full macOS menu bar.  Called once on startup and again via
@@ -833,6 +899,8 @@ pub fn run() {
             delete_project,
             duplicate_project,
             rebuild_menu,
+            get_window_state,
+            save_window_state,
             // Playground management
             list_playgrounds,
             load_playground,
