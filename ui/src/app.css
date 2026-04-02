@@ -1,6 +1,6 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-:root {
+:root, .theme-dark {
   /* macOS dark mode system colors — exact values */
   --bg:              #1c1c1e;   /* window / editor background */
   --bg-sidebar:      #2c2c2e;   /* sidebar */
@@ -36,6 +36,33 @@
   --tab-height:      36px;
   --toolbar-height:  44px;
   --sidebar-width:   220px;
+}
+
+.theme-light {
+  /* macOS light mode system colors */
+  --bg:              #ffffff;
+  --bg-sidebar:      #f2f2f7;
+  --bg-elevated:     #ffffff;
+  --bg-tab:          #e5e5ea;
+  --bg-tab-active:   #ffffff;
+  --bg-hover:        rgba(0,0,0,0.04);
+  --bg-input:        rgba(0,0,0,0.04);
+
+  --border:          rgba(0,0,0,0.12);
+  --border-strong:   rgba(0,0,0,0.20);
+
+  --text:            #1c1c1e;
+  --text-secondary:  rgba(60,60,67,0.80);
+  --text-tertiary:   rgba(60,60,67,0.50);
+
+  --accent:          #007aff;   /* Apple system blue (light) */
+  --accent-hover:    #0066d6;
+  --accent-text:     #ffffff;
+
+  --red:             #ff3b30;
+  --amber:           #ff9500;
+  --green:           #34c759;
+  --rust-orange:     #ce422b;
 }
 
 html, body, #app {
@@ -81,5 +108,5 @@ input::placeholder { color: var(--text-tertiary); }
 /* Scrollbars */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.45); }

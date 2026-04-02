@@ -1,17 +1,9 @@
 SPECIFICATION
 
 Status
-- Version: v0.1.6
-- Date: 2026-04-01
+- Version: v0.1.8
+- Date: 2026-04-02
 - Owner: Jagmeet Chawla
-
----
-
-Visual References
-
-  specs/assets/swift-playgrounds-reference.png
-  specs/assets/v1.2-annotated-feedback.png
-  specs/assets/v1.3-annotated-feedback.png
 
 ---
 
@@ -19,70 +11,38 @@ Product
 
 What
   A native macOS desktop app — built with Tauri — that wraps the existing Rust playground
-  runner in a Swift Playgrounds-inspired UI. v0.1.6 focuses on the editor experience
-  and app polish: actually killing running processes, live compiler feedback, first-run
-  setup, persistent settings, resizable panels, and improved layout control.
+  runner in a Swift Playgrounds-inspired UI. v0.1.8 is the final feature release before
+  shifting focus to distribution (website, DMG, wiki, announcements). It adds live compiler
+  diagnostics, autocomplete via rust-analyzer, light/dark themes, playground export, and
+  polishes the Rust Book examples.
 
 Why
-  The core loop (write → run → see output) works. v0.1.6 makes it feel like a real tool:
-  Stop does what it says, squiggles surface errors without running, the app remembers
-  your layout, and panels resize without reloading.
+  The core editing and running experience is solid after v0.1.7. These five features close
+  the gap between "playground" and "real editor": squiggles surface errors without running,
+  autocomplete makes exploration faster, themes match user preference, and export lets users
+  take their code elsewhere. After this, the app is ready for public release.
+
+Note
+  The editor is Monaco (not CodeMirror 6). The CLAUDE.md tech stack table is stale on this
+  point — the actual codebase uses Monaco throughout.
 
 ---
 
-Feature 1 — Stop Button: Actually Kill the Process
-───────────────────────────────────────────────────
+Feature 1 — Live Error Checking (cargo check squiggles)
+────────────────────────────────────────────────────────
 
 Problem
-  The current Stop button only resets the status label in the frontend.
-  The `cargo run` process continues running — output keeps arriving and the binary
-  is not terminated.
+  Users must press Run to discover compile errors. Typos and type mismatches should
+  surface immediately as red/yellow squiggles in the editor.
 
 Goal
-  Clicking Stop (or Cmd+.) kills the active child process immediately.
+  After the user stops typing for ~500 ms, run `cargo check` in the background and push
+  compiler diagnostics to Monaco as squiggles with hover messages.
 
 Backend (lib.rs)
 
-  State
-    struct RunningProcess(Mutex<Option<u32>>)   // child PID
-    // Managed via app.manage() alongside ActiveProject
-
-  New command
-    #[tauri::command]
-    fn kill_playground(app: AppHandle) -> Result<(), String>
-
-    - Reads the PID from RunningProcess state
-    - Sends SIGTERM; waits up to 500 ms for exit
-    - If still alive, sends SIGKILL
-    - Clears the stored PID
-
-  run_playground changes
-    - After spawn(), store child.id() in RunningProcess state
-    - On process exit (either complete or killed), clear the stored PID
-    - Use tokio::process::Child.kill() for async kill support
-
-Frontend (App.svelte)
-
-  stop() change
-    - await invoke('kill_playground')  instead of just resetting status
-    - Backend kill triggers the channel's "complete" event (exit code -1 / 130),
-      which already updates the RunBlock status — no duplicate state management needed
-
-  Edge cases
-    - If no process is running, kill_playground returns Ok(()) silently
-    - Cmd+. and Stop button both call the same stop() function
-
----
-
-Feature 2 — Live Error Checking (cargo check squiggles)
-────────────────────────────────────────────────────────
-
-Goal
-  After the user stops typing for ~500 ms, run `cargo check` silently in the background
-  and push compiler diagnostics to Monaco as red/yellow squiggles with hover messages.
-  This mirrors what rust-analyzer does but uses the project's own toolchain directly.
-
-Backend
+  New state
+    struct CheckProcess(Mutex<Option<u32>>)   // check child PID for cancellation
 
   New command
     #[tauri::command]
@@ -92,8 +52,9 @@ Backend
         app: AppHandle,
     ) -> Result<(), String>
 
+    - Saves the current code to disk first (same as run_playground does)
     - Runs: cargo check --bin <name> --message-format json
-        --target-dir  <workspace>/target/check-runs   ← separate dir, no lock conflict
+        --target-dir <workspace>/target/check-runs   (separate dir, no lock conflict)
     - Parses JSON output lines; for each "compiler-message" with spans:
         {
           "type": "diagnostic",
@@ -107,330 +68,278 @@ Backend
         }
     - Sends a final { "type": "done" } message when complete
 
-  Separate target-dir
-    check-runs/ is used exclusively by check_playground.
-    run_playground continues to use playground-runs/.
-    No Cargo.lock contention between live check and explicit Run.
-
   Cancellation
     If check_playground is called again while a previous check is running,
-    the old process is killed before the new one starts.
-    Store the check child PID in CheckProcess(Mutex<Option<u32>>) app state.
+    kill the old process before starting the new one (same kill_pg pattern
+    as run_playground).
 
-Frontend
+Frontend (Editor.svelte)
 
-  Editor.svelte changes
-    - After every code change, reset a 500 ms debounce timer
-    - When the timer fires, call invoke('check_playground', { name, onDiagnostics })
-    - On each { type: "diagnostic" } message, call Monaco's
-      editor.setModelMarkers() with the converted IMarkerData
-    - On { type: "done" }, replace markers atomically (clear old, set new)
-    - On tab switch, clear markers for the old tab and restore saved markers
-      for the new tab (store per-tab in a Map<tabId, IMarkerData[]>)
+  - After every code change, reset a 500 ms debounce timer
+  - When the timer fires, call invoke('check_playground', { name, onDiagnostics })
+  - Collect diagnostics; on { type: "done" }, call Monaco's
+    editor.setModelMarkers() atomically (clear old markers, set new batch)
+  - On tab switch, clear markers for the old tab and restore cached markers
+    for the new tab (Map<string, IMarkerData[]>)
 
   Marker mapping
-    severity "error"   → monaco.MarkerSeverity.Error
-    severity "warning" → monaco.MarkerSeverity.Warning
-    Lines/cols are 1-based in both cargo and Monaco — no conversion needed
+    severity "error"   -> MarkerSeverity.Error
+    severity "warning" -> MarkerSeverity.Warning
+    Lines/cols are 1-based in both cargo and Monaco — no conversion needed.
 
-  No check for non-playground tabs
-    Cargo.toml and content files don't run cargo check.
+  Skip non-playground tabs
+    Cargo.toml and content file tabs do not trigger cargo check.
+
+  UX
+    - No visible spinner for background checks — squiggles just appear/disappear
+    - If the user presses Run while a check is in flight, the check is cancelled
+      (run takes priority)
 
 ---
 
-Feature 3 — Toolchain Setup Wizard
-───────────────────────────────────
+Feature 2 — Autocomplete / LSP Integration (rust-analyzer)
+───────────────────────────────────────────────────────────
+
+Problem
+  Users have no code completion, go-to-definition, or inline documentation.
+  Exploring Rust APIs requires switching to external docs.
 
 Goal
-  On first launch (or when cargo is not found), show a one-time setup screen that
-  detects rustup/cargo and offers to install or locate them. Never blocks on a
-  broken toolchain silently.
+  Connect Monaco to a rust-analyzer LSP server for completions, hover info,
+  and inline signature help. This runs per-project (one rust-analyzer instance
+  per open project).
 
-Detection (startup, lib.rs)
+Backend (lib.rs)
 
-  fn detect_toolchain() -> ToolchainStatus
-    enum ToolchainStatus {
-        Found { cargo_path: String, version: String },
-        NotFound,
-    }
-  - Checks ~/.cargo/bin/cargo, then PATH via `which cargo`
-  - Returns NotFound if neither exists or if `cargo --version` fails
+  New state
+    struct LspProcess(Mutex<Option<tokio::process::Child>>)
 
-  emit("toolchain:status", status) during setup()
-  Frontend listens and conditionally shows the wizard screen.
+  New commands
+    #[tauri::command]
+    async fn start_lsp(app: AppHandle) -> Result<u16, String>
+    // Spawns rust-analyzer with stdio transport, returns nothing
+    // (communication happens over stdin/stdout of the child process)
 
-Wizard screen (SetupWizard.svelte)
+    #[tauri::command]
+    async fn stop_lsp(app: AppHandle) -> Result<(), String>
 
-  States:
-    detecting → found | not_found | installing | done | error
+  Approach — LSP proxy over Tauri IPC
+    - Backend spawns `rust-analyzer` as a child process with stdio pipes
+    - Frontend sends LSP JSON-RPC messages via a Tauri command:
+        send_lsp_message(message: String) -> Result<(), String>
+    - Backend forwards them to rust-analyzer's stdin
+    - Backend reads rust-analyzer's stdout in a loop and emits events:
+        app.emit("lsp:message", json_string)
+    - Frontend listens for "lsp:message" and routes responses to Monaco
 
-  "Not found" view
-    - Message: "Rust is not installed."
-    - Primary button: "Install rustup" → runs rustup-init with -y via shell
-    - Secondary link: "I already have Cargo — set path manually"
-    - Manual path input: file picker → validate → save to config.json
+  Frontend (Editor.svelte / new lsp-client.ts)
 
-  "Install" flow
-    - Streams install output via a Channel (same pattern as run_playground)
-    - On success: re-detect, update toolchainInfo state, dismiss wizard
-    - On error: show error, offer retry or manual path
+    Monaco LSP integration via monaco-languageclient (or manual):
+    - Register a CompletionItemProvider that sends textDocument/completion
+    - Register a HoverProvider that sends textDocument/hover
+    - Register a SignatureHelpProvider that sends textDocument/signatureHelp
+    - Handle textDocument/publishDiagnostics from the server
+      (these replace the cargo-check squiggles when LSP is active)
 
-  Config persistence
-    - cargo_path stored in config.json alongside active_project
-    - cargo_path() in lib.rs checks config first, then falls back to auto-detect
+    Lifecycle:
+    - On project load: invoke('start_lsp')
+    - On project switch: invoke('stop_lsp') then invoke('start_lsp')
+    - On app close: invoke('stop_lsp')
+    - textDocument/didOpen sent when a tab is opened
+    - textDocument/didChange sent on every edit (full sync mode)
+    - textDocument/didClose sent when a tab is closed
 
-  Shown only once
-    - wizard_completed: bool in config.json
-    - Set to true when a working cargo is confirmed
-    - Can be re-triggered from Settings → "Re-run setup wizard"
+  Fallback
+    If rust-analyzer is not installed, Feature 1 (cargo check) remains the
+    diagnostic source. Show a non-blocking toast: "Install rust-analyzer for
+    autocomplete: rustup component add rust-analyzer"
+
+  Capability permission
+    None needed — this uses child process spawning (already permitted) and
+    app.emit() (already permitted via core:event:default).
 
 ---
 
-Feature 4 — Settings Panel
-───────────────────────────
+Feature 3 — Themes (Dark / Light / System)
+───────────────────────────────────────────
+
+Problem
+  The app is dark-only. Users working in bright environments or preferring
+  light themes have no option.
 
 Goal
-  A native-feeling settings panel (not a modal, a slide-in sheet or dedicated panel)
-  for editor and app preferences.
+  Add a theme toggle: System (follows macOS appearance), Dark, Light.
+  The theme applies to both the Monaco editor and the surrounding app chrome.
 
-Settings stored in config.json (extends existing)
+Settings change
+  Add to Settings struct and config.json:
+    theme: "system" | "dark" | "light"    // default: "system"
 
-  {
-    "active_project": "default",
-    "cargo_path": "",               // empty = auto-detect
-    "wizard_completed": true,
-    "editor": {
-      "font_size": 13,
-      "font_family": "JetBrains Mono",
-      "tab_size": 4,
-      "theme": "system"             // "system" | "dark" | "light"
-    },
-    "preferred_edition": "2021"     // used when creating new projects
-  }
+  Settings panel gets a new "Theme" segmented control.
 
-Settings.svelte
+Monaco themes
+  - playground-dark (existing) — no changes needed
+  - playground-light (new) — define in Editor.svelte:
+      base: 'vs'
+      Background: #ffffff
+      Foreground: #1c1c1e
+      Colors: matching macOS light appearance (system grays, blue accents)
+      Token colors: Xcode-light-inspired (keywords pink, types teal,
+        strings red-orange, comments gray, numbers amber)
 
-  Access: toolbar button (gear icon, far right) or Cmd+,
-  Layout: slide-in panel from the right, 280 px wide, overlays the editor
+App chrome (CSS)
+  - Define CSS custom properties for both themes:
+      --bg-primary, --bg-secondary, --bg-tertiary
+      --text-primary, --text-secondary
+      --border-color, --accent-color
+      --sidebar-bg, --toolbar-bg, --output-bg
+  - Apply via a .theme-dark / .theme-light class on <body>
+  - "system" listens to prefers-color-scheme media query and sets the class
+    accordingly, updating on OS appearance change
 
-  Sections:
-    Editor
-      Font Size         — number stepper, 10–24, default 13
-      Font Family       — text input (any monospace), default "JetBrains Mono"
-      Tab Size          — segmented control: 2 | 4
-      Theme             — segmented control: System | Light | Dark
-
-    Toolchain
-      Cargo Path        — text input + "Browse…" button
-                          Empty = auto-detect (shows resolved path as placeholder)
-      Rust Edition      — segmented control: 2018 | 2021 | 2024
-      Re-run Setup Wizard  — button
-
-  Live preview
-    Font size and family changes apply to Monaco immediately (no save needed).
-    Theme changes apply immediately.
-    Tab size takes effect on the next new playground.
-
-  Persistence
-    On blur / change: invoke('save_settings', { settings })  immediately.
-    On open: invoke('get_settings') to hydrate panel.
-
-New commands
-    get_settings() -> Settings
-    save_settings(settings: Settings) -> Result<(), String>
-
-App.svelte integration
-  - Editor receives fontsize, fontFamily, tabSize, theme as props
-  - Monaco editor.updateOptions() called reactively when they change
+Frontend (App.svelte)
+  - Pass theme to Editor as a prop
+  - Editor $effect watches theme and calls monaco.editor.setTheme()
+  - Sidebar, Output, TabBar, toolbar all use CSS vars — no code changes
+    needed beyond defining the light-theme values
 
 ---
 
-Feature 5 — Window State Persistence
-─────────────────────────────────────
-
-Goal
-  Reopen the app in the same state as it was left: same window size, position,
-  sidebar width, and open tabs.
-
-What is saved (window-state.json in App Support)
-
-  {
-    "window": {
-      "x": 200, "y": 150,
-      "width": 1280, "height": 800
-    },
-    "sidebar_width": 220,
-    "output_height": 240,         // used in bottom layout
-    "output_width": 320,          // used in right layout
-    "open_tabs": ["hello", "main"],
-    "active_tab": "hello",
-    "layout": "bottom"            // "bottom" | "right"
-  }
-
-Backend
-  New commands:
-    get_window_state() -> WindowState
-    save_window_state(state: WindowState) -> Result<(), String>
-
-  Window geometry saved via Tauri's window.outer_position() and .outer_size()
-  on the "close-requested" event.
-
-Frontend
-  - On mount: load window state, restore tab list (re-invoke load_playground per tab),
-    sidebar/output dimensions via CSS variables / inline styles
-  - On layout change: save immediately
-  - On tab open/close: save immediately
-  - On window resize: debounced 1s save (don't hammer disk on live resize)
-
-  Tabs restore order but unsaved changes are discarded (no dirty state serialisation).
-  If a saved tab no longer exists in the project, it is silently skipped.
-
----
-
-Feature 6 — Resizable Panels
-─────────────────────────────
-
-Goal
-  Drag the border between the sidebar and the editor to resize the sidebar.
-  Drag the border between the editor and the output panel to resize the output.
-  The editor takes all remaining space.
-
-Implementation
-  - CSS resize handles: 4 px wide/tall transparent divs with `cursor: col-resize` /
-    `cursor: row-resize` placed on the panel borders
-  - Mouse drag: pointerdown → pointermove → pointerup on the resize handle
-    Updates a CSS variable (--sidebar-width, --output-height / --output-width)
-  - CSS grid / flex: the main layout uses the CSS variable as the fixed dimension;
-    editor region uses `flex: 1` / `minmax(0, 1fr)` to fill the rest
-  - Min/max clamps:
-      Sidebar:  min 160 px, max 380 px
-      Output:   min 100 px, max 60% of the editor area
-  - State is saved via window-state persistence (Feature 5) on drag end
-
-No external drag libraries — pure pointer events, ~50 lines.
-
----
-
-Feature 7 — Hide Left Panel Button
-────────────────────────────────────
-
-Goal
-  A toggle button collapses the sidebar entirely, giving the editor full width.
-  Matches the pattern in Safari ("Show/Hide Sidebar"), Xcode, and Claude.
-
-Behaviour
-  - A small button at the top-left of the toolbar (left of the project switcher)
-    shows the sidebar-hide icon (three horizontal lines or the standard macOS
-    sidebar toggle icon)
-  - Click toggles sidebarVisible: boolean state
-  - When hidden: sidebar has width 0, no border, no transition flash
-    (use display:none or a CSS class — avoid animating width through 0 as Monaco
-    may not resize cleanly)
-  - The button icon/tooltip flips: "Show Sidebar" / "Hide Sidebar"
-  - Keyboard shortcut: Cmd+Shift+L (matches Xcode)
-  - State persisted via window-state (Feature 5): sidebar_hidden: boolean
-
-  When hidden:
-    - Toolbar button is the only way to restore (no accidental re-show on resize)
-    - The editor area expands to full width immediately
-
----
-
-Feature 8 — Layout Switch
+Feature 4 — Export / Share
 ──────────────────────────
 
+Problem
+  Users can't take their playground code outside the app. No way to share
+  a working example or move to a real Cargo project.
+
 Goal
-  Toggle between two output panel positions:
-    Bottom  — output panel below the editor (current / default)
-    Right   — output panel to the right of the editor (side-by-side)
+  Two export options from a context menu or toolbar action on any playground:
 
-The layout switch button
-  - Lives in the far-right of the toolbar, rightmost element
-  - Shows the icon/label for what you'd switch TO (not current state):
-      Currently Bottom → button shows "⊡ Side-by-side"  (or a right-panel icon)
-      Currently Right  → button shows "⊟ Stacked"       (or a bottom-panel icon)
-  - Tooltip: "Switch to stacked layout" / "Switch to side-by-side layout"
+  A) Export as standalone Cargo project
+     Creates a self-contained directory with:
+       my_playground/
+       ├── Cargo.toml          (name = playground name, deps from project)
+       ├── src/
+       │   └── main.rs         (the playground code)
+       └── content/            (if playground has content files)
 
-Layout implementation
-  - layoutMode: 'bottom' | 'right'  state in App.svelte
-  - Bottom: main area is a column flex (editor on top, output below)
-    Output height = --output-height CSS var (resizable via Feature 6)
-  - Right: main area is a row flex (sidebar | editor | output)
-    Output width = --output-width CSS var (resizable via Feature 6)
-  - CSS classes on .main: layout-bottom / layout-right
-  - Monaco needs editor.layout() called after the container resizes —
-    do this in a ResizeObserver on the editor wrapper div (already needed for
-    general resize handling)
-  - State persisted via window-state (Feature 5)
+     Uses a native save dialog to pick the destination folder.
+     The exported project compiles and runs with `cargo run` independently.
+
+  B) Copy to clipboard (for sharing)
+     Copies the playground source code to the system clipboard.
+     One-click from the context menu. No dialog needed.
+
+Backend (lib.rs)
+
+  New command
+    #[tauri::command]
+    async fn export_playground(
+        name: String,
+        dest: String,       // destination directory path
+        app: AppHandle,
+    ) -> Result<String, String>
+
+    - Creates dest/<name>/ directory structure
+    - Writes Cargo.toml with only the dependencies used in the playground
+      (parse `use` statements to filter, or just copy all project deps —
+       simpler and avoids false negatives)
+    - Copies src/bin/<name>.rs → src/main.rs
+    - Copies content files if they exist
+    - Returns the path to the created directory
+
+  Clipboard is handled entirely in the frontend (navigator.clipboard.writeText).
+
+Frontend
+
+  Toolbar: add an export/share icon button (right side, near layout toggle)
+  - Click shows a small dropdown:
+      "Export as Cargo Project..." → opens save dialog, then invoke('export_playground')
+      "Copy Code to Clipboard"    → navigator.clipboard.writeText(currentCode)
+  - Context menu on playground in sidebar: same two options
+  - Toast confirmation after each action
+
+  Capability permission
+    dialog:default (save dialog) — check if already in capabilities, add if not.
+
+---
+
+Feature 5 — Rust Book Examples Polish
+──────────────────────────────────────
+
+Problem
+  The Rust Book examples (20 chapters) were written in one pass. Some chapters
+  may have gaps, unclear comments, or could better demonstrate the concept.
+
+Goal
+  Review and polish all 20 chapters in book_chapters.rs:
+  - Ensure every playground compiles and runs without errors
+  - Improve comments to be clearer and more educational
+  - Add missing concepts where a chapter's key idea isn't demonstrated
+  - Ensure consistent style across all chapters
+  - Verify content files (attribution.md) are present and correct
+
+  This is a quality pass, not a feature — no new backend/frontend code.
+
+Approach
+  - Read through each chapter's playgrounds in book_chapters.rs
+  - For each: verify it compiles, check the comments are helpful, ensure the
+    key Rust Book concept is actually demonstrated
+  - Fix any issues found
+  - Run cargo fmt + cargo clippy on the output
 
 ---
 
 Acceptance Criteria
 
-Feature 1 — Stop
-  [ ] Clicking Stop during a running process kills it (verified: no more output lines)
-  [ ] Cmd+. has the same effect
-  [ ] RunBlock shows exit code -1 (or 130) and status "error" / "stopped"
-  [ ] Stop when nothing is running does nothing (no error)
-
-Feature 2 — Live Check
-  [ ] Red squiggles appear ~500 ms after stopping typing on a syntax error
-  [ ] Squiggle hover shows the compiler message text
+Feature 1 — Live Error Checking
+  [ ] Red squiggles appear ~500 ms after typing stops on a syntax error
+  [ ] Squiggle hover shows the compiler error message
   [ ] Squiggles clear when the error is fixed
-  [ ] Squiggles do not appear on Cargo.toml or content tabs
-  [ ] Running `cargo run` while a check is in progress works (no file lock error)
+  [ ] No squiggles on Cargo.toml or content file tabs
+  [ ] Running cargo run while a check is in progress works (separate target dir)
+  [ ] Starting a Run cancels any in-flight check
 
-Feature 3 — Setup Wizard
-  [ ] On a machine without cargo, the wizard screen is shown on first launch
-  [ ] "Install rustup" button streams install output and dismisses on success
-  [ ] Manual cargo path is validated (cargo --version) before saving
-  [ ] Wizard is not shown again once wizard_completed = true
-  [ ] Re-run option available from Settings
+Feature 2 — Autocomplete / LSP
+  [ ] Completions appear when typing (e.g. after `std::` or `.`)
+  [ ] Hover over a symbol shows type info / docs
+  [ ] Signature help shows parameter hints inside function calls
+  [ ] LSP diagnostics appear as squiggles (replaces cargo-check when active)
+  [ ] If rust-analyzer is not installed, falls back to cargo-check gracefully
+  [ ] Toast shown suggesting rust-analyzer install if missing
+  [ ] LSP process is cleaned up on project switch and app close
 
-Feature 4 — Settings
-  [ ] Font size change applies to Monaco immediately (no save/reload needed)
-  [ ] Theme change switches Monaco theme immediately
-  [ ] Settings survive app restart
-  [ ] Cargo path override is used by run_playground and check_playground
-  [ ] Cmd+, opens settings panel; Escape closes it
+Feature 3 — Themes
+  [ ] "System" theme follows macOS light/dark appearance automatically
+  [ ] "Dark" theme matches current appearance (no regression)
+  [ ] "Light" theme has readable contrast and consistent styling
+  [ ] Theme change applies immediately to editor AND app chrome
+  [ ] Theme preference persists across restarts
+  [ ] Theme setting accessible from Settings panel (Cmd+,)
 
-Feature 5 — Window State
-  [ ] Window reopens at the same position and size
-  [ ] Open tabs are restored with the same active tab
-  [ ] If a saved tab no longer exists, it is skipped silently
-  [ ] Sidebar width is restored
+Feature 4 — Export / Share
+  [ ] "Export as Cargo Project" creates a working standalone project
+  [ ] Exported project compiles with `cargo run` independently
+  [ ] Content files are included in the export if they exist
+  [ ] "Copy to Clipboard" copies the full source code
+  [ ] Both actions show a toast confirmation
+  [ ] Export uses a native save dialog for destination
 
-Feature 6 — Resizable Panels
-  [ ] Sidebar can be dragged between 160 px and 380 px
-  [ ] Output panel can be dragged in both layout modes
-  [ ] Editor resizes cleanly (Monaco re-layouts, no blank area)
-  [ ] Resize state persists across restarts
-
-Feature 7 — Hide Sidebar
-  [ ] Cmd+Shift+L toggles sidebar
-  [ ] Button icon/tooltip updates correctly
-  [ ] Editor expands to full width when sidebar is hidden
-  [ ] Hidden state persists across restarts
-
-Feature 8 — Layout Switch
-  [ ] Button shows correct "switch to" label for both states
-  [ ] Switching to Right moves output panel to the right of the editor
-  [ ] Switching to Bottom moves output panel below the editor
-  [ ] Monaco re-layouts cleanly in both modes
-  [ ] Layout preference persists across restarts
+Feature 5 — Rust Book Polish
+  [ ] All 20 chapters compile without errors
+  [ ] Comments are clear and educational
+  [ ] Key concepts per chapter are demonstrated
+  [ ] Consistent code style across chapters
+  [ ] attribution.md present in each chapter
 
 ---
 
 Implementation Order (suggested)
 
-  1. Feature 1  (Stop kill)      — small backend change, high user impact
-  2. Feature 7  (Hide sidebar)   — pure frontend, quick win, big feel improvement
-  3. Feature 8  (Layout switch)  — frontend only, builds on sidebar toggle pattern
-  4. Feature 6  (Resize panels)  — pointer events + CSS vars, no backend
-  5. Feature 5  (Window state)   — backend + frontend wiring
-  6. Feature 4  (Settings)       — new panel + backend commands
-  7. Feature 3  (Setup wizard)   — conditional first-run flow
-  8. Feature 2  (Live check)     — most complex: async debounce + Monaco markers
-
-  The first four are frontend-only and can be done in a single session.
-  The last four require backend commands and config schema changes.
+  1. Feature 3  (Themes)           — CSS + Monaco theme, no backend logic, big visual impact
+  2. Feature 1  (Live checking)    — backend command + frontend debounce, foundational for F2
+  3. Feature 4  (Export/share)     — backend command + dialog, standalone feature
+  4. Feature 5  (Book polish)      — review pass, no new architecture
+  5. Feature 2  (LSP/autocomplete) — most complex: child process management, LSP protocol,
+                                     Monaco providers. Build last since it depends on the
+                                     project already being stable.

@@ -21,7 +21,7 @@
 |---|---|---|
 | App shell | Tauri 2 | Rust backend, WKWebView frontend |
 | Frontend | Svelte 5 (runes) | `$state`, `$derived`, `$effect` — NOT Svelte 4 options API |
-| Editor | CodeMirror 6 | NOT Monaco — `architecture.md` is stale on this |
+| Editor | Monaco | `architecture.md` references React + Monaco — React is stale, Monaco is correct |
 | Build | Vite + pnpm | Frontend bundler |
 | Backend | Rust (lib.rs) | All Tauri commands in one file |
 | Permissions | Tauri 2 capabilities | `src-tauri/capabilities/default.json` |
@@ -94,21 +94,16 @@ All runtime data lives under:
 
 ## Current Version Status
 
-**v0.1.6.3** — shipped (interactive console / stdin support).
+**v0.1.7** — shipped (settings, toolchain wizard, dependency manager, templates, console improvements).
 
-**v0.1.6** — shipped (5 of 8 features):
-1. Stop button — SIGTERM + SIGKILL process kill
-2. Window state persistence — size, panel sizes, tabs survive restarts
-3. Resizable panels — drag sidebar/output borders
-4. Hide sidebar — ⌘⇧L
-5. Layout switch — bottom ↔ right output panel
+**v0.1.8** — in progress (final feature release before distribution):
+1. Live error checking — cargo check squiggles in Monaco (500 ms debounce)
+2. Autocomplete / LSP — rust-analyzer completions, hover, signature help
+3. Themes — dark / light / system toggle (Monaco + app chrome)
+4. Export / share — export as standalone Cargo project, copy to clipboard
+5. Rust Book examples polish — review and improve all 20 chapters
 
-**v0.1.7** — shipped (settings, toolchain wizard, dependency manager, templates, console improvements):
-1. Settings panel — font size, font family, tab size, cargo path (⌘,)
-2. Toolchain setup wizard — first-run detection (green/yellow/red), re-check
-3. Dependency manager UI — add/remove crates from Cargo.toml toolbar
-4. Playground templates — 11 starter templates with auto-deps
-5. Console improvements — copy button, ANSI colors, timestamps
+After v0.1.8: pause features, ship website, DMG distribution, wiki, announcements.
 
 ---
 

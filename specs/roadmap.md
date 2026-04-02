@@ -9,6 +9,31 @@ Active specs live in specifications.md. Completed specs live in archive/.
 RELEASED
 ────────
 
+v0.1.7 — Settings, Polish, and Deferred v0.1.6 Features
+  Status: complete — released 2026-04-02
+  See specs/archive/ for completed spec
+
+  Shipped:
+  1. Settings panel (Cmd+,) — font size, font family, tab size, cargo path
+  2. Toolchain setup wizard — first-run detection (green/yellow/red), re-check
+  3. Dependency manager UI — add/remove crates from Cargo.toml toolbar
+  4. Playground templates — 11 starter templates with auto-deps
+  5. Console improvements — copy button, ANSI color support, timestamps
+
+v0.1.6.3 — Interactive Console (stdin support)
+  Status: complete — released 2026-04-02
+
+v0.1.6 — Editor Experience + App Polish
+  Status: complete — released 2026-04-01
+  See specs/archive/specs-v0.1.6.md
+
+  Shipped (5 of 8):
+  1. Stop button — actually kill the process (SIGTERM + SIGKILL fallback)
+  5. Window state persistence — size, position, tabs, sidebar width
+  6. Resizable panels — drag sidebar and output panel borders
+  7. Hide Left Panel button — Cmd+Shift+L, matches Safari/Xcode
+  8. Layout switch — toggle output panel bottom <> right
+
 v0.1.5 — Multiple Projects + Unified Storage
   Status: complete — released 2026-04-01
   See specs/archive/specs-v0.1.5.md
@@ -19,46 +44,18 @@ v0.1.5 — Multiple Projects + Unified Storage
 IN PROGRESS
 ───────────
 
-v0.1.6 — Editor Experience + App Polish
-  Status: partially complete — released 2026-04-01
-  See specs/archive/ for completed spec
+v0.1.8 — Final Feature Release (pre-distribution)
+  Status: in progress
+  See specs/specifications.md
 
-  Shipped (5 of 8):
-  1. Stop button — actually kill the process (SIGTERM + SIGKILL fallback)
-  5. Window state persistence — size, position, tabs, sidebar width
-  6. Resizable panels — drag sidebar and output panel borders
-  7. Hide Left Panel button — Cmd+Shift+L, matches Safari/Xcode
-  8. Layout switch — toggle output panel bottom ↔ right
+  Planned:
+  1. Live error checking — cargo check squiggles in Monaco (500 ms debounce)
+  2. Autocomplete / LSP — rust-analyzer integration for completions, hover, signatures
+  3. Themes — dark / light / system toggle (Monaco + app chrome)
+  4. Export / share — export as standalone Cargo project or copy to clipboard
+  5. Rust Book examples polish — review and improve all 20 chapters
 
-  NOT shipped (moved to v0.1.7):
-  2. Live error checking — cargo check squiggles in CodeMirror
-  3. Toolchain setup wizard — first-run rustup detection and install
-  4. Settings panel — font, theme, tab size, cargo path (Cmd+,)
-
-v0.1.6.3 — Interactive Console (stdin support)
-  Status: complete — released 2026-04-02
-
-  Features:
-  1. Interactive stdin — pipe stdin to running playground process
-     - Backend: pipe child stdin, store handle, add `send_stdin` Tauri command
-     - Frontend: input field in Output panel when program is running
-     - User input echoed as visible line in console output
-     - Enables playgrounds that use std::io::stdin() for prompts/input
-
----
-
-v0.1.7 — Settings, Polish, and Deferred v0.1.6 Features
-  Status: complete — released 2026-04-02
-
-  Shipped:
-  1. Settings panel (Cmd+,) — font size, font family, tab size, cargo path
-  2. Toolchain setup wizard — first-run detection (green/yellow/red), re-check
-  3. Dependency manager UI — add/remove crates from Cargo.toml toolbar
-  4. Playground templates — 11 starter templates with auto-deps
-  5. Console improvements — copy button, ANSI color support, timestamps
-
-  Deferred to future version:
-  - Live error checking — cargo check squiggles (CodeMirror diagnostics)
+  After v0.1.8: pause features, build website, DMG distribution, wiki, announcements.
 
 
 ---

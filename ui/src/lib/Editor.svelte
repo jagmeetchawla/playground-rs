@@ -80,6 +80,51 @@
     }
   })
 
+  // ── Custom light theme — matches macOS light appearance ────────────────────
+  monaco.editor.defineTheme('playground-light', {
+    base: 'vs',
+    inherit: true,
+    rules: [
+      { token: 'comment',            foreground: '8e8e93', fontStyle: 'italic' },
+      { token: 'keyword',            foreground: 'ad3da4' },
+      { token: 'type',               foreground: '0b4f79' },
+      { token: 'type.identifier',    foreground: '0b4f79' },
+      { token: 'string',             foreground: 'c41a16' },
+      { token: 'string.escape',      foreground: 'c41a16' },
+      { token: 'number',             foreground: '1c00cf' },
+      { token: 'number.float',       foreground: '1c00cf' },
+      { token: 'operator',           foreground: '1c1c1e' },
+      { token: 'delimiter',          foreground: '636366' },
+      { token: 'attribute',          foreground: '703daa' },
+      { token: 'macro',              foreground: '703daa' },
+      { token: 'identifier',         foreground: '1c1c1e' },
+    ],
+    colors: {
+      'editor.background':                  '#ffffff',
+      'editor.foreground':                  '#1c1c1e',
+      'editorLineNumber.foreground':        '#c7c7cc',
+      'editorLineNumber.activeForeground':  '#8e8e93',
+      'editor.lineHighlightBackground':     '#f2f2f7',
+      'editor.lineHighlightBorder':         '#00000000',
+      'editor.selectionBackground':         '#0a84ff30',
+      'editor.inactiveSelectionBackground': '#0a84ff18',
+      'editorCursor.foreground':            '#0a84ff',
+      'editorIndentGuide.background':       '#e5e5ea',
+      'editorIndentGuide.activeBackground': '#d1d1d6',
+      'editorBracketMatch.background':      '#0a84ff20',
+      'editorBracketMatch.border':          '#0a84ff60',
+      'editorGutter.background':            '#ffffff',
+      'editor.findMatchBackground':         '#ffd60a50',
+      'editor.findMatchHighlightBackground':'#ffd60a25',
+      'editorError.foreground':             '#ff3b30',
+      'editorWarning.foreground':           '#ff9500',
+      'editorInfo.foreground':              '#0a84ff',
+      'scrollbarSlider.background':         '#00000015',
+      'scrollbarSlider.hoverBackground':    '#00000025',
+      'scrollbarSlider.activeBackground':   '#00000035',
+    }
+  })
+
   const dispatch = createEventDispatcher()
   let {
     code,
@@ -87,6 +132,8 @@
     fontSize = 13,
     fontFamily = 'Menlo',
     tabSize = 4,
+    theme = 'playground-dark',
+    diagnostics = [],
     onSave = () => {},
     onRun = () => {},
     onNew = () => {},
@@ -96,6 +143,8 @@
     fontSize?: number
     fontFamily?: string
     tabSize?: number
+    theme?: string
+    diagnostics?: any[]
     onSave?: () => void
     onRun?: () => void
     onNew?: () => void
@@ -112,7 +161,7 @@
     editor = monaco.editor.create(container, {
       value: code,
       language,
-      theme: 'playground-dark',
+      theme,
       fontSize,
       fontFamily: `'${fontFamily}', monospace`,
       fontLigatures: false,
@@ -181,6 +230,30 @@
       tabSize,
     })
     editor.getModel()?.updateOptions({ tabSize })
+  })
+
+  // Sync theme when it changes
+  $effect(() => {
+    if (!editor) return
+    monaco.editor.setTheme(theme)
+  })
+
+  // Set Monaco markers from cargo check diagnostics
+  $effect(() => {
+    if (!editor) return
+    const model = editor.getModel()
+    if (!model) return
+    const markers: monaco.editor.IMarkerData[] = diagnostics.map(d => ({
+      severity: d.severity === 'warning'
+        ? monaco.MarkerSeverity.Warning
+        : monaco.MarkerSeverity.Error,
+      message: d.message,
+      startLineNumber: d.line,
+      startColumn: d.col,
+      endLineNumber: d.end_line,
+      endColumn: d.end_col,
+    }))
+    monaco.editor.setModelMarkers(model, 'cargo-check', markers)
   })
 
   onDestroy(() => { editor?.dispose() })

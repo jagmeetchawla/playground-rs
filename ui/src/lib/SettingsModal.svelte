@@ -6,6 +6,7 @@
     font_family: string
     tab_size: number
     cargo_path: string
+    theme: string
   }
 
   let {
@@ -42,6 +43,7 @@
       font_family: 'Menlo',
       tab_size: 4,
       cargo_path: draft.cargo_path, // keep cargo path as-is
+      theme: 'system',
     }
   }
 
@@ -111,6 +113,32 @@
           <option value={4}>4 spaces</option>
           <option value={8}>8 spaces</option>
         </select>
+      </div>
+    </section>
+
+    <!-- Appearance section -->
+    <section>
+      <h2>Appearance</h2>
+
+      <div class="setting-row">
+        <label>Theme</label>
+        <div class="segmented">
+          <button
+            class="seg-btn"
+            class:seg-active={draft.theme === 'system'}
+            onclick={() => draft.theme = 'system'}
+          >System</button>
+          <button
+            class="seg-btn"
+            class:seg-active={draft.theme === 'light'}
+            onclick={() => draft.theme = 'light'}
+          >Light</button>
+          <button
+            class="seg-btn"
+            class:seg-active={draft.theme === 'dark'}
+            onclick={() => draft.theme = 'dark'}
+          >Dark</button>
+        </div>
       </div>
     </section>
 
@@ -229,7 +257,7 @@
   input[type="number"],
   select {
     font-family: var(--font-mono); font-size: 12px;
-    background: rgba(0,0,0,0.25); color: var(--text);
+    background: var(--bg-input); color: var(--text);
     border: 1px solid var(--border); border-radius: var(--radius-xs);
     padding: 4px 8px; outline: none;
     min-width: 80px;
@@ -257,15 +285,39 @@
 
   .path-input {
     font-family: var(--font-mono); font-size: 11px;
-    background: rgba(0,0,0,0.25); color: var(--text);
+    background: var(--bg-input); color: var(--text);
     border: 1px solid var(--border); border-radius: var(--radius-xs);
     padding: 4px 8px; outline: none;
     flex: 1; min-width: 0;
   }
 
+  /* ── Segmented control ── */
+  .segmented {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    overflow: hidden;
+  }
+  .seg-btn {
+    font-size: 11px; font-weight: 600;
+    padding: 4px 12px;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+  }
+  .seg-btn:last-child { border-right: none; }
+  .seg-btn:hover { background: var(--bg-hover); }
+  .seg-btn.seg-active {
+    background: var(--accent);
+    color: var(--accent-text);
+  }
+
   /* ── Preview ── */
   .preview-section {
-    background: rgba(0,0,0,0.2);
+    background: var(--bg-sidebar);
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 12px 14px;
@@ -296,11 +348,11 @@
   }
   .btn-secondary {
     color: var(--text-secondary);
-    background: rgba(255,255,255,0.06);
+    background: var(--bg-input);
     border: 1px solid var(--border);
   }
   .btn-secondary:hover {
-    background: rgba(255,255,255,0.1);
+    background: var(--bg-hover);
     border-color: var(--border-strong);
   }
   .btn-primary {

@@ -22,6 +22,10 @@ struct RunningProcess(Mutex<Option<u32>>);
 /// Uses `tokio::sync::Mutex` because writes hold the lock across `.await`.
 struct StdinHandle(tokio::sync::Mutex<Option<tokio::process::ChildStdin>>);
 
+/// PID of the currently running `cargo check` background process.
+/// Used to cancel a previous check when a new one starts.
+struct CheckProcess(Mutex<Option<u32>>);
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Config {
     active_project: String,
@@ -36,6 +40,12 @@ struct Settings {
     tab_size: u32,
     #[serde(default = "default_cargo_path")]
     cargo_path: String,
+    #[serde(default = "default_theme")]
+    theme: String,
+}
+
+fn default_theme() -> String {
+    "system".to_string()
 }
 
 fn default_cargo_path() -> String {
@@ -50,6 +60,7 @@ impl Default for Settings {
             font_family: "Menlo".to_string(),
             tab_size: 4,
             cargo_path: default_cargo_path(),
+            theme: default_theme(),
         }
     }
 }
@@ -596,6 +607,127 @@ async fn kill_playground(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Run `cargo check` in the background and stream diagnostics to the frontend.
+/// Cancels any previously running check before starting a new one.
+#[tauri::command]
+async fn check_playground(
+    name: String,
+    code: String,
+    on_diagnostics: Channel<serde_json::Value>,
+    app: AppHandle,
+) -> Result<(), String> {
+    use std::process::Stdio;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::process::Command;
+
+    validate_name(&name)?;
+
+    // Save the code first so cargo check sees the latest version
+    let workspace = workspace_dir(&app);
+    let file = workspace
+        .join("src")
+        .join("bin")
+        .join(format!("{}.rs", name));
+    std::fs::write(&file, &code).map_err(|e| format!("Failed to save: {}", e))?;
+
+    // Cancel any previous check
+    let prev_pid = app.state::<CheckProcess>().0.lock().unwrap().take();
+    if let Some(pid) = prev_pid {
+        let _ = tokio::process::Command::new("kill")
+            .args(["-TERM", &format!("-{}", pid)])
+            .status()
+            .await;
+    }
+
+    let cargo = cargo_path();
+    let check_target = workspace.join("target").join("check-runs");
+
+    let mut child = Command::new(&cargo)
+        .args([
+            "check",
+            "--bin",
+            &name,
+            "--message-format",
+            "json",
+            "--target-dir",
+            check_target.to_str().unwrap(),
+        ])
+        .current_dir(&workspace)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .process_group(0)
+        .spawn()
+        .map_err(|e| format!("Failed to start cargo check: {}", e))?;
+
+    if let Some(pid) = child.id() {
+        *app.state::<CheckProcess>().0.lock().unwrap() = Some(pid);
+    }
+
+    let stdout = child.stdout.take().unwrap();
+    let mut lines = BufReader::new(stdout).lines();
+
+    // Parse cargo's JSON output for compiler messages
+    while let Ok(Some(line)) = lines.next_line().await {
+        if let Ok(msg) = serde_json::from_str::<serde_json::Value>(&line) {
+            if msg.get("reason").and_then(|r| r.as_str()) == Some("compiler-message") {
+                if let Some(message) = msg.get("message") {
+                    let severity = message
+                        .get("level")
+                        .and_then(|l| l.as_str())
+                        .unwrap_or("error");
+
+                    let text = message
+                        .get("message")
+                        .and_then(|m| m.as_str())
+                        .unwrap_or("");
+
+                    // Extract the primary span
+                    if let Some(spans) = message.get("spans").and_then(|s| s.as_array()) {
+                        if let Some(span) = spans
+                            .iter()
+                            .find(|s| s.get("is_primary").and_then(|p| p.as_bool()) == Some(true))
+                        {
+                            on_diagnostics
+                                .send(serde_json::json!({
+                                    "type": "diagnostic",
+                                    "severity": severity,
+                                    "message": text,
+                                    "line": span.get("line_start").and_then(|n| n.as_u64()).unwrap_or(1),
+                                    "col": span.get("column_start").and_then(|n| n.as_u64()).unwrap_or(1),
+                                    "end_line": span.get("line_end").and_then(|n| n.as_u64()).unwrap_or(1),
+                                    "end_col": span.get("column_end").and_then(|n| n.as_u64()).unwrap_or(1),
+                                }))
+                                .ok();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let _ = child.wait().await;
+    *app.state::<CheckProcess>().0.lock().unwrap() = None;
+
+    on_diagnostics
+        .send(serde_json::json!({ "type": "done" }))
+        .ok();
+
+    Ok(())
+}
+
+/// Cancel any in-flight `cargo check` background process.
+#[tauri::command]
+async fn cancel_check(app: AppHandle) -> Result<(), String> {
+    let maybe_pid = app.state::<CheckProcess>().0.lock().unwrap().take();
+    if let Some(pid) = maybe_pid {
+        let _ = tokio::process::Command::new("kill")
+            .args(["-TERM", &format!("-{}", pid)])
+            .status()
+            .await;
+    }
+    Ok(())
+}
+
 /// Send a line of input to the running playground's stdin.
 #[tauri::command]
 async fn send_stdin(line: String, app: AppHandle) -> Result<(), String> {
@@ -848,7 +980,12 @@ fn check_toolchain(app: AppHandle) -> serde_json::Value {
             .output()
             .ok()
             .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| s.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
+            .map(|s| {
+                s.lines()
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect()
+            })
             .unwrap_or_default()
     } else {
         vec![]
@@ -1027,6 +1164,236 @@ fn reveal_in_finder(path: String) -> Result<(), String> {
 fn get_content_file_path(filename: String, app: AppHandle) -> Result<String, String> {
     let path = safe_content_path(&filename, &app)?;
     Ok(path.to_string_lossy().to_string())
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+
+/// The exact main.rs from the v0.1 CLI playground runner (commit 231314e),
+/// with PLAYGROUND_CONTENT env var added for content file support.
+const CLI_MAIN_RS: &str = r##"use std::io::{self, Write};
+use std::path::PathBuf;
+use std::process::{Command, exit};
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(
+    name = "playground",
+    about = "Run a Rust playground file from src/bin/",
+    version
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// List all available playgrounds
+    #[command(alias = "ls")]
+    List,
+
+    /// Print version information
+    #[command(alias = "v")]
+    Version,
+
+    /// Run a playground by name (default when no subcommand given)
+    #[command(external_subcommand)]
+    Run(Vec<String>),
+}
+
+fn list_playgrounds() -> Vec<String> {
+    let dir = PathBuf::from("src/bin");
+    if !dir.exists() {
+        return vec![];
+    }
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let path = e.path();
+            if path.extension()?.to_str()? == "rs" {
+                path.file_stem()?.to_str().map(|s| s.to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+fn print_list() {
+    let playgrounds = list_playgrounds();
+    if playgrounds.is_empty() {
+        println!("No playgrounds found. Add a .rs file to src/bin/.");
+    } else {
+        println!("Available playgrounds:\n");
+        for name in &playgrounds {
+            println!("  {}", name);
+        }
+    }
+}
+
+fn pick_playground() -> String {
+    let playgrounds = list_playgrounds();
+
+    if playgrounds.is_empty() {
+        eprintln!("No playgrounds found. Add a .rs file to src/bin/.");
+        exit(1);
+    }
+
+    println!("Available playgrounds:\n");
+    for (i, name) in playgrounds.iter().enumerate() {
+        println!("  [{}] {}", i + 1, name);
+    }
+
+    loop {
+        print!("\nPick a playground: ");
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        let input = input.trim();
+
+        if let Ok(n) = input.parse::<usize>() {
+            if n >= 1 && n <= playgrounds.len() {
+                return playgrounds[n - 1].clone();
+            }
+        } else if playgrounds.contains(&input.to_string()) {
+            return input.to_string();
+        }
+
+        eprintln!("Invalid choice. Enter a number (1-{}) or a name.", playgrounds.len());
+    }
+}
+
+fn run_playground(name: &str, args: &[String]) {
+    let bin_path = PathBuf::from("src/bin").join(format!("{}.rs", name));
+    if !bin_path.exists() {
+        eprintln!("Error: playground `{}` not found (looked for {})", name, bin_path.display());
+        exit(1);
+    }
+
+    // Set PLAYGROUND_CONTENT so playgrounds can find their content files
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .unwrap_or_else(|_| ".".to_string());
+    let content_path = std::path::Path::new(&manifest_dir).join("content");
+
+    let status = Command::new("cargo")
+        .args(["run", "--bin", name, "--"])
+        .args(args)
+        .env("PLAYGROUND_CONTENT", &content_path)
+        .status()
+        .expect("failed to invoke cargo");
+
+    exit(status.code().unwrap_or(0));
+}
+
+fn main() {
+    let cli = Cli::parse();
+
+    match cli.command {
+        None => {
+            let name = pick_playground();
+            run_playground(&name, &[]);
+        }
+        Some(Commands::List) => print_list(),
+        Some(Commands::Version) => {
+            println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        }
+        Some(Commands::Run(args)) => {
+            run_playground(&args[0], &args[1..]);
+        }
+    }
+}
+"##;
+
+/// Export the active project as a standalone CLI playground (v0.1 CLI style).
+/// Creates dest/<project>/ with merged Cargo.toml (deps + clap), src/main.rs,
+/// src/bin/*.rs, and content/ files.
+#[tauri::command]
+fn export_project(dest: String, app: AppHandle) -> Result<String, String> {
+    let workspace = workspace_dir(&app);
+    let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
+
+    let export_dir = PathBuf::from(&dest).join(&project_name);
+    let export_src = export_dir.join("src");
+    let export_bin = export_src.join("bin");
+    std::fs::create_dir_all(&export_bin).map_err(|e| e.to_string())?;
+
+    // Read original Cargo.toml for edition and deps
+    let orig_toml =
+        std::fs::read_to_string(workspace.join("Cargo.toml")).map_err(|e| e.to_string())?;
+    let doc = orig_toml
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| format!("Failed to parse Cargo.toml: {}", e))?;
+
+    let edition = doc
+        .get("package")
+        .and_then(|p| p.get("edition"))
+        .and_then(|e| e.as_str())
+        .unwrap_or("2021");
+
+    // Build merged Cargo.toml: project deps + clap + default-run
+    let mut export_toml = toml_edit::DocumentMut::new();
+    export_toml["package"] = toml_edit::Item::Table(toml_edit::Table::new());
+    export_toml["package"]["name"] = toml_edit::value(&project_name);
+    export_toml["package"]["version"] = toml_edit::value("0.1.0");
+    export_toml["package"]["edition"] = toml_edit::value(edition);
+    export_toml["package"]["default-run"] = toml_edit::value(&project_name);
+
+    // Merge deps: start with original, ensure clap is present
+    let mut deps_table = if let Some(deps) = doc.get("dependencies") {
+        deps.clone()
+    } else {
+        toml_edit::Item::Table(toml_edit::Table::new())
+    };
+    if deps_table.get("clap").is_none() {
+        let mut clap_table = toml_edit::InlineTable::new();
+        clap_table.insert("version", "4".into());
+        let mut features = toml_edit::Array::new();
+        features.push("derive");
+        clap_table.insert("features", toml_edit::Value::Array(features));
+        deps_table["clap"] = toml_edit::Item::Value(toml_edit::Value::InlineTable(clap_table));
+    }
+    export_toml["dependencies"] = deps_table;
+
+    std::fs::write(export_dir.join("Cargo.toml"), export_toml.to_string())
+        .map_err(|e| e.to_string())?;
+
+    // Write the CLI main.rs (the v0.1 runner with clap)
+    std::fs::write(export_src.join("main.rs"), CLI_MAIN_RS).map_err(|e| e.to_string())?;
+
+    // Copy all playground files from src/bin/
+    let bin_src = workspace.join("src").join("bin");
+    if bin_src.exists() {
+        for entry in std::fs::read_dir(&bin_src)
+            .map_err(|e| e.to_string())?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map(|ext| ext == "rs").unwrap_or(false))
+        {
+            std::fs::copy(entry.path(), export_bin.join(entry.file_name()))
+                .map_err(|e| e.to_string())?;
+        }
+    }
+
+    // Copy content files if they exist
+    let content_src = content_dir(&app);
+    if content_src.exists() {
+        let content_dest = export_dir.join("content");
+        if let Ok(entries) = std::fs::read_dir(&content_src) {
+            for entry in entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+            {
+                std::fs::create_dir_all(&content_dest).map_err(|e| e.to_string())?;
+                std::fs::copy(entry.path(), content_dest.join(entry.file_name()))
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+    }
+
+    Ok(export_dir.to_string_lossy().to_string())
 }
 
 // ── Window state persistence ──────────────────────────────────────────────────
@@ -1261,6 +1628,7 @@ fn rebuild_menu(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Ensure App Support directory exists
             let app_data = app
@@ -1295,6 +1663,7 @@ pub fn run() {
             app.manage(ActiveProject(Mutex::new(active)));
             app.manage(RunningProcess(Mutex::new(None)));
             app.manage(StdinHandle(tokio::sync::Mutex::new(None)));
+            app.manage(CheckProcess(Mutex::new(None)));
 
             // Bootstrap the active project's directory structure if needed
             ensure_project(app.handle()).expect("Failed to initialise project");
@@ -1372,6 +1741,8 @@ pub fn run() {
             run_playground,
             kill_playground,
             send_stdin,
+            check_playground,
+            cancel_check,
             workspace_path,
             // Cargo / toolchain
             get_cargo_toml,
@@ -1391,6 +1762,8 @@ pub fn run() {
             import_content_file,
             reveal_in_finder,
             get_content_file_path,
+            // Export
+            export_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

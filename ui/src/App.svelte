@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
   import { invoke, Channel } from '@tauri-apps/api/core'
+  import { open as dialogOpen } from '@tauri-apps/plugin-dialog'
   import { listen } from '@tauri-apps/api/event'
   import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
   import Sidebar from './lib/Sidebar.svelte'
@@ -93,6 +94,7 @@
   let showAbout:       boolean       = $state(false)
   let showSettings:    boolean       = $state(false)
   let showWizard:      boolean       = $state(false)
+  let showExportMenu:  boolean       = $state(false)
 
   // ── Settings ──────────────────────────────────────────────────────────────────
   let settings: Settings = $state({
@@ -100,7 +102,21 @@
     font_family: 'Menlo',
     tab_size: 4,
     cargo_path: '',
+    theme: 'system',
   })
+
+  // ── Theme resolution ──────────────────────────────────────────────────────
+  let systemDark = $state(window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+  // Resolved theme: "dark" or "light" based on setting + OS preference
+  let resolvedTheme = $derived(
+    settings.theme === 'system' ? (systemDark ? 'dark' : 'light') : settings.theme
+  )
+
+  // Monaco theme name derived from resolved theme
+  let monacoTheme = $derived(
+    resolvedTheme === 'light' ? 'playground-light' : 'playground-dark'
+  )
   let deletePending:   string | null = $state(null)
   let showAddDep:      boolean       = $state(false)
   let depName:         string        = $state('')
@@ -295,6 +311,20 @@
     }).catch(console.error)
   })
 
+  // Apply theme class to document body whenever resolved theme changes
+  $effect(() => {
+    document.body.classList.remove('theme-dark', 'theme-light')
+    document.body.classList.add(`theme-${resolvedTheme}`)
+  })
+
+  // Listen to OS appearance changes for "system" theme
+  $effect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = (e: MediaQueryListEvent) => { systemDark = e.matches }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  })
+
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
   async function loadProjectData() {
@@ -436,6 +466,63 @@
     if (!dirtyTabs.includes(activeTab)) {
       dirtyTabs = [...dirtyTabs, activeTab]
     }
+    scheduleCheck(activeTab, newCode)
+  }
+
+  // ── Live error checking ────────────────────────────────────────────────────
+  // 300ms idle debounce + at most one cargo check in flight at a time.
+  // If the user edits while a check is running, the pending edit is queued
+  // and fires immediately when the in-flight check finishes.
+  let _checkTimer: ReturnType<typeof setTimeout> | null = null
+  let _checkRunning = false
+  let _pendingCheck: { name: string; code: string } | null = null
+  let tabMarkers: Record<string, any[]> = $state({})
+  let currentMarkers = $derived(activeTab ? (tabMarkers[activeTab] ?? []) : [])
+
+  function scheduleCheck(name: string, code: string) {
+    const meta = tabMeta[name]
+    if (meta?.type !== 'playground') return
+    if (_checkTimer) clearTimeout(_checkTimer)
+    if (_checkRunning) {
+      // A check is already in flight — queue this edit and it will fire
+      // as soon as the current check finishes (no additional delay).
+      _pendingCheck = { name, code }
+      return
+    }
+    _checkTimer = setTimeout(() => runCheck(name, code), 300)
+  }
+
+  async function runCheck(name: string, code: string) {
+    _checkRunning = true
+    _pendingCheck = null
+    const diagnostics: any[] = []
+    const channel = new Channel()
+    channel.onmessage = (msg: any) => {
+      if (msg.type === 'diagnostic') {
+        diagnostics.push(msg)
+      } else if (msg.type === 'done') {
+        tabMarkers = { ...tabMarkers, [name]: diagnostics }
+      }
+    }
+    try {
+      await invoke('check_playground', { name, code, onDiagnostics: channel })
+    } catch {
+      // check failed — ignore silently
+    } finally {
+      _checkRunning = false
+      // If edits arrived while this check was running, fire immediately.
+      if (_pendingCheck) {
+        const { name: n, code: c } = _pendingCheck
+        _pendingCheck = null
+        runCheck(n, c)
+      }
+    }
+  }
+
+  function cancelCheck() {
+    if (_checkTimer) { clearTimeout(_checkTimer); _checkTimer = null }
+    _pendingCheck = null
+    invoke('cancel_check').catch(() => {})
   }
 
   // ── RunBlock helpers ─────────────────────────────────────────────────────────
@@ -454,6 +541,7 @@
     if (!activeTab || isRunning) return
     const meta = tabMeta[activeTab] ?? { type: 'playground' }
     if (meta.type !== 'playground') return
+    cancelCheck()
     const name = activeTab
     await save()
 
@@ -513,6 +601,30 @@
   // The channel's "complete" message handles the RunBlock status update.
   function stop() {
     invoke('kill_playground').catch(console.error)
+  }
+
+  // ── Export / Share ───────────────────────────────────────────────────────────
+
+  async function exportProject() {
+    const dest = await dialogOpen({ directory: true, title: 'Export project to…' })
+    if (!dest) return // user cancelled
+    try {
+      await save()
+      const path = await invoke<string>('export_project', { dest })
+      showToast(`Exported to ${path}`)
+    } catch (e) {
+      showToast(`Export failed: ${e}`)
+    }
+  }
+
+  async function copyCodeToClipboard() {
+    if (!activeTab) return
+    try {
+      await navigator.clipboard.writeText(currentCode)
+      showToast('Copied to clipboard')
+    } catch {
+      showToast('Failed to copy')
+    }
   }
 
   // ── Playground CRUD ──────────────────────────────────────────────────────────
@@ -782,6 +894,24 @@
         </button>
       {/if}
 
+      <div class="export-wrap">
+        <button class="btn btn-export" onclick={() => showExportMenu = !showExportMenu} title="Export / Share">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M6 1v7M3 3.5 6 1l3 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 7v3.5h8V7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        {#if showExportMenu}
+          <div class="export-dropdown" role="menu">
+            <button class="export-item" onclick={() => { showExportMenu = false; exportProject() }}>Export Project…</button>
+            {#if activeTab}
+              <button class="export-item" onclick={() => { showExportMenu = false; copyCodeToClipboard() }}>Copy Code to Clipboard</button>
+            {/if}
+          </div>
+          <div class="export-backdrop" onclick={() => showExportMenu = false} aria-hidden="true"></div>
+        {/if}
+      </div>
+
       {#if isRunning}
         <button class="btn btn-stop" onclick={stop}>
           <svg width="10" height="10" viewBox="0 0 10 10"><rect width="10" height="10" rx="2" fill="currentColor"/></svg>
@@ -898,6 +1028,8 @@
               fontSize={settings.font_size}
               fontFamily={settings.font_family}
               tabSize={settings.tab_size}
+              theme={monacoTheme}
+              diagnostics={currentMarkers}
               onSave={save}
               onRun={run}
               onNew={requestNewPlayground}
@@ -1087,6 +1219,35 @@
 
   .btn-stop { background: #3a3a3c; color: var(--text-secondary); }
   .btn-stop:hover { background: var(--bg-elevated); }
+
+  .btn-export {
+    background: var(--bg-input); color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .btn-export:hover { background: var(--bg-hover); color: var(--text); }
+
+  .export-wrap { position: relative; }
+  .export-backdrop {
+    position: fixed; inset: 0; z-index: 99;
+  }
+  .export-dropdown {
+    position: absolute; top: 100%; right: 0; z-index: 100;
+    margin-top: 4px;
+    min-width: 200px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    padding: 4px 0;
+  }
+  .export-item {
+    display: block; width: 100%;
+    padding: 6px 12px;
+    font-size: 12px; text-align: left;
+    color: var(--text); background: none; border: none; border-radius: 0;
+    cursor: pointer;
+  }
+  .export-item:hover { background: var(--accent); color: #fff; }
 
   .settings-btn {
     display: flex; align-items: center; justify-content: center;
