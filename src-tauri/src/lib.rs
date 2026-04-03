@@ -7,6 +7,7 @@ mod cargo_commands;
 mod content_commands;
 mod export;
 mod knr_chapters;
+pub(crate) mod languages;
 mod menu;
 mod playground_commands;
 pub(crate) mod rustic_manifest;
