@@ -77,9 +77,10 @@ All runtime data lives under:
 | `src-tauri/src/playground_commands.rs` | Project CRUD + playground CRUD + run/kill/check/cancel/stdin (~450 lines) |
 | `src-tauri/src/cargo_commands.rs` | Cargo.toml management, toolchain checks, setup wizard (~300 lines) |
 | `src-tauri/src/content_commands.rs` | Content file CRUD commands (~120 lines) |
-| `src-tauri/src/export.rs` | CLI_MAIN_RS const + export_project command (~230 lines) |
+| `src-tauri/src/export.rs` | Project export: Rust (CLI runner) and native (shell runner + Makefile) (~400 lines) |
 | `src-tauri/src/menu.rs` | macOS menu bar builder + rebuild_menu command (~150 lines) |
 | `src-tauri/src/book_chapters.rs` | `seed_rust_book` command — all 20 Rust Book chapter data (~2,700 lines) |
+| `src-tauri/src/knr_chapters.rs` | `seed_knr_book` command — 8 K&R C Book chapter projects (~1,200 lines) |
 | `src-tauri/tauri.conf.json` | App config: identifier, window defaults, bundle settings |
 | `src-tauri/capabilities/default.json` | Tauri 2 IPC permissions — every API call needs an entry here |
 | `ui/src/App.svelte` | Root layout, all global state, menu event listeners, window state persistence |
@@ -103,11 +104,13 @@ All runtime data lives under:
 
 ## Current Version Status
 
+**v0.2** — shipped (native C/C++ projects: rustic.toml manifest, C/C++ templates, native export with POSIX shell runner + Makefile, K&R C Book examples, sea green theme, tabbed toolchain wizard, compiler flags UI, project-type badges, settings clang display).
+
+**v0.1.9** — shipped (renamed from playground-rs to rustic-playground, cleaned up src/bin).
+
 **v0.1.8.1** — shipped (production testing fixes: toolchain detection on app bundles, serde_json template dep, stop-and-run confirmation dialog, menu items for Copy Code/Export Project/Rename Playground, menu sync with active tab, rustup.rs link in wizard).
 
-**v0.1.8** — shipped (new app icon, Rust theme, live error checking, dark/light/system themes, export, Rust Book polish, backend modularization, 70 unit tests, stdin fix, light theme readability, live theme preview).
-
-After v0.1.8.1: pause features, ship website, DMG distribution, wiki, announcements.
+Next: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
 
 ---
 
