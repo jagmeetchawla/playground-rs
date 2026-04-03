@@ -120,7 +120,7 @@ When the container path (above) is working and the v2.x feature set is complete.
 
 ## Separate project — AI session knowledge graph
 
-**Discussed:** 2026-03-30, during playground-rs session
+**Discussed:** 2026-03-30, during rustic-playground session
 
 A structured graph to track work done across AI chat sessions — nodes for decisions,
 features, files, sessions, motivations; edges for `motivated_by`, `implemented_in`,

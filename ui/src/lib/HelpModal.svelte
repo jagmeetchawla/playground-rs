@@ -30,7 +30,7 @@
     <section>
       <h2>Getting Started</h2>
       <p>
-        playground-rs is a macOS desktop app for running Rust experiments — inspired by Swift Playgrounds.
+        Rustic Playground is a macOS desktop app for running Rust experiments — inspired by Swift Playgrounds.
         Each <strong>playground</strong> is a <code>.rs</code> file with a <code>fn main()</code>.
         Hit <kbd>⌘R</kbd> to compile and run it; output streams live to the Console panel below.
       </p>
@@ -109,7 +109,7 @@ fn main() &#123;
       </p>
       <p>
         Projects are stored at:<br/>
-        <code>~/Library/Application Support/com.playground-rs.app/projects/</code>
+        <code>~/Library/Application Support/com.rustic-playground.app/projects/</code>
       </p>
     </section>
 

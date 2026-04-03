@@ -56,7 +56,7 @@ cd ui && pnpm build        # production bundle
 
 All runtime data lives under:
 ```
-~/Library/Application Support/com.playground-rs.app/
+~/Library/Application Support/com.rustic-playground.app/
 ├── config.json              ← active_project, cargo_path, wizard_completed
 ├── window-state.json        ← window geometry, panel sizes, open tabs
 └── projects/

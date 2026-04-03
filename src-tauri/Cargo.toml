@@ -1,10 +1,10 @@
 [package]
-name = "playground-app"
+name = "rustic-playground"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "playground_app_lib"
+name = "rustic_playground_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

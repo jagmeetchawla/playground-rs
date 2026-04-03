@@ -66,8 +66,8 @@
 ## Build & Run
 
 ```sh
-git clone https://github.com/jagmeetchawla/playground-rs
-cd playground-rs
+git clone https://github.com/jagmeetchawla/rustic-playground
+cd rustic-playground
 cd ui && pnpm install && cd ..
 cargo tauri dev        # development mode — hot reload
 cargo tauri build      # release .app in src-tauri/target/release/bundle/
@@ -78,7 +78,7 @@ cargo tauri build      # release .app in src-tauri/target/release/bundle/
 Each **project** is a Cargo workspace stored at:
 
 ```
-~/Library/Application Support/com.playground-rs.app/projects/<name>/
+~/Library/Application Support/com.rustic-playground.app/projects/<name>/
 ├── Cargo.toml        ← shared dependencies for all playgrounds in this project
 ├── src/bin/
 │   ├── hello.rs      ← seeded on first launch
@@ -179,7 +179,7 @@ Every chapter project also contains an `attribution.md` in its Files panel.
 ## Project Structure
 
 ```
-playground-rs/
+rustic-playground/
 ├── src-tauri/
 │   ├── src/lib.rs            ← all Tauri commands (projects, playgrounds, content files, seeding)
 │   ├── capabilities/         ← Tauri 2 permission definitions

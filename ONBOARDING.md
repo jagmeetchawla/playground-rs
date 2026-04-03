@@ -20,7 +20,7 @@ Each experiment is called a **playground** — a standalone Rust `fn main()` bin
 
 The product started as a CLI runner and has been iteratively turned into a full GUI desktop app. There have been three distinct eras:
 
-### Era 0 — build.rs macro approach (`playground-rs-alt/`)
+### Era 0 — build.rs macro approach (`playground-rs-alt/` (deleted))
 The original proof-of-concept used `build.rs` to scan source files and generate a dispatcher macro. Clever but fragile. Replaced because Cargo's native `src/bin/` auto-discovery does the same thing with zero code.
 
 ### Era 1 — CLI runner (`src/main.rs`) — tagged `v0`, `v0.1`
@@ -50,7 +50,7 @@ The frontend runs in macOS's WKWebView (Tauri's rendering layer) and communicate
 ## 4. Repository Structure
 
 ```
-playground-rs/
+rustic-playground/
 ├── src/
 │   └── main.rs                  ← legacy CLI runner (still works: cargo run list)
 ├── src-tauri/
@@ -90,7 +90,7 @@ playground-rs/
 User edits code in Monaco
     ↓
 ⌘S  →  invoke('save_playground', { name, content })
-    ↓  writes to ~/Library/Application Support/com.playground-rs.app/
+    ↓  writes to ~/Library/Application Support/com.rustic-playground.app/
     ↓             projects/<project>/src/bin/<name>.rs
     ↓
 ⌘R  →  invoke('run_playground', { name, channel })
@@ -115,7 +115,7 @@ Each playground has a **content folder** at `projects/<project>/content/`. The a
 
 All user data lives at:
 ```
-~/Library/Application Support/com.playground-rs.app/
+~/Library/Application Support/com.rustic-playground.app/
 ├── config.json                  ← active project name
 └── projects/
     └── <project-name>/
@@ -158,7 +158,7 @@ On first launch the `default` project is created with a seeded `hello.rs`. You c
 - Unified storage: both dev and release use `~/Library/Application Support/`
 - Restructured native menu: **Project** menu with dynamic project list (✓ on active), **Playground** menu replaces File
 - Menu items drive the ProjectSwitcher popover via Tauri events
-- See [`specs/archive/specs-v0.1.5.md`](specs/archive/specs-v0.1.5.md) | [GitHub release](https://github.com/jagmeetchawla/playground-rs/releases/tag/v0.1.5)
+- See [`specs/archive/specs-v0.1.5.md`](specs/archive/specs-v0.1.5.md) | [GitHub release](https://github.com/jagmeetchawla/rustic-playground/releases/tag/v0.1.5)
 
 ### v0.1.6 — App Polish + Identity
 All eight features from the v0.1.6 spec shipped partially — the four "quick wins" plus several additional polish items:
@@ -181,13 +181,13 @@ All eight features from the v0.1.6 spec shipped partially — the four "quick wi
 **Not yet shipped from v0.1.6 spec** (see section 8):
 Live cargo check squiggles, toolchain setup wizard, settings panel, window state persistence.
 
-See [GitHub release v0.1.6](https://github.com/jagmeetchawla/playground-rs/releases/tag/v0.1.6)
+See [GitHub release v0.1.6](https://github.com/jagmeetchawla/rustic-playground/releases/tag/v0.1.6)
 
 ### v0.1.6.1 — Bug fixes on top of v0.1.6
 - **Delete Playground was broken**: `window.confirm()` silently returns `false` in Tauri's WKWebView — replaced with an in-app confirm modal (this is a known Tauri gotcha)
 - **Delete menu items not greying out**: "Delete Project" and "Delete Playground" in the native menu bar were always enabled. Fixed by baking `.enabled()` state into menu construction via `rebuild_menu`, which is called reactively via `$effect` whenever the projects or playgrounds list changes
 
-See [GitHub release v0.1.6.1](https://github.com/jagmeetchawla/playground-rs/releases/tag/v0.1.6.1)
+See [GitHub release v0.1.6.1](https://github.com/jagmeetchawla/rustic-playground/releases/tag/v0.1.6.1)
 
 ### v0.1.6.3 — Interactive Console (stdin support)
 - **Interactive stdin**: playgrounds that read from `std::io::stdin()` now work — a text input field appears in the Console panel while the program is running. Type input and press Enter to send it to the process. User input is echoed in accent color to distinguish it from program output.
@@ -260,8 +260,8 @@ The full menu bar is built by `build_menu()` in `lib.rs` on every state change t
 **Requirements:** macOS 11+, Rust + Cargo, Node.js 18+, Tauri CLI 2.x
 
 ```sh
-git clone https://github.com/jagmeetchawla/playground-rs
-cd playground-rs
+git clone https://github.com/jagmeetchawla/rustic-playground
+cd rustic-playground
 
 # Install Tauri CLI if needed
 cargo install tauri-cli --version "^2.0"
@@ -273,7 +273,7 @@ cargo tauri dev
 cargo tauri build
 ```
 
-App data is stored at `~/Library/Application Support/com.playground-rs.app/`. Delete this folder to start fresh.
+App data is stored at `~/Library/Application Support/com.rustic-playground.app/`. Delete this folder to start fresh.
 
 **Regenerate app icon:**
 ```sh

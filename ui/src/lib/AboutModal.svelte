@@ -56,8 +56,8 @@
       </div>
       <div class="stack-row">
         <span class="stack-label">Source</span>
-        <a class="stack-link" href="https://github.com/jagmeetchawla/playground-rs" target="_blank" rel="noreferrer">
-          github.com/jagmeetchawla/playground-rs
+        <a class="stack-link" href="https://github.com/jagmeetchawla/rustic-playground" target="_blank" rel="noreferrer">
+          github.com/jagmeetchawla/rustic-playground
         </a>
       </div>
     </div>

@@ -1346,7 +1346,7 @@ fn main() {
 //
 // TO RUN THE TESTS IN THIS FILE:
 //   Open Terminal, then:
-//   cd ~/Library/Application\ Support/com.playground-rs.app/projects/ch11_testing
+//   cd ~/Library/Application\ Support/com.rustic-playground.app/projects/ch11_testing
 //   cargo test writing_tests      ← run tests in this binary
 //   cargo test -- --nocapture     ← see println! inside tests
 //
@@ -1414,7 +1414,7 @@ fn main() {
     println!("big holds small? {}", big.can_hold(&small));
     println!();
     println!("To run the #[test] functions:");
-    println!("  cd ~/Library/Application\\ Support/com.playground-rs.app/projects/ch11_testing");
+    println!("  cd ~/Library/Application\\ Support/com.rustic-playground.app/projects/ch11_testing");
     println!("  cargo test writing_tests");
 }
 "#,
@@ -1427,7 +1427,7 @@ fn main() {
 // Only libraries (lib.rs) can have integration tests — binaries cannot.
 //
 // RUN THESE TESTS:
-//   cd ~/Library/Application\ Support/com.playground-rs.app/projects/ch11_testing
+//   cd ~/Library/Application\ Support/com.rustic-playground.app/projects/ch11_testing
 //   cargo test test_organisation   ← unit tests in this binary
 //   cargo test                     ← all tests in the project
 

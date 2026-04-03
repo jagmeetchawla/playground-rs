@@ -145,7 +145,7 @@ Why replaced
 
 ---
 
-Pre-v0 — build.rs + macro approach (see playground-rs-alt/)
+Pre-v0 — build.rs + macro approach (deleted, was playground-rs-alt/)
 
 The original implementation used build.rs to scan src/ for *_playground.rs files,
 generated _playgrounds.rs with a declarative macro, and dispatched via pub fn run().

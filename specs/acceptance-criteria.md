@@ -14,7 +14,7 @@ LAUNCH
 
 [ ] App launches
     Given: macOS machine with Rust toolchain configured
-    When:  User opens playground-rs.app
+    When:  User opens Rustic Playground.app
     Then:  App window opens, sidebar shows all playgrounds from src/bin/, editor is empty
 
 [ ] Playground list loads
