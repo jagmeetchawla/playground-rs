@@ -3,6 +3,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::{
     bin_dir, cargo_path, content_dir, playground_template, project_cargo_toml, projects_dir,
+    rustic_manifest::{self, write_manifest},
     safe_playground_path, save_config, validate_name, workspace_dir, ActiveProject, CheckProcess,
     RunningProcess, StdinHandle,
 };
@@ -31,21 +32,73 @@ pub fn get_active_project(app: AppHandle) -> String {
 }
 
 #[tauri::command]
-pub fn new_project(name: String, app: AppHandle) -> Result<(), String> {
+pub fn new_project(
+    name: String,
+    project_type: Option<String>,
+    app: AppHandle,
+) -> Result<(), String> {
     validate_name(&name)?;
     let project_path = projects_dir(&app).join(&name);
     if project_path.exists() {
         return Err(format!("Project '{}' already exists", name));
     }
-    let bin = project_path.join("src").join("bin");
-    std::fs::create_dir_all(&bin).map_err(|e| format!("Failed to create project: {}", e))?;
-    std::fs::write(project_path.join("Cargo.toml"), project_cargo_toml(&name))
-        .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
-    std::fs::write(bin.join("hello.rs"), playground_template("hello"))
-        .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
-    std::fs::create_dir_all(project_path.join("content"))
-        .map_err(|e| format!("Failed to create content dir: {}", e))?;
+
+    let ptype = project_type.as_deref().unwrap_or("rust");
+
+    match ptype {
+        "native" => {
+            std::fs::create_dir_all(&project_path)
+                .map_err(|e| format!("Failed to create project: {}", e))?;
+            std::fs::create_dir_all(project_path.join("content"))
+                .map_err(|e| format!("Failed to create content dir: {}", e))?;
+            let manifest = rustic_manifest::new_native_manifest();
+            write_manifest(&project_path, &manifest)?;
+            std::fs::write(
+                project_path.join("hello.c"),
+                native_starter_template("hello", "c"),
+            )
+            .map_err(|e| format!("Failed to seed hello.c: {}", e))?;
+        }
+        _ => {
+            // Rust project (default)
+            let bin = project_path.join("src").join("bin");
+            std::fs::create_dir_all(&bin)
+                .map_err(|e| format!("Failed to create project: {}", e))?;
+            std::fs::write(project_path.join("Cargo.toml"), project_cargo_toml(&name))
+                .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
+            std::fs::write(bin.join("hello.rs"), playground_template("hello"))
+                .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
+            std::fs::create_dir_all(project_path.join("content"))
+                .map_err(|e| format!("Failed to create content dir: {}", e))?;
+            let manifest = rustic_manifest::new_rust_manifest();
+            write_manifest(&project_path, &manifest)?;
+        }
+    }
+
     Ok(())
+}
+
+/// Starter template for native project files, based on language extension.
+pub fn native_starter_template(name: &str, ext: &str) -> String {
+    match ext {
+        "c" => format!(
+            "#include <stdio.h>\n\nint main() {{\n    printf(\"Hello from {}!\\n\");\n    return 0;\n}}\n",
+            name
+        ),
+        "cpp" => format!(
+            "#include <iostream>\n\nint main() {{\n    std::cout << \"Hello from {}!\" << std::endl;\n    return 0;\n}}\n",
+            name
+        ),
+        "zig" => format!(
+            "const std = @import(\"std\");\n\npub fn main() !void {{\n    const stdout = std.io.getStdOut().writer();\n    try stdout.print(\"Hello from {}!\\n\", .{{}});\n}}\n",
+            name
+        ),
+        "rs" => format!(
+            "fn main() {{\n    println!(\"Hello from {}!\");\n}}\n",
+            name
+        ),
+        _ => format!("// Hello from {}!\n", name),
+    }
 }
 
 #[tauri::command]
@@ -166,11 +219,7 @@ pub fn new_playground(name: String, content: Option<String>, app: AppHandle) -> 
 }
 
 #[tauri::command]
-pub fn rename_playground(
-    old_name: String,
-    new_name: String,
-    app: AppHandle,
-) -> Result<(), String> {
+pub fn rename_playground(old_name: String, new_name: String, app: AppHandle) -> Result<(), String> {
     let old_path = safe_playground_path(&old_name, &app)?;
     let new_path = safe_playground_path(&new_name, &app)?;
     if new_path.exists() {

@@ -8,6 +8,7 @@ mod content_commands;
 mod export;
 mod menu;
 mod playground_commands;
+pub(crate) mod rustic_manifest;
 
 // ── App state ─────────────────────────────────────────────────────────────────
 
@@ -161,24 +162,31 @@ pub(crate) fn playground_template(name: &str) -> String {
 // ── Project bootstrap ─────────────────────────────────────────────────────────
 
 /// Ensures the active project has the required directory structure.
-/// Creates Cargo.toml + src/bin/hello.rs + content/ if they don't exist yet.
+/// Creates Cargo.toml + src/bin/hello.rs + content/ if they don't exist yet (for Rust projects).
+/// Also ensures a rustic.toml manifest exists (auto-generates for legacy projects).
 fn ensure_project(app: &AppHandle) -> Result<(), String> {
     let workspace = workspace_dir(app);
-    let bin = bin_dir(app);
-    let content = content_dir(app);
 
-    if !bin.exists() {
-        std::fs::create_dir_all(&bin)
-            .map_err(|e| format!("Failed to create project dirs: {}", e))?;
-        let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
-        std::fs::write(
-            workspace.join("Cargo.toml"),
-            project_cargo_toml(&project_name),
-        )
-        .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
-        std::fs::write(bin.join("hello.rs"), playground_template("hello"))
-            .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
+    // Ensure rustic.toml exists (auto-generates for legacy projects)
+    let manifest = rustic_manifest::ensure_manifest(&workspace)?;
+
+    if manifest.project.project_type == "rust" {
+        let bin = workspace.join(&manifest.paths.src);
+        if !bin.exists() {
+            std::fs::create_dir_all(&bin)
+                .map_err(|e| format!("Failed to create project dirs: {}", e))?;
+            let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
+            std::fs::write(
+                workspace.join("Cargo.toml"),
+                project_cargo_toml(&project_name),
+            )
+            .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
+            std::fs::write(bin.join("hello.rs"), playground_template("hello"))
+                .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
+        }
     }
+
+    let content = workspace.join(&manifest.paths.content);
     if !content.exists() {
         std::fs::create_dir_all(&content)
             .map_err(|e| format!("Failed to create content dir: {}", e))?;
@@ -461,7 +469,13 @@ pub fn run() {
             };
             let active_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
             // On startup we don't know playground count yet; frontend will call rebuild_menu shortly
-            let menu = menu::build_menu(app.handle(), &initial_projects, &active_name, usize::MAX, false)?;
+            let menu = menu::build_menu(
+                app.handle(),
+                &initial_projects,
+                &active_name,
+                usize::MAX,
+                false,
+            )?;
             app.set_menu(menu)?;
             Ok(())
         })
@@ -544,6 +558,9 @@ pub fn run() {
             content_commands::get_content_file_path,
             // Export
             export::export_project,
+            // Manifest
+            rustic_manifest::get_project_type,
+            rustic_manifest::get_project_manifest,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -607,7 +624,11 @@ mod tests {
     fn validate_name_rejects_too_long() {
         let long = "a".repeat(65);
         let err = validate_name(&long).unwrap_err();
-        assert!(err.contains("too long") || err.contains("64"), "got: {}", err);
+        assert!(
+            err.contains("too long") || err.contains("64"),
+            "got: {}",
+            err
+        );
     }
 
     #[test]
@@ -782,7 +803,8 @@ mod tests {
 
     #[test]
     fn settings_deserialize_with_missing_theme_gets_default() {
-        let json = r#"{"font_size":13,"font_family":"Menlo","tab_size":4,"cargo_path":"/usr/bin/cargo"}"#;
+        let json =
+            r#"{"font_size":13,"font_family":"Menlo","tab_size":4,"cargo_path":"/usr/bin/cargo"}"#;
         let s: Settings = serde_json::from_str(json).unwrap();
         assert_eq!(s.theme, "system");
     }

@@ -72,13 +72,93 @@ v0.1.5 — Multiple Projects + Unified Storage
   Status: complete — released 2026-04-01
   See specs/archive/specs-v0.1.5.md
 
+v0.1.9 — Rename and Cleanup
+  Status: complete — released 2026-04-03
+  Renamed from playground-rs to rustic-playground. Cleaned up src/bin.
+
+---
+
+IN PROGRESS
+───────────
+
+v0.2 — Multi-Language Support (Native Projects)
+  Status: specced — 2026-04-03
+  See specs/specifications.md
+
+  Overview:
+  Adds a "native" project type alongside existing Rust (Cargo) projects.
+  Native projects hold loose source files — C, C++, Zig, Rust (rustc) —
+  compiled and run directly. No build system, no dependency management.
+  Languages can be mixed freely in a single native project.
+
+  Features:
+  1. rustic.toml project manifest
+     - Every project gets a rustic.toml at its root
+     - [project] — type ("rust" | "native"), created_with version
+     - [paths] — src directory, content directory (app reads these, never hardcodes)
+     - [toolchain] — informational snapshot of compiler versions at creation time
+     - Legacy projects without rustic.toml get one auto-generated on first load
+
+  2. Project type selection
+     - New project dialog offers Rust and Native type choices
+     - Rust: full Cargo workspace with deps and live checking
+     - Native: loose source files, compiler chosen by extension
+
+  3. Native project playground CRUD
+     - Source files in project root (paths.src = ".")
+     - Files named with extension: hello.c, vectors.cpp, fizzbuzz.zig, ownership.rs
+     - Stem validation: same [a-z][a-z0-9_]* rule as Rust playgrounds
+     - list/new/load/save/rename/delete/duplicate — all path resolution via rustic.toml
+
+  4. Compile and run (native)
+     - .c    → clang <file> -o <out> && <out>
+     - .cpp  → clang++ <file> -o <out> -std=c++17 && <out>
+     - .zig  → zig run <file>
+     - .rs   → rustc <file> -o <out> && <out>
+     - Output binaries: target/runs/<stem>
+     - Same process group kill, stdin, PLAYGROUND_CONTENT as Rust projects
+     - Compiler paths: clang via xcrun, zig via PATH, rustc as cargo sibling
+
+  5. New playground dialog (native)
+     - Language picker: C, C++, Zig, Rust
+     - Language-appropriate starter template per selection
+     - Rust projects: no language picker (always .rs)
+
+  6. Sidebar adaptation
+     - Native projects: show filenames with extensions, no Cargo.toml entry, no deps
+     - Rust projects: unchanged
+
+  7. Monaco language detection
+     - Set editor language by file extension: .c → "c", .cpp → "cpp", .zig → "zig", .rs → "rust"
+     - Currently hardcoded to "rust" — change to detect from active tab
+
+  8. Setup wizard updates
+     - Detect clang (via xcrun --find clang)
+     - Detect zig (via which zig)
+     - Show status for all toolchains, link to ziglang.org
+     - Does not block on missing Zig or clang
+
+  9. Conditional menus
+     - Rust-specific items (Add Dependency, Export as Cargo Project, Rust Book) hidden for native
+     - Run/Stop/New/Copy work for both types
+     - Menu rebuilds on project switch between types
+
+  Not in scope for v0.2:
+  - No dependency management for native projects
+  - No live error checking for native projects
+  - No LSP / autocomplete for C/C++/Zig
+  - No build systems (CMake, Makefiles, zig build)
+  - No multi-file compilation (each source file is standalone)
+  - No header files for C/C++ (beyond system headers)
+  - No templates beyond starter code per language
+  - No book chapters for C/C++/Zig
 
 ---
 
 NEXT
 ────
 
-  After v0.1.8.1: pause features, build website, DMG distribution, wiki, announcements.
+  After v0.2: website, DMG distribution, wiki, announcements.
 
 
 ---

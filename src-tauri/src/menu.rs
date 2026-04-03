@@ -158,8 +158,14 @@ pub fn rebuild_menu(
     has_active_playground: bool,
     app: AppHandle,
 ) -> Result<(), String> {
-    let menu =
-        build_menu(&app, &projects, &active, playground_count, has_active_playground).map_err(|e| e.to_string())?;
+    let menu = build_menu(
+        &app,
+        &projects,
+        &active,
+        playground_count,
+        has_active_playground,
+    )
+    .map_err(|e| e.to_string())?;
     app.set_menu(menu).map_err(|e| e.to_string())?;
     Ok(())
 }

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-use crate::{ActiveProject, content_dir, workspace_dir};
+use crate::{content_dir, workspace_dir, ActiveProject};
 
 /// The exact main.rs from the v0.1 CLI playground runner (commit 231314e),
 /// with PLAYGROUND_CONTENT env var added for content file support.
@@ -176,14 +176,19 @@ mod tests {
     #[test]
     fn cli_main_rs_is_nontrivial() {
         // The embedded CLI runner should be substantial
-        assert!(CLI_MAIN_RS.len() > 1000, "CLI_MAIN_RS too short: {} bytes", CLI_MAIN_RS.len());
+        assert!(
+            CLI_MAIN_RS.len() > 1000,
+            "CLI_MAIN_RS too short: {} bytes",
+            CLI_MAIN_RS.len()
+        );
     }
 
     // ── Export TOML merge logic ──────────────────────────────────────────
 
     #[test]
     fn export_toml_adds_clap_when_missing() {
-        let orig = "[package]\nname = \"test\"\nedition = \"2021\"\n\n[dependencies]\nserde = \"1\"\n";
+        let orig =
+            "[package]\nname = \"test\"\nedition = \"2021\"\n\n[dependencies]\nserde = \"1\"\n";
         let doc = orig.parse::<toml_edit::DocumentMut>().unwrap();
 
         let mut deps_table = doc.get("dependencies").unwrap().clone();
@@ -227,10 +232,7 @@ mod tests {
         let reparsed = output.parse::<toml_edit::DocumentMut>();
         assert!(reparsed.is_ok(), "Export TOML failed to reparse");
         let reparsed = reparsed.unwrap();
-        assert_eq!(
-            reparsed["package"]["name"].as_str().unwrap(),
-            "my_export"
-        );
+        assert_eq!(reparsed["package"]["name"].as_str().unwrap(), "my_export");
         assert_eq!(
             reparsed["package"]["default-run"].as_str().unwrap(),
             "my_export"

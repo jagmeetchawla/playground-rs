@@ -1,7 +1,7 @@
 SPECIFICATION
 
 Status
-- Version: v0.1.8.1
+- Version: v0.2
 - Date: 2026-04-03
 - Owner: Jagmeet Chawla
 
@@ -10,355 +10,465 @@ Status
 Product
 
 What
-  A native macOS desktop app — built with Tauri — that wraps the existing Rust playground
-  runner in a Swift Playgrounds-inspired UI. v0.1.8.1 is a production testing bugfix release.
-  Focus now shifts to distribution (website, DMG, wiki, announcements).
+  Rustic Playground v0.2 — multi-language support. Add a **native project** type
+  alongside the existing Rust (Cargo) project type. Native projects hold loose
+  source files — `.c`, `.cpp`, `.zig`, `.rs` — compiled and run directly via
+  `clang`, `clang++`, `zig run`, and `rustc`. No build system, no dependency
+  management. Languages can be mixed freely in a single native project.
 
-  v0.1.8.1 fixes (from production testing):
-  1. Toolchain detection — use absolute paths for sibling tools (rustup, rustc, rustfmt, clippy) — DONE
-  2. Serde JSON template — dep not added to Cargo.toml (quoted version string) — DONE
-  3. Stop-and-run confirmation — prompt before killing another playground's process — DONE
-  4. Menu items — Copy Code to Clipboard, Export Project, Rename Playground — DONE
-  5. Menu sync — grey out Copy Code / Rename / Delete when no playground tab active — DONE
-  6. Wizard — added rustup.rs link for install guidance — DONE
-
-  v0.1.8 features (previous release):
-  1. Live error checking (cargo check squiggles) — DONE
-  2. Autocomplete / LSP — SKIPPED (decided not to include)
-  3. Themes (dark / light / system / rust) — DONE
-  4. Export / share — DONE (exports as standalone CLI playground)
-  5. Rust Book examples polish — DONE (all 20 chapters, zero warnings)
-  6. Backend modularization — DONE (lib.rs split into 6 modules)
-  7. New app icon — DONE (illustrated rustic playground with cargo crate, gear, fn() sign)
-  8. Rust theme — DONE (warm earthy palette: espresso bg, parchment text, Rust-red accents)
+  Rust projects remain unchanged — full Cargo workspace experience with
+  dependencies, live checking, book chapters, and export.
 
 Why
-  The core editing and running experience is solid after v0.1.7. These features close
-  the gap between "playground" and "real editor": squiggles surface errors without running,
-  themes match user preference, and export lets users take their code elsewhere.
-  After this, the app is ready for public release.
+  Panache before public release. C/C++ come free on macOS (clang ships with
+  Xcode Command Line Tools). Zig is a rising language with a dead-simple
+  `zig run` model. Supporting multiple languages differentiates Rustic Playground
+  from single-language tools and makes it useful for broader experimentation.
 
-Note
-  The editor is Monaco. The backend is modularised: lib.rs (~550 lines) is the coordination
-  hub, with playground_commands.rs, cargo_commands.rs, content_commands.rs, export.rs,
-  menu.rs, and book_chapters.rs as separate modules.
-
----
-
-Feature 1 — Live Error Checking (cargo check squiggles)
-────────────────────────────────────────────────────────
-
-Problem
-  Users must press Run to discover compile errors. Typos and type mismatches should
-  surface immediately as red/yellow squiggles in the editor.
-
-Goal
-  After the user stops typing for ~500 ms, run `cargo check` in the background and push
-  compiler diagnostics to Monaco as squiggles with hover messages.
-
-Backend (lib.rs)
-
-  New state
-    struct CheckProcess(Mutex<Option<u32>>)   // check child PID for cancellation
-
-  New command
-    #[tauri::command]
-    async fn check_playground(
-        name: String,
-        on_diagnostics: Channel<serde_json::Value>,
-        app: AppHandle,
-    ) -> Result<(), String>
-
-    - Saves the current code to disk first (same as run_playground does)
-    - Runs: cargo check --bin <name> --message-format json
-        --target-dir <workspace>/target/check-runs   (separate dir, no lock conflict)
-    - Parses JSON output lines; for each "compiler-message" with spans:
-        {
-          "type": "diagnostic",
-          "file": "src/bin/<name>.rs",
-          "line": 5,          // 1-based
-          "col": 8,           // 1-based
-          "end_line": 5,
-          "end_col": 12,
-          "severity": "error" | "warning",
-          "message": "cannot borrow `x` as mutable..."
-        }
-    - Sends a final { "type": "done" } message when complete
-
-  Cancellation
-    If check_playground is called again while a previous check is running,
-    kill the old process before starting the new one (same kill_pg pattern
-    as run_playground).
-
-Frontend (Editor.svelte)
-
-  - After every code change, reset a 500 ms debounce timer
-  - When the timer fires, call invoke('check_playground', { name, onDiagnostics })
-  - Collect diagnostics; on { type: "done" }, call Monaco's
-    editor.setModelMarkers() atomically (clear old markers, set new batch)
-  - On tab switch, clear markers for the old tab and restore cached markers
-    for the new tab (Map<string, IMarkerData[]>)
-
-  Marker mapping
-    severity "error"   -> MarkerSeverity.Error
-    severity "warning" -> MarkerSeverity.Warning
-    Lines/cols are 1-based in both cargo and Monaco — no conversion needed.
-
-  Skip non-playground tabs
-    Cargo.toml and content file tabs do not trigger cargo check.
-
-  UX
-    - No visible spinner for background checks — squiggles just appear/disappear
-    - If the user presses Run while a check is in flight, the check is cancelled
-      (run takes priority)
+Design Principle
+  Project-level typing. The project type determines the experience:
+  - **Rust project** — Cargo workspace. Full feature set.
+  - **Native project** — folder of source files. Compiler chosen by extension.
+    No build system. No deps. Mix languages freely.
 
 ---
 
-Feature 2 — Autocomplete / LSP Integration (rust-analyzer)
-───────────────────────────────────────────────────────────
+Data Model Changes
 
-Problem
-  Users have no code completion, go-to-definition, or inline documentation.
-  Exploring Rust APIs requires switching to external docs.
+rustic.toml — project manifest
+  Every project has a `rustic.toml` at its root. This is the project's own
+  manifest — metadata, structure, and toolchain info.
 
-Goal
-  Connect Monaco to a rust-analyzer LSP server for completions, hover info,
-  and inline signature help. This runs per-project (one rust-analyzer instance
-  per open project).
+  Rust project:
+    [project]
+    type = "rust"
+    created_with = "0.2"
 
-Backend (lib.rs)
+    [paths]
+    src = "src/bin"
+    content = "content"
 
-  New state
-    struct LspProcess(Mutex<Option<tokio::process::Child>>)
+    [toolchain]
+    rustc = "1.82.0"
+    cargo = "1.82.0"
 
-  New commands
-    #[tauri::command]
-    async fn start_lsp(app: AppHandle) -> Result<u16, String>
-    // Spawns rust-analyzer with stdio transport, returns nothing
-    // (communication happens over stdin/stdout of the child process)
+  Native project:
+    [project]
+    type = "native"
+    created_with = "0.2"
 
-    #[tauri::command]
-    async fn stop_lsp(app: AppHandle) -> Result<(), String>
+    [paths]
+    src = "."
+    content = "content"
 
-  Approach — LSP proxy over Tauri IPC
-    - Backend spawns `rust-analyzer` as a child process with stdio pipes
-    - Frontend sends LSP JSON-RPC messages via a Tauri command:
-        send_lsp_message(message: String) -> Result<(), String>
-    - Backend forwards them to rust-analyzer's stdin
-    - Backend reads rust-analyzer's stdout in a loop and emits events:
-        app.emit("lsp:message", json_string)
-    - Frontend listens for "lsp:message" and routes responses to Monaco
+    [toolchain]
+    clang = "Apple clang 16.0.0"
+    zig = "0.14.0"
 
-  Frontend (Editor.svelte / new lsp-client.ts)
+  The [toolchain] section is informational — populated at creation time with
+  detected versions. Not used for dispatch.
 
-    Monaco LSP integration via monaco-languageclient (or manual):
-    - Register a CompletionItemProvider that sends textDocument/completion
-    - Register a HoverProvider that sends textDocument/hover
-    - Register a SignatureHelpProvider that sends textDocument/signatureHelp
-    - Handle textDocument/publishDiagnostics from the server
-      (these replace the cargo-check squiggles when LSP is active)
+  The [paths] section tells the app where to find source files and content.
+  The app reads these paths instead of hardcoding src/bin/ or project root.
+  In a future release, users could point content elsewhere or organize source
+  files into subfolders.
 
-    Lifecycle:
-    - On project load: invoke('start_lsp')
-    - On project switch: invoke('stop_lsp') then invoke('start_lsp')
-    - On app close: invoke('stop_lsp')
-    - textDocument/didOpen sent when a tab is opened
-    - textDocument/didChange sent on every edit (full sync mode)
-    - textDocument/didClose sent when a tab is closed
+Project type detection
+  Primary: read rustic.toml → project.type
+  Fallback (legacy projects without rustic.toml): if Cargo.toml exists → "rust",
+  otherwise infer from file extensions present.
+  The app writes rustic.toml on project creation. Legacy projects get one
+  auto-generated on first load.
 
-  Fallback
-    If rust-analyzer is not installed, Feature 1 (cargo check) remains the
-    diagnostic source. Show a non-blocking toast: "Install rust-analyzer for
-    autocomplete: rustup component add rust-analyzer"
+Rust project structure
+  projects/<name>/
+  ├── rustic.toml
+  ├── Cargo.toml
+  ├── src/bin/
+  │   └── <playground>.rs
+  └── content/
 
-  Capability permission
-    None needed — this uses child process spawning (already permitted) and
-    app.emit() (already permitted via core:event:default).
+Native project structure
+  projects/<name>/
+  ├── rustic.toml
+  ├── <playground>.c
+  ├── <playground>.cpp
+  ├── <playground>.zig
+  ├── <playground>.rs
+  └── content/
 
----
+  No src/bin/ nesting. No Cargo.toml. Source files live directly in the
+  project root (as declared by paths.src = "."). The content/ folder path
+  comes from paths.content.
 
-Feature 3 — Themes (Dark / Light / System / Rust)
-──────────────────────────────────────────────────
+Supported extensions and compilers
+  .c    → clang <file> -o <out> && <out>
+  .cpp  → clang++ <file> -o <out> -std=c++17 && <out>
+  .zig  → zig run <file>
+  .rs   → rustc <file> -o <out> && <out>
 
-Problem
-  The app is dark-only. Users working in bright environments or preferring
-  light themes have no option.
+  Output binaries go to: projects/<name>/target/runs/<stem>
+  (target/ is already gitignored and skipped by duplicate_project)
 
-Goal
-  Add a theme toggle: System (follows macOS appearance), Dark, Light, Rust.
-  The theme applies to both the Monaco editor and the surrounding app chrome.
-  Default: "system".
-
-Settings change
-  Add to Settings struct and config.json:
-    theme: "system" | "dark" | "light" | "rust"    // default: "system"
-
-  Settings panel has a 4-button segmented control: System | Light | Dark | Rust
-
-Monaco themes (all defined in Editor.svelte)
-  - playground-dark — macOS dark (#1c1c1e bg, blue accents, Xcode-inspired tokens)
-  - playground-light — macOS light (#ffffff bg, blue accents, light Xcode tokens)
-  - playground-rust — warm earthy Rust-inspired palette:
-      Background: #1a1210 (deep espresso)
-      Foreground: #e8d5c4 (warm parchment)
-      Keywords: #ce422b (Rust red), Types: #d4a03c (oxidized gold)
-      Strings: #6b9e3c (patina green), Numbers: #c87832 (copper)
-      Macros: #e05a3a (bright rust), Attributes: #b07840 (bronze)
-
-App chrome (CSS — app.css)
-  - Three theme classes: .theme-dark, .theme-light, .theme-rust
-  - Applied via class on <body>, removed/added in $effect
-  - "system" listens to prefers-color-scheme media query
-
-Frontend (App.svelte)
-  - resolvedTheme: system→dark/light based on OS, or direct dark/light/rust
-  - monacoTheme: rust→playground-rust, light→playground-light, else playground-dark
-  - Editor $effect watches theme and calls monaco.editor.setTheme()
+Playground naming for native projects
+  Names include the extension: `hello.c`, `vectors.cpp`, `fizzbuzz.zig`.
+  Validation: `<stem>` follows the same `[a-z][a-z0-9_]*` rule. Extension must
+  be one of the supported set.
 
 ---
 
-Feature 4 — Export / Share
-──────────────────────────
+Feature 1 — Project Type Selection
 
-Problem
-  Users can't take their playground code outside the app. No way to share
-  a working example or move to a real Cargo project.
+New project dialog
+  When creating a new project, the user picks a type:
+  - **Rust** — "Full Cargo workspace with dependencies and live checking"
+  - **Native** — "Loose source files — C, C++, Zig, Rust (rustc). No build system."
 
-Goal
-  Two export options from a context menu or toolbar action on any playground:
+  The choice is permanent for the project (no conversion between types).
 
-  A) Export as standalone Cargo project
-     Creates a self-contained directory with:
-       my_playground/
-       ├── Cargo.toml          (name = playground name, deps from project)
-       ├── src/
-       │   └── main.rs         (the playground code)
-       └── content/            (if playground has content files)
+Backend
+  new_project gains an optional `project_type` parameter (default: "rust").
 
-     Uses a native save dialog to pick the destination folder.
-     The exported project compiles and runs with `cargo run` independently.
+  For native projects:
+  - Creates rustic.toml with type = "native", paths.src = ".", paths.content = "content"
+  - Populates [toolchain] with detected clang/zig versions
+  - Creates content/ directory
+  - Seeds a hello.c starter file:
+      #include <stdio.h>
+      int main() {
+          printf("Hello from hello!\n");
+          return 0;
+      }
+  - Does NOT create Cargo.toml or src/bin/
 
-  B) Copy to clipboard (for sharing)
-     Copies the playground source code to the system clipboard.
-     One-click from the context menu. No dialog needed.
+  For rust projects:
+  - Creates rustic.toml with type = "rust", paths.src = "src/bin", paths.content = "content"
+  - Populates [toolchain] with detected rustc/cargo versions
+  - Existing behavior (Cargo.toml + src/bin/hello.rs + content/)
 
-Backend (lib.rs)
+  New command: get_project_type(name) → "rust" | "native"
+  - Reads rustic.toml → project.type
+  - Fallback: Cargo.toml present → "rust", otherwise infer from files
 
-  New command
-    #[tauri::command]
-    async fn export_playground(
-        name: String,
-        dest: String,       // destination directory path
-        app: AppHandle,
-    ) -> Result<String, String>
+  New command: get_project_manifest(name) → RusticManifest struct
+  - Returns the full parsed rustic.toml (type, paths, toolchain)
+  - The frontend uses paths.src and paths.content for all file operations
 
-    - Creates dest/<name>/ directory structure
-    - Writes Cargo.toml with only the dependencies used in the playground
-      (parse `use` statements to filter, or just copy all project deps —
-       simpler and avoids false negatives)
-    - Copies src/bin/<name>.rs → src/main.rs
-    - Copies content files if they exist
-    - Returns the path to the created directory
-
-  Clipboard is handled entirely in the frontend (navigator.clipboard.writeText).
+  Legacy project migration:
+  - On first load of a project without rustic.toml, auto-generate one
+    based on detected structure (Cargo.toml → rust, otherwise native)
 
 Frontend
-
-  Toolbar: add an export/share icon button (right side, near layout toggle)
-  - Click shows a small dropdown:
-      "Export as Cargo Project..." → opens save dialog, then invoke('export_playground')
-      "Copy Code to Clipboard"    → navigator.clipboard.writeText(currentCode)
-  - Context menu on playground in sidebar: same two options
-  - Toast confirmation after each action
-
-  Capability permission
-    dialog:default (save dialog) — check if already in capabilities, add if not.
+  NewProjectModal (or inline in sidebar) shows the type picker. Once selected,
+  the project is created with the appropriate type.
 
 ---
 
-Feature 5 — Rust Book Examples Polish
-──────────────────────────────────────
+Feature 2 — Native Project: Playground CRUD
 
-Problem
-  The Rust Book examples (20 chapters) were written in one pass. Some chapters
-  may have gaps, unclear comments, or could better demonstrate the concept.
+list_playgrounds (native)
+  Reads project root directory. Returns files matching supported extensions
+  (.c, .cpp, .zig, .rs). Sorted alphabetically.
 
-Goal
-  Review and polish all 20 chapters in book_chapters.rs:
-  - Ensure every playground compiles and runs without errors
-  - Improve comments to be clearer and more educational
-  - Add missing concepts where a chapter's key idea isn't demonstrated
-  - Ensure consistent style across all chapters
-  - Verify content files (attribution.md) are present and correct
+  The existing list_playgrounds reads from src/bin/ and strips .rs — the native
+  variant reads from the project root and preserves the full filename (stem +
+  extension), since extension matters.
 
-  This is a quality pass, not a feature — no new backend/frontend code.
+new_playground (native)
+  Takes a name WITH extension (e.g., "hello.c"). Validates stem, validates
+  extension is supported. Writes a language-appropriate starter template:
 
-Approach
-  - Read through each chapter's playgrounds in book_chapters.rs
-  - For each: verify it compiles, check the comments are helpful, ensure the
-    key Rust Book concept is actually demonstrated
-  - Fix any issues found
-  - Run cargo fmt + cargo clippy on the output
+  .c:
+    #include <stdio.h>
+    int main() {
+        printf("Hello from <name>!\n");
+        return 0;
+    }
+
+  .cpp:
+    #include <iostream>
+    int main() {
+        std::cout << "Hello from <name>!" << std::endl;
+        return 0;
+    }
+
+  .zig:
+    const std = @import("std");
+    pub fn main() !void {
+        const stdout = std.io.getStdWriter();
+        try stdout.print("Hello from <name>!\n", .{});
+    }
+
+  .rs:
+    fn main() {
+        println!("Hello from <name>!");
+    }
+
+load_playground / save_playground (native)
+  Same as Rust, but path is project_root/<name_with_ext> instead of
+  src/bin/<name>.rs.
+
+rename_playground / delete_playground / duplicate_playground (native)
+  Same semantics, different base path. Rename must preserve or allow changing
+  the extension.
+
+Implementation approach
+  All playground commands resolve paths through rustic.toml's [paths] section:
+
+  - Read paths.src from the manifest to find the source directory
+  - Rust: workspace/<paths.src>/<name>.rs  (e.g., workspace/src/bin/hello.rs)
+  - Native: workspace/<paths.src>/<name>   (e.g., workspace/hello.c)
+  - Content: workspace/<paths.content>/    (e.g., workspace/content/)
+
+  This means the backend never hardcodes src/bin/ or assumes project root.
+  The path comes from the manifest. Existing safe_playground_path is updated
+  to read the manifest and resolve accordingly.
+
+---
+
+Feature 3 — Native Project: Compile and Run
+
+run_playground (native)
+  Detects language from file extension. Builds and runs:
+
+  For compiled languages (C, C++, Rust):
+    1. Compile: clang/clang++/rustc <source> -o <target_dir>/<stem>
+    2. If compilation fails, stream stderr and send { stream: "complete", code: 1 }
+    3. If compilation succeeds, run the binary and stream stdout/stderr
+    4. Send { stream: "complete", code: <exit_code> }
+
+  For Zig:
+    1. Run: zig run <source>
+    2. Stream stdout/stderr
+    3. Send { stream: "complete", code: <exit_code> }
+
+  Compiler output (errors, warnings) goes to stderr stream — the frontend
+  already displays stderr in red, so compilation errors show naturally.
+
+  The output channel sends the same JSON shape as today:
+    { "stream": "stdout" | "stderr" | "complete", "line": "...", "code": N }
+
+  Process management:
+  - Same process_group(0) + SIGTERM/SIGKILL pattern
+  - Same RunningProcess state for kill_playground
+  - Same StdinHandle for send_stdin (interactive input works)
+  - PLAYGROUND_CONTENT env var set the same way
+
+  Compiler paths:
+  - clang / clang++: use `xcrun --find clang` to resolve (works even without
+    full Xcode install, just Command Line Tools). Fall back to /usr/bin/clang.
+  - zig: check ~/.local/bin/zig, then PATH via `which zig`
+  - rustc: sibling of cargo — derive from settings cargo_path
+    (e.g., ~/.cargo/bin/cargo → ~/.cargo/bin/rustc)
+
+kill_playground
+  Unchanged — works for any child process.
+
+check_playground (native)
+  Not supported for native projects. The frontend should not trigger live
+  checking for native project tabs. (Future: clang -fsyntax-only, zig check,
+  rustc --edition 2021 -- but not in v0.2.)
+
+---
+
+Feature 4 — New Playground Dialog (Native)
+
+When creating a playground in a native project, the dialog must include a
+language picker:
+
+  Name: [____________]
+  Language: [C] [C++] [Zig] [Rust]
+
+  The language selection determines the file extension and starter template.
+  Default language: C (since it's the most accessible).
+
+For Rust projects, the dialog remains unchanged (no language picker — always .rs).
+
+---
+
+Feature 5 — Sidebar Adaptation
+
+Rust projects (unchanged)
+  Sidebar shows:
+  - Cargo.toml (always at top)
+  - Playgrounds (src/bin/*.rs, displayed without .rs extension)
+  - Content files
+
+Native projects
+  Sidebar shows:
+  - Playgrounds grouped or sorted by extension, displayed WITH extension:
+      hello.c
+      vectors.cpp
+      fizzbuzz.zig
+      ownership.rs
+  - Content files
+
+  No Cargo.toml entry. No "Dependencies" section.
+
+  Context menu on playground: Run, Rename, Duplicate, Delete (same as Rust
+  minus dependency-related items).
+
+---
+
+Feature 6 — Monaco Editor Language Detection
+
+Set Monaco language mode based on file extension:
+  .c    → "c"
+  .cpp  → "cpp"
+  .zig  → "zig"          (Monaco has basic Zig support via monarch tokenizer)
+  .rs   → "rust"
+
+Currently hardcoded to "rust" — change to detect from the active tab's
+filename/extension.
+
+For Rust projects, all playground tabs are still "rust". Cargo.toml is "toml".
+For native projects, each tab gets its language from its extension.
+
+---
+
+Feature 7 — Setup Wizard Updates
+
+The setup wizard currently checks for Rust toolchain only. For v0.2:
+
+Toolchain detection
+  - Rust: cargo, rustc, rustfmt, clippy (existing)
+  - C/C++: clang (check via `xcrun --find clang` or `which clang`)
+  - Zig: zig (check via `which zig`)
+
+Display in wizard
+  Rust tools:    ✅ cargo, rustc, rustfmt, clippy
+  C/C++ tools:   ✅ clang (via Xcode Command Line Tools)
+  Zig:           ❌ not found — install from ziglang.org
+
+  Rust is required for Rust projects. C/C++ and Zig are optional — the user
+  can still create native projects; they'll just get an error if they try to
+  run a language whose compiler isn't installed.
+
+  The wizard does NOT block on missing Zig. It shows the status and a link
+  to ziglang.org for installation.
+
+---
+
+Feature 8 — Menu and Keyboard Shortcuts
+
+Existing Rust-specific menu items should be aware of project type:
+
+  - "Add Dependency..." — only shown for Rust projects
+  - "Export as Cargo Project..." — only shown for Rust projects
+  - "Load Rust Book Examples..." — only shown for Rust projects
+  - Run (⌘R), Stop (⌘.), New Playground (⌘N) — work for both types
+  - Copy Code (⌘⇧C) — works for both types
+
+rebuild_menu receives the project type and conditionally includes/excludes
+Rust-specific items.
+
+---
+
+Feature 9 — Backwards Compatibility
+
+Existing projects
+  Legacy projects have no rustic.toml. On first load, the app auto-generates
+  one by detecting structure:
+  - Cargo.toml present → type = "rust", paths.src = "src/bin", paths.content = "content"
+  - Otherwise → type = "native", paths.src = ".", paths.content = "content"
+  Toolchain versions populated from currently installed tools.
+
+Config
+  No changes to config.json structure. The active_project field works the
+  same way regardless of project type.
+
+Export
+  Export is Rust-only (produces a Cargo project). For native projects,
+  "Copy Code to Clipboard" is available; full export is not applicable
+  (single files don't need a project wrapper).
+
+---
+
+Scope Boundaries — What v0.2 Does NOT Include
+
+  - No dependency management for native projects
+  - No live error checking for native projects (future: clang -fsyntax-only)
+  - No LSP / autocomplete for C/C++/Zig
+  - No build systems (CMake, Makefiles, zig build)
+  - No multi-file compilation (each source file is standalone)
+  - No header files for C/C++ (beyond system headers)
+  - No Zig auto-installer in the wizard (just detection + link)
+  - No conversion between project types
+  - No templates for native projects (just starter code per language)
+  - No book chapters for C/C++/Zig
 
 ---
 
 Acceptance Criteria
 
-Feature 1 — Live Error Checking
-  [x] Red squiggles appear ~500 ms after typing stops on a syntax error
-  [x] Squiggle hover shows the compiler error message
-  [x] Squiggles clear when the error is fixed
-  [x] No squiggles on Cargo.toml or content file tabs
-  [x] Running cargo run while a check is in progress works (separate target dir)
-  [x] Starting a Run cancels any in-flight check
+Feature 1 — Project Type Selection
+  [ ] New project dialog offers Rust and Native type choices
+  [ ] Rust project creates rustic.toml + Cargo.toml + src/bin/ structure
+  [ ] Native project creates rustic.toml + content/ + hello.c starter
+  [ ] rustic.toml contains correct [project], [paths], and [toolchain] sections
+  [ ] get_project_type returns correct type for new and existing projects
+  [ ] Legacy projects without rustic.toml get one auto-generated on first load
 
-Feature 2 — Autocomplete / LSP
-  [ ] Completions appear when typing (e.g. after `std::` or `.`)
-  [ ] Hover over a symbol shows type info / docs
-  [ ] Signature help shows parameter hints inside function calls
-  [ ] LSP diagnostics appear as squiggles (replaces cargo-check when active)
-  [ ] If rust-analyzer is not installed, falls back to cargo-check gracefully
-  [ ] Toast shown suggesting rust-analyzer install if missing
-  [ ] LSP process is cleaned up on project switch and app close
+Feature 2 — Native Playground CRUD
+  [ ] list_playgrounds reads from paths.src in rustic.toml
+  [ ] list_playgrounds returns .c, .cpp, .zig, .rs files for native projects
+  [ ] new_playground creates file with language-appropriate template
+  [ ] load/save/rename/delete/duplicate work for native playgrounds
+  [ ] All path resolution uses rustic.toml [paths], never hardcoded
+  [ ] Stem validation enforced (same naming rules as Rust playgrounds)
 
-Feature 3 — Themes
-  [x] "System" theme follows macOS light/dark appearance automatically
-  [x] "Dark" theme matches current appearance (no regression)
-  [x] "Light" theme has readable contrast and consistent styling
-  [x] "Rust" theme — warm earthy palette (espresso, parchment, Rust-red accents)
-  [x] Theme change applies immediately to editor AND app chrome
-  [x] Theme preference persists across restarts
-  [x] Theme setting accessible from Settings panel (Cmd+,)
-  [x] Live theme preview — switches instantly on click, reverts on cancel
-  [x] Light theme stderr/compiler output uses darker red (#d42020) for readability
+Feature 3 — Compile and Run
+  [ ] .c files compile and run via clang
+  [ ] .cpp files compile and run via clang++ with -std=c++17
+  [ ] .zig files run via zig run
+  [ ] .rs files compile and run via rustc
+  [ ] Compilation errors stream to stderr (shown in red in output panel)
+  [ ] Process kill works (SIGTERM + SIGKILL on process group)
+  [ ] stdin input works for native playgrounds
+  [ ] PLAYGROUND_CONTENT env var is set
 
-Feature 4 — Export / Share
-  [x] "Export as Cargo Project" creates a working standalone project
-  [x] Exported project compiles with `cargo run` independently
-  [x] Content files are included in the export if they exist
-  [x] "Copy to Clipboard" copies the full source code
-  [x] Both actions show a toast confirmation
-  [x] Export uses a native save dialog for destination
+Feature 4 — New Playground Dialog
+  [ ] Native projects show a language picker (C, C++, Zig, Rust)
+  [ ] Rust projects show no language picker (always .rs)
+  [ ] Selected language determines file extension and starter template
 
-Feature 5 — Rust Book Polish
-  [x] All 20 chapters compile without errors
-  [x] Comments are clear and educational
-  [x] Key concepts per chapter are demonstrated
-  [x] Consistent code style across chapters
-  [x] attribution.md present in each chapter
+Feature 5 — Sidebar
+  [ ] Native projects show files with extensions (hello.c, not hello)
+  [ ] No Cargo.toml entry for native projects
+  [ ] Context menus work correctly for native playgrounds
 
-Bug Fixes (post-feature)
-  [x] Stdin input appears immediately when binary starts (detect cargo "Running" stderr line)
-  [x] Light theme compiler output readability — stderr uses theme-aware var(--red)
+Feature 6 — Monaco Language Detection
+  [ ] .c files get C syntax highlighting
+  [ ] .cpp files get C++ syntax highlighting
+  [ ] .zig files get Zig syntax highlighting
+  [ ] .rs files get Rust syntax highlighting (both project types)
+  [ ] Cargo.toml still gets TOML highlighting
+
+Feature 7 — Setup Wizard
+  [ ] Shows clang status (found / not found)
+  [ ] Shows zig status (found / not found)
+  [ ] Links to ziglang.org for Zig installation
+  [ ] Does not block on missing Zig or clang
+
+Feature 8 — Menus
+  [ ] Rust-specific menu items hidden for native projects
+  [ ] Run/Stop/New/Copy work for both project types
+  [ ] Menu rebuilds correctly on project switch between types
+
+Feature 9 — Backwards Compatibility
+  [ ] Legacy projects without rustic.toml get one auto-generated on first load
+  [ ] Auto-detection correctly identifies Rust projects (Cargo.toml present)
+  [ ] All existing Rust projects work without manual changes
 
 ---
 
 Implementation Order (suggested)
 
-  1. Feature 3  (Themes)           — CSS + Monaco theme, no backend logic, big visual impact
-  2. Feature 1  (Live checking)    — backend command + frontend debounce, foundational for F2
-  3. Feature 4  (Export/share)     — backend command + dialog, standalone feature
-  4. Feature 5  (Book polish)      — review pass, no new architecture
-  5. Feature 2  (LSP/autocomplete) — most complex: child process management, LSP protocol,
-                                     Monaco providers. Build last since it depends on the
-                                     project already being stable.
+  1. Data model     — rustic.toml, get_project_type, new_project with type
+  2. Playground CRUD — native path helpers, list/new/load/save/rename/delete
+  3. Compile & run  — native run_playground dispatch, compiler resolution
+  4. Frontend       — sidebar, new playground dialog, language picker
+  5. Monaco         — language detection by extension
+  6. Wizard         — clang/zig detection
+  7. Menus          — conditional items based on project type
+  8. Polish         — test all language combinations, edge cases
