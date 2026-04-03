@@ -9,6 +9,26 @@ Active specs live in specifications.md. Completed specs live in archive/.
 RELEASED
 ────────
 
+v0.2 — Native C/C++ Projects
+  Status: complete — released 2026-04-03
+
+  Shipped:
+  1. rustic.toml project manifest (type, paths, build flags, toolchain)
+  2. Project type selection: Rust vs Native (C/C++) in new project dialog
+  3. Native playground CRUD (list/new/load/save/rename/delete/duplicate)
+  4. Compile and run: clang/clang++ dispatch by extension, stdin, process kill
+  5. Compiler flags UI: sidebar panel with C/C++ flag inputs, saved to rustic.toml
+  6. New playground dialog: language tabs (C/C++), 8 templates each
+  7. Sidebar: file badges (C/C++ in sea green), compiler flags panel
+  8. Monaco language detection (.c → "c", .cpp → "cpp")
+  9. Conditional menus: K&R book for native, Rust book for Rust
+  10. Toolchain wizard: tabbed Rust-first layout with C/C++ status tab
+  11. Native export: POSIX shell runner, Makefile, flags.sh, README
+  12. K&R C Book examples (8 chapters, 16 playgrounds)
+  13. Sea green theme (Monaco + app chrome)
+  14. Settings: clang version display with install instructions
+  15. Rust export: added README for consistency
+
 v0.1.8.1 — Production Testing Bugfix Release
   Status: complete — released 2026-04-03
   Production tested by Jagmeet Chawla (3 rounds: clean+toolchain, clean+no-toolchain, upgrade)
@@ -77,76 +97,6 @@ v0.1.9 — Rename and Cleanup
   Renamed from playground-rs to rustic-playground. Cleaned up src/bin.
 
 ---
-
-IN PROGRESS
-───────────
-
-v0.2 — Native C/C++ Projects
-  Status: in progress — 2026-04-03
-  See specs/specifications.md
-
-  Overview:
-  Adds a "native" project type alongside existing Rust (Cargo) projects.
-  Native projects hold loose C and C++ source files compiled directly with
-  clang/clang++. No build system — compiler flags stored in rustic.toml.
-  Default flags include -lsqlite3 (macOS ships sqlite3).
-
-  Features:
-  1. rustic.toml project manifest
-     - Every project gets a rustic.toml at its root
-     - [project] — type ("rust" | "native"), created_with version
-     - [paths] — src directory, content directory
-     - [build] — cflags and cxxflags arrays (defaults: -lsqlite3, -std=c++17)
-     - [toolchain] — informational snapshot of compiler versions
-     - Legacy projects auto-generate rustic.toml on first load
-
-  2. Project type selection
-     - New project dialog: Rust vs Native (C/C++)
-     - Rust: full Cargo workspace with deps and live checking
-     - Native: C/C++ files compiled with clang, configurable flags
-
-  3. Native project playground CRUD
-     - Source files in project root (paths.src = ".")
-     - Files named with extension: hello.c, vectors.cpp
-     - Stem validation: same [a-z][a-z0-9_]* rule as Rust playgrounds
-     - list/new/load/save/rename/delete/duplicate via rustic.toml paths
-
-  4. Compile and run (native)
-     - .c   → clang <file> -o <out> [cflags] && <out>
-     - .cpp → clang++ <file> -o <out> [cxxflags] && <out>
-     - Compiler flags from [build] in rustic.toml
-     - Output binaries: target/runs/<stem>
-     - Same process group kill, stdin, PLAYGROUND_CONTENT as Rust projects
-     - Compiler path: clang via xcrun, fallback /usr/bin/clang
-
-  5. Compiler flags UI
-     - Sidebar panel for native projects: C flags + C++ flags text inputs
-     - Saved to rustic.toml [build] section on change
-     - Homebrew libraries: user adds -I/-L/-l flags manually
-
-  6. New playground dialog (native)
-     - Language picker: C, C++
-     - Language-appropriate starter template per selection
-
-  7. Sidebar adaptation
-     - Native: filenames with extensions, compiler flags panel, no Cargo.toml
-     - Rust: unchanged
-
-  8. Monaco language detection
-     - Editor language by file extension: .c → "c", .cpp → "cpp"
-
-  9. Conditional menus
-     - Export Project and Rust Book disabled for native projects
-     - Run/Stop/New/Copy work for both types
-     - Menu rebuilds on project switch
-
-  Not in scope for v0.2:
-  - No live error checking for native projects
-  - No LSP / autocomplete for C/C++
-  - No build systems (CMake, Makefiles)
-  - No multi-file compilation (each source file is standalone)
-  - No header files beyond system headers
-  - No book chapters for C/C++
 
 ---
 
