@@ -1,8 +1,8 @@
 SPECIFICATION
 
 Status
-- Version: v0.1.8
-- Date: 2026-04-02
+- Version: v0.1.8.1
+- Date: 2026-04-03
 - Owner: Jagmeet Chawla
 
 ---
@@ -11,10 +11,18 @@ Product
 
 What
   A native macOS desktop app — built with Tauri — that wraps the existing Rust playground
-  runner in a Swift Playgrounds-inspired UI. v0.1.8 is the final feature release before
-  shifting focus to distribution (website, DMG, wiki, announcements).
+  runner in a Swift Playgrounds-inspired UI. v0.1.8.1 is a production testing bugfix release.
+  Focus now shifts to distribution (website, DMG, wiki, announcements).
 
-  Features delivered:
+  v0.1.8.1 fixes (from production testing):
+  1. Toolchain detection — use absolute paths for sibling tools (rustup, rustc, rustfmt, clippy) — DONE
+  2. Serde JSON template — dep not added to Cargo.toml (quoted version string) — DONE
+  3. Stop-and-run confirmation — prompt before killing another playground's process — DONE
+  4. Menu items — Copy Code to Clipboard, Export Project, Rename Playground — DONE
+  5. Menu sync — grey out Copy Code / Rename / Delete when no playground tab active — DONE
+  6. Wizard — added rustup.rs link for install guidance — DONE
+
+  v0.1.8 features (previous release):
   1. Live error checking (cargo check squiggles) — DONE
   2. Autocomplete / LSP — SKIPPED (decided not to include)
   3. Themes (dark / light / system / rust) — DONE

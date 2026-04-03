@@ -77,6 +77,17 @@
   )
   let isRunning = $derived(currentStatus === 'compiling' || currentStatus === 'running')
 
+  // Check if any playground (not just the active tab) has a running process
+  let runningPlayground = $derived.by(() => {
+    for (const [name, runs] of Object.entries(tabRuns)) {
+      const last = runs.at(-1)
+      if (last && (last.status === 'compiling' || last.status === 'running')) {
+        return name
+      }
+    }
+    return null
+  })
+
   // ── Toolchain + Cargo.toml ────────────────────────────────────────────────────
   let cargoToml:     string                             = $state('')
   let toolchainInfo: { path: string; version: string } = $state({ path: '', version: '' })
@@ -120,6 +131,8 @@
       : 'playground-dark'
   )
   let deletePending:   string | null = $state(null)
+  let renameTarget:    string | null = $state(null)
+  let stopAndRunPending: string | null = $state(null)  // name of playground to run after stopping current
   let showAddDep:      boolean       = $state(false)
   let depName:         string        = $state('')
   let depVersion:      string        = $state('')
@@ -274,10 +287,13 @@
         listen('menu:rename-project', () => { switcherPendingMode = 'rename' }),
         listen('menu:delete-project', () => { switcherPendingMode = 'delete-confirm' }),
         listen<string>('menu:switch-project', (e) => switchProject(e.payload)),
+        listen('menu:copy-code',         () => copyCodeToClipboard()),
+        listen('menu:export-project',    () => exportProject()),
         listen('menu:settings',          () => { showSettings = true }),
         listen('menu:help',              () => { showHelp  = true }),
         listen('menu:about',             () => { showAbout = true }),
         listen('menu:rust-book',         () => seedRustBook()),
+        listen('menu:rename-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground') renameTarget = activeTab }),
         listen('menu:delete-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground') deletePending = activeTab }),
       ])
     } catch (e) {
@@ -304,12 +320,14 @@
     saveWindowState()
   })
 
-  // Rebuild the native menu whenever projects or playground count changes
+  // Rebuild the native menu whenever projects, playground count, or active tab changes
+  let hasActivePlayground = $derived(!!activeTab && currentTabMeta.type === 'playground')
   $effect(() => {
     invoke('rebuild_menu', {
       projects,
       active: activeProject,
       playgroundCount: playgrounds.length,
+      hasActivePlayground,
     }).catch(console.error)
   })
 
@@ -335,7 +353,7 @@
   }
 
   function syncMenuProjects() {
-    invoke('rebuild_menu', { projects, active: activeProject, playgroundCount: playgrounds.length }).catch(console.error)
+    invoke('rebuild_menu', { projects, active: activeProject, playgroundCount: playgrounds.length, hasActivePlayground }).catch(console.error)
   }
 
   async function switchProject(name: string) {
@@ -543,6 +561,13 @@
     if (!activeTab || isRunning) return
     const meta = tabMeta[activeTab] ?? { type: 'playground' }
     if (meta.type !== 'playground') return
+
+    // If another playground is running, ask before killing it
+    if (runningPlayground && runningPlayground !== activeTab) {
+      stopAndRunPending = activeTab
+      return
+    }
+
     cancelCheck()
     const name = activeTab
     await save()
@@ -615,6 +640,19 @@
     invoke('kill_playground').catch(console.error)
   }
 
+  async function confirmStopAndRun() {
+    const target = stopAndRunPending
+    stopAndRunPending = null
+    if (!target) return
+    await invoke('kill_playground')
+    // Brief delay to let the process group fully terminate
+    await new Promise(r => setTimeout(r, 300))
+    // Switch to the target tab and run it
+    activeTab = target
+    await tick()
+    run()
+  }
+
   // ── Export / Share ───────────────────────────────────────────────────────────
 
   async function exportProject() {
@@ -630,7 +668,7 @@
   }
 
   async function copyCodeToClipboard() {
-    if (!activeTab) return
+    if (!activeTab || tabMeta[activeTab]?.type !== 'playground') return
     try {
       await navigator.clipboard.writeText(currentCode)
       showToast('Copied to clipboard')
@@ -916,7 +954,7 @@
         {#if showExportMenu}
           <div class="export-dropdown" role="menu">
             <button class="export-item" onclick={() => { showExportMenu = false; exportProject() }}>Export Project…</button>
-            {#if activeTab}
+            {#if activeTab && tabMeta[activeTab]?.type === 'playground'}
               <button class="export-item" onclick={() => { showExportMenu = false; copyCodeToClipboard() }}>Copy Code to Clipboard</button>
             {/if}
           </div>
@@ -972,6 +1010,7 @@
           {dirtyTabs}
           {cargoToml}
           onNewPlayground={requestNewPlayground}
+          bind:renameTarget
           on:select={(e) => openTab(e.detail, { type: 'playground' })}
           on:rename={onRename}
           on:delete={onDelete}
@@ -1140,6 +1179,17 @@
     <div class="confirm-actions">
       <button class="confirm-cancel" onclick={() => deletePending = null}>Cancel</button>
       <button class="confirm-delete" onclick={confirmDelete}>Delete</button>
+    </div>
+  </div>
+{/if}
+
+{#if stopAndRunPending}
+  <div class="confirm-backdrop" onclick={() => stopAndRunPending = null} aria-hidden="true"></div>
+  <div class="confirm-dialog" role="alertdialog" aria-modal="true">
+    <p class="confirm-msg"><strong>{runningPlayground}</strong> is running.<br><span class="confirm-sub">Stop it and run <strong>{stopAndRunPending}</strong> instead?</span></p>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" onclick={() => stopAndRunPending = null}>No</button>
+      <button class="confirm-proceed" onclick={confirmStopAndRun}>Yes, stop and run</button>
     </div>
   </div>
 {/if}
@@ -1498,4 +1548,10 @@
     color: #ff7070;
   }
   .confirm-delete:hover { background: rgba(220, 60, 60, 0.38); }
+  .confirm-proceed {
+    font-size: 12px; padding: 5px 12px; border-radius: 6px;
+    background: var(--accent); border: 1px solid var(--accent);
+    color: #fff;
+  }
+  .confirm-proceed:hover { background: var(--accent-hover); }
 </style>

@@ -9,7 +9,8 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     handle: &impl tauri::Manager<R>,
     projects: &[String],
     active: &str,
-    playground_count: usize,
+    _playground_count: usize,
+    has_active_playground: bool,
 ) -> tauri::Result<tauri::menu::Menu<R>> {
     let app_submenu = SubmenuBuilder::new(handle, "Rustic Playground")
         .item(
@@ -54,6 +55,12 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .separator()
         .item(&rename_project_item)
         .item(&delete_project_item)
+        .separator()
+        .item(
+            &MenuItemBuilder::with_id("export_project", "Export Project…")
+                .accelerator("CmdOrCtrl+Shift+E")
+                .build(handle)?,
+        )
         .build()?;
 
     let playground_menu = SubmenuBuilder::new(handle, "Playground")
@@ -76,8 +83,20 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         )
         .separator()
         .item(
+            &MenuItemBuilder::with_id("copy_code", "Copy Code to Clipboard")
+                .accelerator("CmdOrCtrl+Shift+C")
+                .enabled(has_active_playground)
+                .build(handle)?,
+        )
+        .separator()
+        .item(
+            &MenuItemBuilder::with_id("menu_rename_playground", "Rename Playground…")
+                .enabled(has_active_playground)
+                .build(handle)?,
+        )
+        .item(
             &MenuItemBuilder::with_id("menu_delete_playground", "Delete Playground…")
-                .enabled(playground_count > 0)
+                .enabled(has_active_playground)
                 .build(handle)?,
         )
         .build()?;
@@ -136,9 +155,11 @@ pub fn rebuild_menu(
     projects: Vec<String>,
     active: String,
     playground_count: usize,
+    has_active_playground: bool,
     app: AppHandle,
 ) -> Result<(), String> {
-    let menu = build_menu(&app, &projects, &active, playground_count).map_err(|e| e.to_string())?;
+    let menu =
+        build_menu(&app, &projects, &active, playground_count, has_active_playground).map_err(|e| e.to_string())?;
     app.set_menu(menu).map_err(|e| e.to_string())?;
     Ok(())
 }

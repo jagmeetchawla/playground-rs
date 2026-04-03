@@ -116,6 +116,17 @@ Toolchain Detection & Setup
 - If not found: show first-run setup wizard (3-state UI)
 - All cargo invocations use the resolved absolute path
 
+Sibling tool resolution (rustup, rustc, rustfmt, cargo-clippy):
+- macOS app bundles launched from /Applications get a minimal PATH that excludes
+  ~/.cargo/bin — bare command names like "rustup" won't resolve
+- Fix: derive the bin directory from the resolved cargo path via .parent(), then
+  resolve sibling tools as absolute paths (e.g. /Users/x/.cargo/bin/rustup)
+- This works regardless of install location — if cargo is at /opt/rust/bin/cargo,
+  siblings resolve to /opt/rust/bin/rustup, etc.
+- Falls back to bare name (PATH lookup) if the absolute path doesn't exist
+- No separate settings for each tool — rustup puts all binaries in the same
+  directory, so the cargo path is the single source of truth
+
 ---
 
 v0 — CLI Runner (archived, see specs/archive/)

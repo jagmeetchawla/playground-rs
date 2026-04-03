@@ -461,7 +461,7 @@ pub fn run() {
             };
             let active_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
             // On startup we don't know playground count yet; frontend will call rebuild_menu shortly
-            let menu = menu::build_menu(app.handle(), &initial_projects, &active_name, usize::MAX)?;
+            let menu = menu::build_menu(app.handle(), &initial_projects, &active_name, usize::MAX, false)?;
             app.set_menu(menu)?;
             Ok(())
         })
@@ -481,7 +481,10 @@ pub fn run() {
                 "close_tab" => Some("menu:close-tab"),
                 "run_playground" => Some("menu:run"),
                 "stop_playground" => Some("menu:stop"),
+                "menu_rename_playground" => Some("menu:rename-playground"),
                 "menu_delete_playground" => Some("menu:delete-playground"),
+                "copy_code" => Some("menu:copy-code"),
+                "export_project" => Some("menu:export-project"),
                 "show_settings" => Some("menu:settings"),
                 "show_help" => Some("menu:help"),
                 "show_about" => Some("menu:about"),

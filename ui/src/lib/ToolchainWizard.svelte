@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
+  import { open as shellOpen } from '@tauri-apps/plugin-shell'
 
   let {
     onclose,
@@ -179,6 +180,7 @@
           <p class="install-text">Install Rust using the official installer:</p>
           <code class="install-cmd">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code>
           <p class="install-hint">Run this in Terminal, then click "Re-check" below.</p>
+          <p class="install-hint">Or visit <button class="link-btn" onclick={() => shellOpen('https://rustup.rs')}>rustup.rs</button> for more options.</p>
         </div>
       {/if}
 
@@ -391,4 +393,10 @@
     font-size: 11px; color: var(--text-tertiary);
     margin: 8px 0 0 0;
   }
+  .link-btn {
+    background: none; border: none; padding: 0;
+    color: var(--accent); font-size: 11px;
+    text-decoration: underline; cursor: pointer;
+  }
+  .link-btn:hover { filter: brightness(1.2); }
 </style>

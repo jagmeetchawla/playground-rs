@@ -103,9 +103,11 @@ All runtime data lives under:
 
 ## Current Version Status
 
+**v0.1.8.1** — shipped (production testing fixes: toolchain detection on app bundles, serde_json template dep, stop-and-run confirmation dialog, menu items for Copy Code/Export Project/Rename Playground, menu sync with active tab, rustup.rs link in wizard).
+
 **v0.1.8** — shipped (new app icon, Rust theme, live error checking, dark/light/system themes, export, Rust Book polish, backend modularization, 70 unit tests, stdin fix, light theme readability, live theme preview).
 
-After v0.1.8: pause features, ship website, DMG distribution, wiki, announcements.
+After v0.1.8.1: pause features, ship website, DMG distribution, wiki, announcements.
 
 ---
 

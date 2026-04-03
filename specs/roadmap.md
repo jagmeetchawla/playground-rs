@@ -9,6 +9,21 @@ Active specs live in specifications.md. Completed specs live in archive/.
 RELEASED
 ────────
 
+v0.1.8.1 — Production Testing Bugfix Release
+  Status: complete — released 2026-04-03
+  Production tested by Jagmeet Chawla (3 rounds: clean+toolchain, clean+no-toolchain, upgrade)
+
+  Shipped:
+  1. Fix: toolchain detection uses absolute paths for rustup/rustc/rustfmt/clippy (app bundles get minimal PATH)
+  2. Fix: serde_json template dep not added to Cargo.toml (quoted version string bug)
+  3. Stop-and-run confirmation dialog — prompt before killing another playground's process
+  4. Menu: Copy Code to Clipboard (Cmd+Shift+C) in Playground menu
+  5. Menu: Export Project (Cmd+Shift+E) in Project menu
+  6. Menu: Rename Playground in Playground menu
+  7. Menu sync — Copy Code / Rename / Delete greyed out when no playground tab active
+  8. Wizard: added rustup.rs link for install guidance
+  9. Capability: shell:allow-open for external links
+
 v0.1.8 — Final Feature Release (pre-distribution)
   Status: complete — released 2026-04-02
   See specs/archive/ for completed spec
@@ -63,7 +78,7 @@ v0.1.5 — Multiple Projects + Unified Storage
 NEXT
 ────
 
-  After v0.1.8: pause features, build website, DMG distribution, wiki, announcements.
+  After v0.1.8.1: pause features, build website, DMG distribution, wiki, announcements.
 
 
 ---

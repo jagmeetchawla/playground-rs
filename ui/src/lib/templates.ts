@@ -385,7 +385,7 @@ async fn main() {
     description: 'Serialize and deserialize structs',
     deps: [
       { name: 'serde', version: '{ version = "1", features = ["derive"] }' },
-      { name: 'serde_json', version: '"1"' },
+      { name: 'serde_json', version: '1' },
     ],
     code: `use serde::{Deserialize, Serialize};
 

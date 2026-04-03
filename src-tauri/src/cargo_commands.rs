@@ -149,26 +149,9 @@ pub fn get_toolchain_info() -> serde_json::Value {
 pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
     let config = load_config(&app);
 
-    // Check rustup
-    let rustup_installed = std::process::Command::new("rustup")
-        .arg("--version")
-        .output()
-        .ok()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-
-    let rustup_version = if rustup_installed {
-        std::process::Command::new("rustup")
-            .arg("--version")
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| s.trim().to_string())
-    } else {
-        None
-    };
-
-    // Check cargo — use the user's configured path from settings
+    // Resolve cargo and its bin directory for sibling tools.
+    // macOS app bundles get a minimal PATH that excludes ~/.cargo/bin,
+    // so we must use absolute paths for all Rust toolchain binaries.
     let settings = {
         let path = settings_path(&app);
         if path.exists() {
@@ -185,6 +168,42 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
     } else {
         settings.cargo_path.clone()
     };
+    let cargo_dir = std::path::Path::new(&cargo)
+        .parent()
+        .unwrap_or(std::path::Path::new(""))
+        .to_path_buf();
+
+    // Helper: resolve a tool name to an absolute path via the cargo bin dir
+    let tool_path = |name: &str| -> String {
+        let abs = cargo_dir.join(name);
+        if abs.exists() {
+            abs.to_string_lossy().to_string()
+        } else {
+            name.to_string() // fall back to bare name (PATH lookup)
+        }
+    };
+
+    // Check rustup
+    let rustup_bin = tool_path("rustup");
+    let rustup_installed = std::process::Command::new(&rustup_bin)
+        .arg("--version")
+        .output()
+        .ok()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let rustup_version = if rustup_installed {
+        std::process::Command::new(&rustup_bin)
+            .arg("--version")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+    } else {
+        None
+    };
+
+    // Check cargo
     let cargo_output = std::process::Command::new(&cargo)
         .arg("--version")
         .output()
@@ -198,7 +217,8 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         .map(|s| s.trim().to_string());
 
     // Check rustc
-    let rustc_output = std::process::Command::new("rustc")
+    let rustc_bin = tool_path("rustc");
+    let rustc_output = std::process::Command::new(&rustc_bin)
         .arg("--version")
         .output()
         .ok();
@@ -212,7 +232,7 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
 
     // Get active toolchain if rustup is available
     let active_toolchain = if rustup_installed {
-        std::process::Command::new("rustup")
+        std::process::Command::new(&rustup_bin)
             .args(["show", "active-toolchain"])
             .output()
             .ok()
@@ -224,7 +244,7 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
 
     // Get installed toolchains list
     let installed_toolchains: Vec<String> = if rustup_installed {
-        std::process::Command::new("rustup")
+        std::process::Command::new(&rustup_bin)
             .args(["toolchain", "list"])
             .output()
             .ok()
@@ -241,14 +261,14 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
     };
 
     // Check for essential components
-    let has_rustfmt = std::process::Command::new("rustfmt")
+    let has_rustfmt = std::process::Command::new(tool_path("rustfmt"))
         .arg("--version")
         .output()
         .ok()
         .map(|o| o.status.success())
         .unwrap_or(false);
 
-    let has_clippy = std::process::Command::new("cargo-clippy")
+    let has_clippy = std::process::Command::new(tool_path("cargo-clippy"))
         .arg("--version")
         .output()
         .ok()

@@ -211,6 +211,7 @@ See the warning at the top of this file. Additionally:
 
 | Version | Highlights |
 |---|---|
+| v0.1.8.1 | Production testing fixes: toolchain detection on app bundles, serde_json template dep, stop-and-run confirmation, menu items (Copy Code, Export Project, Rename Playground), menu sync with active tab, rustup.rs link in wizard |
 | v0.1.8 | New app icon, Rust theme, live error checking (Monaco markers), dark/light/system themes, project export, Rust Book polish, backend modularized into 6 modules, 70 unit tests, stdin fix, light theme readability fix, live theme preview |
 | v0.1.7 | Settings panel, toolchain setup wizard, dependency manager, 11 playground templates, console improvements (copy, ANSI colors, timestamps) |
 | v0.1.6.3 | Interactive console — stdin support for playgrounds |

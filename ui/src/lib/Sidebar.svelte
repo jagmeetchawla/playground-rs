@@ -11,12 +11,14 @@
     dirtyTabs,
     cargoToml = '',
     onNewPlayground = () => {},
+    renameTarget = $bindable(null),
   }: {
     playgrounds: string[]
     selected: string | null
     dirtyTabs: string[]
     cargoToml: string
     onNewPlayground?: () => void
+    renameTarget?: string | null
   } = $props()
 
   // ── Sidebar tab ───────────────────────────────────────────────────────────────
@@ -34,6 +36,15 @@
       : playgrounds.filter(n => n.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
+
+  // Allow parent to trigger rename mode via the renameTarget prop
+  $effect(() => {
+    if (renameTarget && playgrounds.includes(renameTarget)) {
+      sidebarTab = 'playgrounds'
+      startRename(renameTarget)
+      renameTarget = null
+    }
+  })
 
   function openContext(e: MouseEvent, name: string) {
     e.preventDefault()
