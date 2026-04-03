@@ -87,8 +87,35 @@ pub(crate) fn bin_dir(app: &AppHandle) -> PathBuf {
     workspace_dir(app).join("src").join("bin")
 }
 
+/// Source directory for the active project, read from rustic.toml [paths].src.
+/// Falls back to src/bin for Rust projects without a manifest.
+pub(crate) fn src_dir(app: &AppHandle) -> PathBuf {
+    let workspace = workspace_dir(app);
+    if let Some(manifest) = rustic_manifest::read_manifest(&workspace) {
+        workspace.join(&manifest.paths.src)
+    } else {
+        workspace.join("src").join("bin")
+    }
+}
+
 pub(crate) fn content_dir(app: &AppHandle) -> PathBuf {
     workspace_dir(app).join("content")
+}
+
+/// Content directory read from rustic.toml [paths].content.
+pub(crate) fn manifest_content_dir(app: &AppHandle) -> PathBuf {
+    let workspace = workspace_dir(app);
+    if let Some(manifest) = rustic_manifest::read_manifest(&workspace) {
+        workspace.join(&manifest.paths.content)
+    } else {
+        workspace.join("content")
+    }
+}
+
+/// Get the active project's type from rustic.toml.
+pub(crate) fn active_project_type(app: &AppHandle) -> String {
+    let workspace = workspace_dir(app);
+    rustic_manifest::detect_project_type(&workspace)
 }
 
 pub(crate) fn config_path(app: &AppHandle) -> PathBuf {
@@ -244,6 +271,53 @@ pub(crate) fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBu
         .unwrap_or_else(|| resolved_dir.clone());
     if resolved_parent != resolved_dir {
         return Err(format!("Path traversal detected for name '{}'", name));
+    }
+    Ok(path)
+}
+
+/// Validate a native playground filename: stem must match naming rules, extension must be supported.
+/// Returns (stem, extension) on success.
+pub(crate) fn validate_native_name(filename: &str) -> Result<(String, String), String> {
+    let path = std::path::Path::new(filename);
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| format!("'{}' has no valid stem", filename))?;
+    let ext = path.extension().and_then(|e| e.to_str()).ok_or_else(|| {
+        format!(
+            "'{}' has no extension — use .c, .cpp, .zig, or .rs",
+            filename
+        )
+    })?;
+
+    validate_name(stem)?;
+    if !rustic_manifest::is_supported_extension(ext) {
+        return Err(format!(
+            "Unsupported extension '.{}' — use .c, .cpp, .zig, or .rs",
+            ext
+        ));
+    }
+    Ok((stem.to_string(), ext.to_string()))
+}
+
+/// Safe path for a native playground file. filename includes extension (e.g. "hello.c").
+pub(crate) fn safe_native_playground_path(
+    filename: &str,
+    app: &AppHandle,
+) -> Result<PathBuf, String> {
+    validate_native_name(filename)?;
+    let dir = src_dir(app);
+    let path = dir.join(filename);
+    // For native projects where src=".", dir may not exist yet on a brand-new project.
+    // Only do traversal check if the directory exists.
+    if let Ok(resolved_dir) = dir.canonicalize() {
+        let resolved_parent = path
+            .parent()
+            .and_then(|p| p.canonicalize().ok())
+            .unwrap_or_else(|| resolved_dir.clone());
+        if resolved_parent != resolved_dir {
+            return Err(format!("Path traversal detected for '{}'", filename));
+        }
     }
     Ok(path)
 }
@@ -687,6 +761,61 @@ mod tests {
     fn validate_filename_accepts_dotfiles() {
         assert!(validate_filename(".gitignore").is_ok());
         assert!(validate_filename("..hidden").is_ok());
+    }
+
+    // ── validate_native_name ──────────────────────────────────────────────
+
+    #[test]
+    fn validate_native_name_accepts_valid_c() {
+        let (stem, ext) = validate_native_name("hello.c").unwrap();
+        assert_eq!(stem, "hello");
+        assert_eq!(ext, "c");
+    }
+
+    #[test]
+    fn validate_native_name_accepts_valid_cpp() {
+        let (stem, ext) = validate_native_name("vectors.cpp").unwrap();
+        assert_eq!(stem, "vectors");
+        assert_eq!(ext, "cpp");
+    }
+
+    #[test]
+    fn validate_native_name_accepts_valid_zig() {
+        let (stem, ext) = validate_native_name("fizzbuzz.zig").unwrap();
+        assert_eq!(stem, "fizzbuzz");
+        assert_eq!(ext, "zig");
+    }
+
+    #[test]
+    fn validate_native_name_accepts_valid_rs() {
+        let (stem, ext) = validate_native_name("ownership.rs").unwrap();
+        assert_eq!(stem, "ownership");
+        assert_eq!(ext, "rs");
+    }
+
+    #[test]
+    fn validate_native_name_rejects_no_extension() {
+        assert!(validate_native_name("hello").is_err());
+    }
+
+    #[test]
+    fn validate_native_name_rejects_unsupported_extension() {
+        assert!(validate_native_name("hello.py").is_err());
+        assert!(validate_native_name("hello.go").is_err());
+    }
+
+    #[test]
+    fn validate_native_name_rejects_bad_stem() {
+        assert!(validate_native_name("Hello.c").is_err());
+        assert!(validate_native_name("2fast.c").is_err());
+        assert!(validate_native_name("my-file.c").is_err());
+    }
+
+    #[test]
+    fn validate_native_name_accepts_underscores_and_digits_in_stem() {
+        let (stem, ext) = validate_native_name("my_test_2.cpp").unwrap();
+        assert_eq!(stem, "my_test_2");
+        assert_eq!(ext, "cpp");
     }
 
     // ── is_text_file ─────────────────────────────────────────────────────

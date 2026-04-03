@@ -2,10 +2,11 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager};
 
 use crate::{
-    bin_dir, cargo_path, content_dir, playground_template, project_cargo_toml, projects_dir,
+    active_project_type, bin_dir, cargo_path, manifest_content_dir, playground_template,
+    project_cargo_toml, projects_dir,
     rustic_manifest::{self, write_manifest},
-    safe_playground_path, save_config, validate_name, workspace_dir, ActiveProject, CheckProcess,
-    RunningProcess, StdinHandle,
+    safe_native_playground_path, safe_playground_path, save_config, src_dir, validate_name,
+    validate_native_name, workspace_dir, ActiveProject, CheckProcess, RunningProcess, StdinHandle,
 };
 
 // ── Project commands ──────────────────────────────────────────────────────────
@@ -182,46 +183,92 @@ fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result
 
 #[tauri::command]
 pub fn list_playgrounds(app: AppHandle) -> Vec<String> {
-    let dir = bin_dir(&app);
-    let mut names: Vec<String> = match std::fs::read_dir(&dir) {
-        Ok(entries) => entries
-            .filter_map(|e| e.ok())
-            .map(|e| e.file_name().to_string_lossy().to_string())
-            .filter(|f| f.ends_with(".rs"))
-            .map(|f| f.trim_end_matches(".rs").to_string())
-            .collect(),
-        Err(_) => vec![],
-    };
-    names.sort();
-    names
+    let ptype = active_project_type(&app);
+    if ptype == "native" {
+        // Native: list supported source files from paths.src directory
+        let dir = src_dir(&app);
+        let mut names: Vec<String> = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_file())
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .filter(|f| {
+                    std::path::Path::new(f)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .map(rustic_manifest::is_supported_extension)
+                        .unwrap_or(false)
+                })
+                .collect(),
+            Err(_) => vec![],
+        };
+        names.sort();
+        names
+    } else {
+        // Rust: list .rs files from src/bin, strip extension
+        let dir = bin_dir(&app);
+        let mut names: Vec<String> = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .filter(|f| f.ends_with(".rs"))
+                .map(|f| f.trim_end_matches(".rs").to_string())
+                .collect(),
+            Err(_) => vec![],
+        };
+        names.sort();
+        names
+    }
+}
+
+/// Resolve a playground file path based on project type.
+/// Rust: name is stem only (e.g. "hello"), file is src/bin/hello.rs
+/// Native: name includes extension (e.g. "hello.c"), file is <src>/hello.c
+fn resolve_playground_path(name: &str, app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    if active_project_type(app) == "native" {
+        safe_native_playground_path(name, app)
+    } else {
+        safe_playground_path(name, app)
+    }
 }
 
 #[tauri::command]
 pub fn load_playground(name: String, app: AppHandle) -> Result<String, String> {
-    let path = safe_playground_path(&name, &app)?;
+    let path = resolve_playground_path(&name, &app)?;
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn save_playground(name: String, content: String, app: AppHandle) -> Result<(), String> {
-    let path = safe_playground_path(&name, &app)?;
+    let path = resolve_playground_path(&name, &app)?;
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn new_playground(name: String, content: Option<String>, app: AppHandle) -> Result<(), String> {
-    let path = safe_playground_path(&name, &app)?;
-    if path.exists() {
-        return Err(format!("'{}' already exists", name));
+    let ptype = active_project_type(&app);
+    if ptype == "native" {
+        let (stem, ext) = validate_native_name(&name)?;
+        let path = safe_native_playground_path(&name, &app)?;
+        if path.exists() {
+            return Err(format!("'{}' already exists", name));
+        }
+        let code = content.unwrap_or_else(|| native_starter_template(&stem, &ext));
+        std::fs::write(&path, code).map_err(|e| e.to_string())
+    } else {
+        let path = safe_playground_path(&name, &app)?;
+        if path.exists() {
+            return Err(format!("'{}' already exists", name));
+        }
+        let code = content.unwrap_or_else(|| playground_template(&name));
+        std::fs::write(&path, code).map_err(|e| e.to_string())
     }
-    let code = content.unwrap_or_else(|| playground_template(&name));
-    std::fs::write(&path, code).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn rename_playground(old_name: String, new_name: String, app: AppHandle) -> Result<(), String> {
-    let old_path = safe_playground_path(&old_name, &app)?;
-    let new_path = safe_playground_path(&new_name, &app)?;
+    let old_path = resolve_playground_path(&old_name, &app)?;
+    let new_path = resolve_playground_path(&new_name, &app)?;
     if new_path.exists() {
         return Err(format!("'{}' already exists", new_name));
     }
@@ -230,22 +277,74 @@ pub fn rename_playground(old_name: String, new_name: String, app: AppHandle) -> 
 
 #[tauri::command]
 pub fn delete_playground(name: String, app: AppHandle) -> Result<(), String> {
-    let path = safe_playground_path(&name, &app)?;
+    let path = resolve_playground_path(&name, &app)?;
     std::fs::remove_file(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn duplicate_playground(name: String, app: AppHandle) -> Result<String, String> {
-    let src = safe_playground_path(&name, &app)?;
-    let new_name = format!("{}_copy", name);
-    let dst = safe_playground_path(&new_name, &app)?;
-    std::fs::copy(&src, &dst).map_err(|e| e.to_string())?;
-    Ok(new_name)
+    let ptype = active_project_type(&app);
+    if ptype == "native" {
+        let (stem, ext) = validate_native_name(&name)?;
+        let src = safe_native_playground_path(&name, &app)?;
+        let new_name = format!("{}_copy.{}", stem, ext);
+        let dst = safe_native_playground_path(&new_name, &app)?;
+        std::fs::copy(&src, &dst).map_err(|e| e.to_string())?;
+        Ok(new_name)
+    } else {
+        let src = safe_playground_path(&name, &app)?;
+        let new_name = format!("{}_copy", name);
+        let dst = safe_playground_path(&new_name, &app)?;
+        std::fs::copy(&src, &dst).map_err(|e| e.to_string())?;
+        Ok(new_name)
+    }
 }
 
 #[tauri::command]
 pub fn workspace_path(app: AppHandle) -> String {
     workspace_dir(&app).to_string_lossy().to_string()
+}
+
+// ── Compiler resolution for native projects ──────────────────────────────────
+
+/// Resolve the clang compiler path via xcrun, falling back to /usr/bin/clang.
+fn resolve_clang() -> String {
+    std::process::Command::new("xcrun")
+        .args(["--find", "clang"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/usr/bin/clang".to_string())
+}
+
+/// Resolve rustc path as a sibling of cargo.
+fn resolve_rustc() -> String {
+    let cargo = cargo_path();
+    let cargo_dir = std::path::Path::new(&cargo)
+        .parent()
+        .unwrap_or(std::path::Path::new(""));
+    let rustc = cargo_dir.join("rustc");
+    if rustc.exists() {
+        rustc.to_string_lossy().to_string()
+    } else {
+        "rustc".to_string()
+    }
+}
+
+/// Resolve zig path from PATH.
+fn resolve_zig() -> Result<String, String> {
+    std::process::Command::new("which")
+        .arg("zig")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Zig not found — install from ziglang.org".to_string())
 }
 
 #[tauri::command]
@@ -254,8 +353,20 @@ pub async fn run_playground(
     on_output: Channel<serde_json::Value>,
     app: AppHandle,
 ) -> Result<(), String> {
+    let ptype = active_project_type(&app);
+    if ptype == "native" {
+        run_native_playground(name, on_output, app).await
+    } else {
+        run_rust_playground(name, on_output, app).await
+    }
+}
+
+async fn run_rust_playground(
+    name: String,
+    on_output: Channel<serde_json::Value>,
+    app: AppHandle,
+) -> Result<(), String> {
     use std::process::Stdio;
-    use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
 
     validate_name(&name)?;
@@ -263,7 +374,7 @@ pub async fn run_playground(
     let cargo = cargo_path();
     let workspace = workspace_dir(&app);
     let playground_target = workspace.join("target").join("playground-runs");
-    let content_path = content_dir(&app);
+    let content_path = manifest_content_dir(&app);
 
     let mut child = Command::new(&cargo)
         .args([
@@ -278,16 +389,134 @@ pub async fn run_playground(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .process_group(0) // own process group so kill() hits cargo + spawned binary
+        .process_group(0)
         .spawn()
         .map_err(|e| format!("Failed to start cargo: {}", e))?;
 
-    // Store PID (= PGID) so kill_playground can send signals to the whole group.
+    stream_child_output(&mut child, &on_output, &app).await
+}
+
+async fn run_native_playground(
+    name: String,
+    on_output: Channel<serde_json::Value>,
+    app: AppHandle,
+) -> Result<(), String> {
+    use std::process::Stdio;
+    use tokio::process::Command;
+
+    let (stem, ext) = validate_native_name(&name)?;
+    let source_path = safe_native_playground_path(&name, &app)?;
+    let workspace = workspace_dir(&app);
+    let content_path = manifest_content_dir(&app);
+    let runs_dir = workspace.join("target").join("runs");
+    std::fs::create_dir_all(&runs_dir)
+        .map_err(|e| format!("Failed to create target/runs: {}", e))?;
+
+    match ext.as_str() {
+        "zig" => {
+            // Zig: single-step `zig run <file>`
+            let zig = resolve_zig()?;
+            let mut child = Command::new(&zig)
+                .args(["run", source_path.to_str().unwrap()])
+                .current_dir(&workspace)
+                .env("PLAYGROUND_CONTENT", &content_path)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .process_group(0)
+                .spawn()
+                .map_err(|e| format!("Failed to start zig: {}", e))?;
+
+            stream_child_output(&mut child, &on_output, &app).await
+        }
+        _ => {
+            // C, C++, Rust: compile then run
+            let out_binary = runs_dir.join(&stem);
+            let (compiler, extra_args): (String, Vec<&str>) = match ext.as_str() {
+                "c" => (resolve_clang(), vec![]),
+                "cpp" => {
+                    // clang++ is a sibling of clang
+                    let clang = resolve_clang();
+                    let clangpp = clang.replace("clang", "clang++");
+                    (clangpp, vec!["-std=c++17"])
+                }
+                "rs" => (resolve_rustc(), vec!["--edition", "2021"]),
+                _ => return Err(format!("Unsupported extension: {}", ext)),
+            };
+
+            // Step 1: Compile
+            let mut compile_args: Vec<&str> = vec![
+                source_path.to_str().unwrap(),
+                "-o",
+                out_binary.to_str().unwrap(),
+            ];
+            compile_args.extend(&extra_args);
+
+            let compile = Command::new(&compiler)
+                .args(&compile_args)
+                .current_dir(&workspace)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .process_group(0)
+                .spawn()
+                .map_err(|e| format!("Failed to start {}: {}", compiler, e))?;
+
+            // Store PID for kill support during compilation
+            if let Some(pid) = compile.id() {
+                *app.state::<RunningProcess>().0.lock().unwrap() = Some(pid);
+            }
+
+            let output = compile
+                .wait_with_output()
+                .await
+                .map_err(|e| e.to_string())?;
+
+            // Stream compile errors/warnings to stderr
+            let stderr_text = String::from_utf8_lossy(&output.stderr);
+            for line in stderr_text.lines() {
+                on_output
+                    .send(serde_json::json!({ "stream": "stderr", "line": line }))
+                    .ok();
+            }
+
+            if !output.status.success() {
+                *app.state::<RunningProcess>().0.lock().unwrap() = None;
+                on_output
+                    .send(serde_json::json!({
+                        "stream": "complete",
+                        "code": output.status.code().unwrap_or(1)
+                    }))
+                    .ok();
+                return Ok(());
+            }
+
+            // Step 2: Run the compiled binary
+            let mut child = Command::new(out_binary.to_str().unwrap())
+                .current_dir(&workspace)
+                .env("PLAYGROUND_CONTENT", &content_path)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .process_group(0)
+                .spawn()
+                .map_err(|e| format!("Failed to run compiled binary: {}", e))?;
+
+            stream_child_output(&mut child, &on_output, &app).await
+        }
+    }
+}
+
+/// Shared logic: store PID, capture stdin, stream stdout/stderr, wait, send complete.
+async fn stream_child_output(
+    child: &mut tokio::process::Child,
+    on_output: &Channel<serde_json::Value>,
+    app: &AppHandle,
+) -> Result<(), String> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
     if let Some(pid) = child.id() {
         *app.state::<RunningProcess>().0.lock().unwrap() = Some(pid);
     }
-
-    // Store stdin handle so the frontend can send interactive input.
     *app.state::<StdinHandle>().0.lock().await = child.stdin.take();
 
     let stdout = child.stdout.take().unwrap();
@@ -316,7 +545,6 @@ pub async fn run_playground(
     let status = child.wait().await.map_err(|e| e.to_string())?;
     let _ = tokio::join!(stdout_task, stderr_task);
 
-    // Process finished — clear stored PID and stdin handle.
     *app.state::<RunningProcess>().0.lock().unwrap() = None;
     *app.state::<StdinHandle>().0.lock().await = None;
 
@@ -353,6 +581,7 @@ pub async fn kill_playground(app: AppHandle) -> Result<(), String> {
 
 /// Run `cargo check` in the background and stream diagnostics to the frontend.
 /// Cancels any previously running check before starting a new one.
+/// Only works for Rust (Cargo) projects — returns immediately for native projects.
 #[tauri::command]
 pub async fn check_playground(
     name: String,
@@ -363,6 +592,14 @@ pub async fn check_playground(
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
+
+    // Native projects don't support live checking
+    if active_project_type(&app) == "native" {
+        on_diagnostics
+            .send(serde_json::json!({ "type": "done" }))
+            .ok();
+        return Ok(());
+    }
 
     validate_name(&name)?;
 
