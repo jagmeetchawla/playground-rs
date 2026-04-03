@@ -68,9 +68,20 @@
 ```sh
 git clone https://github.com/jagmeetchawla/rustic-playground
 cd rustic-playground
+```
+
+**macOS desktop app** (Tauri + Svelte):
+```sh
 cd ui && pnpm install && cd ..
 cargo tauri dev        # development mode — hot reload
-cargo tauri build      # release .app in src-tauri/target/release/bundle/
+cargo tauri build      # release .app + .dmg in src-tauri/target/release/bundle/
+```
+
+**CLI runner** (no GUI, no Node required):
+```sh
+cargo run              # interactive playground picker
+cargo run -- <name>    # run a specific playground
+cargo build            # build all playgrounds
 ```
 
 ## How It Works
