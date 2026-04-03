@@ -18,9 +18,10 @@ src-tauri/src/
 ├── playground_commands.rs   — project CRUD (7 commands) + playground CRUD (8) + run/kill/check/cancel/stdin
 ├── cargo_commands.rs        — Cargo.toml get/save, add/remove dependency, toolchain info/check, wizard
 ├── content_commands.rs      — content file CRUD (9 commands: list/create/read/save/delete/rename/import/reveal/path)
-├── export.rs                — CLI_MAIN_RS const + export_project command
+├── export.rs                — project export: routes by type to Rust or native export (see below)
 ├── menu.rs                  — build_menu + rebuild_menu (macOS menu bar)
 ├── book_chapters.rs         — seed_rust_book command (20 Rust Book chapter projects)
+├── knr_chapters.rs          — seed_knr_book command (8 K&R C Book chapter projects)
 └── main.rs                  — Tauri entry point
 
 Frontend Structure
@@ -35,7 +36,10 @@ ui/src/
 │   ├── NewPlaygroundModal.svelte — new playground dialog with template picker
 │   ├── HelpModal.svelte     — help overlay (⌘⇧/)
 │   ├── AboutModal.svelte    — about dialog
-│   └── templates.ts         — 11 starter templates with auto-deps
+│   ├── ProjectSwitcher.svelte — project list popover, new/rename/delete project
+│   ├── ToolchainWizard.svelte — first-run wizard, tabbed (Rust / C/C++)
+│   ├── TabBar.svelte        — editor tab bar with language-aware badges
+│   └── templates.ts         — Rust, C, and C++ starter templates (see below)
 ├── app.css                  — global CSS variables (dark/light themes)
 └── main.ts                  — Svelte mount point
 
@@ -63,16 +67,42 @@ cargo_commands.rs (~300 lines):
 content_commands.rs (~120 lines):
 - Content file CRUD: list/create/read/save/delete/rename/import, reveal_in_finder, get_content_file_path
 
-export.rs (~230 lines):
-- CLI_MAIN_RS: embedded v0.1 CLI runner (clap-based, interactive picker)
-- export_project: exports active project as standalone CLI playground with merged Cargo.toml
+export.rs (~400 lines):
+- export_project: thin router — detects project type, dispatches to Rust or native export
+- Rust path: export_rust_project + CLI_MAIN_RS (clap-based CLI runner, merged Cargo.toml)
+- Native path: export_native_project + CLI_PLAYGROUND_SH (shell script runner, Makefile)
+- Shared helper: copy_content_files (pure I/O, no language-specific logic)
+- Separation: Rust and native exports are independent functions with own constants.
+  Modifying one cannot break the other. Kept in the same file for discoverability.
 
 menu.rs (~150 lines):
 - build_menu: constructs full macOS menu bar (App, Project, Playground, Run, Edit, Help)
 - rebuild_menu: Tauri command to reconstruct menu when state changes
 
 book_chapters.rs (~2,700 lines):
-- seed_rust_book: creates 20 chapter projects with all playgrounds and attribution
+- seed_rust_book: creates 20 Rust Book chapter projects with all playgrounds and attribution
+
+knr_chapters.rs (~1,200 lines):
+- seed_knr_book: creates 8 K&R C Book chapter projects (native type) with attribution
+- Fully separate module from book_chapters.rs — no shared code
+
+Project Types & Code Separation
+
+Two project types: "rust" (default, first-class) and "native" (C/C++).
+
+Rust is the first-class citizen. The app always starts with Rust toolchain detection,
+defaults to creating Rust projects, and the native path is additive — never modifies
+Rust-specific code paths.
+
+Separation strategy to prevent regressions:
+- Backend: native-only modules are fully isolated (knr_chapters.rs). Shared modules
+  (export.rs, playground_commands.rs) use separate functions per type with a thin
+  router at the top. The Rust code path is never modified when adding native support.
+- Frontend: templates.ts contains TEMPLATES (Rust), C_TEMPLATES, and CPP_TEMPLATES
+  as separate exported arrays — no cross-references. Components branch on projectType
+  prop to render type-specific UI.
+- Manifest: native projects use rustic.toml ([project] type = "native"), Rust projects
+  use Cargo.toml. Detection is via rustic.toml presence + type field.
 
 How It Works
 
@@ -101,20 +131,26 @@ Output Streaming
 - Frontend renders each stream with a different colour
 
 Theme System
-- Three modes: System / Light / Dark (persisted in settings)
+- Four modes: System / Light / Dark / Sea Green (persisted in settings)
 - System mode tracks prefers-color-scheme media query
-- CSS custom properties on body (.theme-dark / .theme-light) for app chrome
-- Monaco has paired themes: playground-dark / playground-light
+- CSS custom properties on body (.theme-dark / .theme-light / .theme-seagreen) for app chrome
+- Monaco has paired themes: playground-dark / playground-light / playground-seagreen
 - Both sync reactively via Svelte $effect
+- Sea Green theme: deep ocean palette honoring C — complements the Rust orange theme
 
 Toolchain Detection & Setup
-- On launch: check common paths in order:
+- Rust (required at startup):
     1. User's configured cargo_path from settings
     2. ~/.cargo/bin/cargo
     3. which cargo (PATH lookup)
-- If found: read version via cargo --version
-- If not found: show first-run setup wizard (3-state UI)
-- All cargo invocations use the resolved absolute path
+  - If found: read version via cargo --version
+  - If not found: show first-run setup wizard (Rust tab)
+  - All cargo invocations use the resolved absolute path
+- Native C/C++ (detected on demand):
+    1. xcrun --find clang
+    2. clang --version for display
+  - Not required at startup — detected when first native project is created
+  - Wizard has a separate C/C++ tab showing status and install instructions
 
 Sibling tool resolution (rustup, rustc, rustfmt, cargo-clippy):
 - macOS app bundles launched from /Applications get a minimal PATH that excludes

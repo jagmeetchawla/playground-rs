@@ -8,7 +8,7 @@
     active: string | null
     dirtyTabs: string[]
     tabLabels?: Record<string, string>
-    tabTypes?: Record<string, 'rs' | 'content' | 'cargo'>
+    tabTypes?: Record<string, 'rs' | 'content' | 'cargo' | 'c' | 'cpp'>
   } = $props()
 </script>
 
@@ -30,6 +30,10 @@
         <span class="file-badge file-badge--content">📄</span>
       {:else if tabType === 'cargo'}
         <span class="file-badge file-badge--cargo">CT</span>
+      {:else if tabType === 'c'}
+        <span class="file-badge file-badge--native">C</span>
+      {:else if tabType === 'cpp'}
+        <span class="file-badge file-badge--native">C++</span>
       {:else}
         <span class="file-badge">RS</span>
       {/if}
@@ -126,6 +130,10 @@
   }
   .file-badge--cargo {
     background: #5a4a3a;
+    letter-spacing: 0;
+  }
+  .file-badge--native {
+    background: #4a9;
     letter-spacing: 0;
   }
 

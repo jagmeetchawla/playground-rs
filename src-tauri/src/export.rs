@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
 use crate::{content_dir, workspace_dir, ActiveProject};
+use crate::rustic_manifest;
 
 /// The exact main.rs from the v0.1 CLI playground runner (commit 231314e),
 /// with PLAYGROUND_CONTENT env var added for content file support.
@@ -279,12 +280,160 @@ mod tests {
     }
 }
 
-/// Export the active project as a standalone CLI playground (v0.1 CLI style).
-/// Creates dest/<project>/ with merged Cargo.toml (deps + clap), src/main.rs,
-/// src/bin/*.rs, and content/ files.
+/// Shell script CLI runner for native C/C++ projects.
+/// Mirrors the Rust CLI runner: list, pick, compile & run.
+const CLI_PLAYGROUND_SH: &str = r##"#!/bin/sh
+# playground — CLI runner for C/C++ playground files
+# Exported from Rustic Playground
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$SCRIPT_DIR/src"
+BUILD_DIR="$SCRIPT_DIR/build"
+CONTENT_DIR="$SCRIPT_DIR/content"
+
+# Source build flags
+if [ -f "$SCRIPT_DIR/flags.sh" ]; then
+    . "$SCRIPT_DIR/flags.sh"
+fi
+
+mkdir -p "$BUILD_DIR"
+
+list_playgrounds() {
+    for f in "$SRC_DIR"/*.c "$SRC_DIR"/*.cpp; do
+        [ -f "$f" ] && basename "$f"
+    done | sort
+}
+
+compile_and_run() {
+    src="$SRC_DIR/$1"
+    name="${1%.*}"
+    ext="${1##*.}"
+    out="$BUILD_DIR/$name"
+    shift
+
+    if [ ! -f "$src" ]; then
+        echo "Error: playground '$(basename "$src")' not found (looked for $src)" >&2
+        exit 1
+    fi
+
+    if [ "$ext" = "cpp" ]; then
+        compiler="clang++"
+        flags="${CXXFLAGS:-}"
+    else
+        compiler="clang"
+        flags="${CFLAGS:-}"
+    fi
+
+    echo "Compiling $(basename "$src")..."
+    "$compiler" "$src" -o "$out" $flags
+    echo ""
+
+    PLAYGROUND_CONTENT="$CONTENT_DIR" "$out" "$@"
+}
+
+pick_playground() {
+    count=0
+    for f in "$SRC_DIR"/*.c "$SRC_DIR"/*.cpp; do
+        [ -f "$f" ] || continue
+        count=$((count + 1))
+        eval "file_$count=\"$(basename "$f")\""
+    done
+
+    if [ "$count" -eq 0 ]; then
+        echo "No playgrounds found. Add a .c or .cpp file to src/."
+        exit 1
+    fi
+
+    echo "Available playgrounds:"
+    echo ""
+    i=1
+    while [ "$i" -le "$count" ]; do
+        eval "printf '  [%d] %s\\n' $i \"\$file_$i\""
+        i=$((i + 1))
+    done
+
+    while true; do
+        printf "\nPick a playground: "
+        read -r input
+        case "$input" in
+            *[!0-9]*|"") ;;
+            *)
+                if [ "$input" -ge 1 ] 2>/dev/null && [ "$input" -le "$count" ] 2>/dev/null; then
+                    eval "chosen=\"\$file_$input\""
+                    compile_and_run "$chosen"
+                    return
+                fi
+                ;;
+        esac
+        i=1
+        while [ "$i" -le "$count" ]; do
+            eval "f=\"\$file_$i\""
+            fname="${f%.*}"
+            if [ "$input" = "$f" ] || [ "$input" = "$fname" ]; then
+                compile_and_run "$f"
+                return
+            fi
+            i=$((i + 1))
+        done
+        echo "Invalid choice. Enter a number (1-$count) or a filename."
+    done
+}
+
+case "${1:-}" in
+    list|ls)
+        list_playgrounds
+        ;;
+    version|v)
+        echo "playground 0.1.0"
+        ;;
+    help|--help|-h)
+        echo "Usage: ./playground.sh [command|filename]"
+        echo ""
+        echo "Commands:"
+        echo "  (none)         Interactive picker"
+        echo "  <file.c>       Compile and run a specific file"
+        echo "  list, ls       List all playground files"
+        echo "  version, v     Print version"
+        echo "  help           Show this help"
+        ;;
+    "")
+        pick_playground
+        ;;
+    *)
+        # Direct file — try exact, then with extension
+        if [ -f "$SRC_DIR/$1" ]; then
+            compile_and_run "$@"
+        elif [ -f "$SRC_DIR/$1.c" ]; then
+            arg="$1.c"; shift
+            compile_and_run "$arg" "$@"
+        elif [ -f "$SRC_DIR/$1.cpp" ]; then
+            arg="$1.cpp"; shift
+            compile_and_run "$arg" "$@"
+        else
+            echo "Error: playground '$1' not found" >&2
+            exit 1
+        fi
+        ;;
+esac
+"##;
+
+/// Export the active project. Routes to Rust or Native export based on project type.
 #[tauri::command]
 pub fn export_project(dest: String, app: AppHandle) -> Result<String, String> {
     let workspace = workspace_dir(&app);
+    let ptype = rustic_manifest::detect_project_type(&workspace);
+    if ptype == "native" {
+        export_native_project(dest, &app)
+    } else {
+        export_rust_project(dest, &app)
+    }
+}
+
+/// Export a Rust project as a standalone CLI playground (v0.1 CLI style).
+fn export_rust_project(dest: String, app: &AppHandle) -> Result<String, String> {
+    let workspace = workspace_dir(app);
     let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
 
     let export_dir = PathBuf::from(&dest).join(&project_name);
@@ -349,7 +498,172 @@ pub fn export_project(dest: String, app: AppHandle) -> Result<String, String> {
     }
 
     // Copy content files if they exist
-    let content_src = content_dir(&app);
+    copy_content_files(app, &export_dir)?;
+
+    // Write README
+    let readme = format!(
+        "# {project_name}\n\n\
+        Exported from Rustic Playground.\n\n\
+        ## Usage\n\n\
+        ```bash\n\
+        # Interactive picker\n\
+        cargo run\n\n\
+        # Run a specific playground\n\
+        cargo run -- <name>\n\n\
+        # List all playgrounds\n\
+        cargo run -- list\n\
+        ```\n\n\
+        ## Requirements\n\n\
+        - [Rust](https://rustup.rs/) (cargo, rustc)\n"
+    );
+    std::fs::write(export_dir.join("README.md"), readme).map_err(|e| e.to_string())?;
+
+    Ok(export_dir.to_string_lossy().to_string())
+}
+
+/// Export a native C/C++ project as a standalone CLI playground.
+/// Creates dest/<project>/ with playground.sh runner, Makefile, src/*.c|cpp,
+/// and content/ files.
+fn export_native_project(dest: String, app: &AppHandle) -> Result<String, String> {
+    let workspace = workspace_dir(app);
+    let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
+
+    let export_dir = PathBuf::from(&dest).join(&project_name);
+    let export_src = export_dir.join("src");
+    std::fs::create_dir_all(&export_src).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(export_dir.join("build")).map_err(|e| e.to_string())?;
+
+    // Read build flags from manifest
+    let manifest = rustic_manifest::ensure_manifest(&workspace)
+        .unwrap_or_else(|_| rustic_manifest::new_native_manifest());
+    let cflags = manifest.build.cflags.join(" ");
+    let cxxflags = manifest.build.cxxflags.join(" ");
+
+    // Write flags.sh — sourced by playground.sh
+    let flags_sh = format!(
+        "# Build flags exported from Rustic Playground\nexport CFLAGS=\"{cflags}\"\nexport CXXFLAGS=\"{cxxflags}\"\n"
+    );
+    std::fs::write(export_dir.join("flags.sh"), flags_sh).map_err(|e| e.to_string())?;
+
+    // Write Makefile
+    let makefile = generate_makefile(&workspace, &cflags, &cxxflags)?;
+    std::fs::write(export_dir.join("Makefile"), makefile).map_err(|e| e.to_string())?;
+
+    // Write the CLI runner script
+    std::fs::write(export_dir.join("playground.sh"), CLI_PLAYGROUND_SH)
+        .map_err(|e| e.to_string())?;
+    // Make it executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o755);
+        std::fs::set_permissions(export_dir.join("playground.sh"), perms)
+            .map_err(|e| e.to_string())?;
+    }
+
+    // Copy all .c and .cpp source files
+    for entry in std::fs::read_dir(&workspace)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map(|ext| ext == "c" || ext == "cpp")
+                .unwrap_or(false)
+        })
+    {
+        std::fs::copy(entry.path(), export_src.join(entry.file_name()))
+            .map_err(|e| e.to_string())?;
+    }
+
+    // Copy content files if they exist
+    copy_content_files(app, &export_dir)?;
+
+    // Write a README
+    let readme = format!(
+        "# {project_name}\n\n\
+        Exported from Rustic Playground.\n\n\
+        ## Usage\n\n\
+        ```bash\n\
+        # Interactive picker\n\
+        ./playground.sh\n\n\
+        # Run a specific file\n\
+        ./playground.sh hello.c\n\n\
+        # List all playgrounds\n\
+        ./playground.sh list\n\n\
+        # Build all with make\n\
+        make\n\
+        make clean\n\
+        ```\n\n\
+        ## Build Flags\n\n\
+        C flags: `{cflags}`\n\
+        C++ flags: `{cxxflags}`\n\n\
+        Edit `flags.sh` to change compiler flags.\n"
+    );
+    std::fs::write(export_dir.join("README.md"), readme).map_err(|e| e.to_string())?;
+
+    Ok(export_dir.to_string_lossy().to_string())
+}
+
+fn generate_makefile(workspace: &std::path::Path, cflags: &str, cxxflags: &str) -> Result<String, String> {
+    let mut c_files = Vec::new();
+    let mut cpp_files = Vec::new();
+
+    for entry in std::fs::read_dir(workspace)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        match path.extension().and_then(|e| e.to_str()) {
+            Some("c") => {
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    c_files.push(stem.to_string());
+                }
+            }
+            Some("cpp") => {
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    cpp_files.push(stem.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    c_files.sort();
+    cpp_files.sort();
+
+    let all_targets: Vec<String> = c_files
+        .iter()
+        .chain(cpp_files.iter())
+        .map(|s| format!("build/{s}"))
+        .collect();
+
+    let mut mk = String::new();
+    mk.push_str("# Makefile — exported from Rustic Playground\n\n");
+    mk.push_str(&format!("CFLAGS   = {cflags}\n"));
+    mk.push_str(&format!("CXXFLAGS = {cxxflags}\n"));
+    mk.push_str("CONTENT  = $(CURDIR)/content\n\n");
+    mk.push_str(&format!("all: {}\n\n", all_targets.join(" ")));
+
+    for name in &c_files {
+        mk.push_str(&format!(
+            "build/{name}: src/{name}.c\n\t@mkdir -p build\n\tclang $(CFLAGS) $< -o $@\n\n"
+        ));
+    }
+    for name in &cpp_files {
+        mk.push_str(&format!(
+            "build/{name}: src/{name}.cpp\n\t@mkdir -p build\n\tclang++ $(CXXFLAGS) $< -o $@\n\n"
+        ));
+    }
+
+    mk.push_str("clean:\n\trm -rf build\n\n");
+    mk.push_str(".PHONY: all clean\n");
+
+    Ok(mk)
+}
+
+fn copy_content_files(app: &AppHandle, export_dir: &std::path::Path) -> Result<(), String> {
+    let content_src = content_dir(app);
     if content_src.exists() {
         let content_dest = export_dir.join("content");
         if let Ok(entries) = std::fs::read_dir(&content_src) {
@@ -363,6 +677,5 @@ pub fn export_project(dest: String, app: AppHandle) -> Result<String, String> {
             }
         }
     }
-
-    Ok(export_dir.to_string_lossy().to_string())
+    Ok(())
 }

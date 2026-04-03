@@ -11,6 +11,8 @@ pub struct RusticManifest {
     #[serde(default)]
     pub paths: PathsInfo,
     #[serde(default)]
+    pub build: BuildInfo,
+    #[serde(default)]
     pub toolchain: ToolchainInfo,
 }
 
@@ -37,6 +39,33 @@ impl Default for PathsInfo {
     }
 }
 
+/// Compiler flags for native (C/C++) projects.
+/// Default flags include `-lsqlite3` (macOS ships sqlite3).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct BuildInfo {
+    #[serde(default = "default_cflags")]
+    pub cflags: Vec<String>,
+    #[serde(default = "default_cxxflags")]
+    pub cxxflags: Vec<String>,
+}
+
+fn default_cflags() -> Vec<String> {
+    vec!["-lsqlite3".to_string()]
+}
+
+fn default_cxxflags() -> Vec<String> {
+    vec!["-std=c++17".to_string(), "-lsqlite3".to_string()]
+}
+
+impl Default for BuildInfo {
+    fn default() -> Self {
+        Self {
+            cflags: default_cflags(),
+            cxxflags: default_cxxflags(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct ToolchainInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -45,8 +74,6 @@ pub struct ToolchainInfo {
     pub cargo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clang: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub zig: Option<String>,
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -56,10 +83,8 @@ const APP_VERSION: &str = "0.2";
 
 // ── Supported native extensions ──────────────────────────────────────────────
 
-#[allow(dead_code)] // used in upcoming playground CRUD for native projects
-pub const NATIVE_EXTENSIONS: &[&str] = &["c", "cpp", "zig", "rs"];
+pub const NATIVE_EXTENSIONS: &[&str] = &["c", "cpp"];
 
-#[allow(dead_code)] // used in upcoming playground CRUD for native projects
 pub fn is_supported_extension(ext: &str) -> bool {
     NATIVE_EXTENSIONS.contains(&ext)
 }
@@ -110,6 +135,10 @@ pub fn new_rust_manifest() -> RusticManifest {
             src: "src/bin".to_string(),
             content: "content".to_string(),
         },
+        build: BuildInfo {
+            cflags: vec![],
+            cxxflags: vec![],
+        },
         toolchain: detect_rust_toolchain(),
     }
 }
@@ -125,6 +154,7 @@ pub fn new_native_manifest() -> RusticManifest {
             src: ".".to_string(),
             content: "content".to_string(),
         },
+        build: BuildInfo::default(),
         toolchain: detect_native_toolchain(),
     }
 }
@@ -141,6 +171,7 @@ pub fn generate_legacy_manifest(project_dir: &Path) -> RusticManifest {
                 src: "src/bin".to_string(),
                 content: "content".to_string(),
             },
+            build: BuildInfo { cflags: vec![], cxxflags: vec![] },
             toolchain: detect_rust_toolchain(),
         }
     } else {
@@ -153,6 +184,7 @@ pub fn generate_legacy_manifest(project_dir: &Path) -> RusticManifest {
                 src: ".".to_string(),
                 content: "content".to_string(),
             },
+            build: BuildInfo::default(),
             toolchain: detect_native_toolchain(),
         }
     }
@@ -187,16 +219,14 @@ fn detect_rust_toolchain() -> ToolchainInfo {
         cargo: run_version_command(&cargo_bin, &["--version"]),
         rustc: run_version_command(&rustc_bin, &["--version"]),
         clang: None,
-        zig: None,
     }
 }
 
 fn detect_native_toolchain() -> ToolchainInfo {
     ToolchainInfo {
-        rustc: run_version_command("rustc", &["--version"]),
+        rustc: None,
         cargo: None,
         clang: detect_clang_version(),
-        zig: detect_zig_version(),
     }
 }
 
@@ -219,10 +249,6 @@ fn detect_clang_version() -> Option<String> {
     // Fallback: try /usr/bin/clang
     run_version_command("/usr/bin/clang", &["--version"])
         .map(|v| v.lines().next().unwrap_or(&v).to_string())
-}
-
-fn detect_zig_version() -> Option<String> {
-    run_version_command("zig", &["version"])
 }
 
 fn run_version_command(cmd: &str, args: &[&str]) -> Option<String> {
@@ -251,6 +277,26 @@ pub fn get_project_manifest(name: String, app: AppHandle) -> Result<RusticManife
         return Err(format!("Project '{}' does not exist", name));
     }
     ensure_manifest(&project_dir)
+}
+
+#[tauri::command]
+pub fn get_build_flags(app: AppHandle) -> Result<BuildInfo, String> {
+    use tauri::Manager;
+    let active = app.state::<crate::ActiveProject>().0.lock().unwrap().clone();
+    let project_dir = projects_dir(&app).join(&active);
+    let manifest = ensure_manifest(&project_dir)?;
+    Ok(manifest.build)
+}
+
+#[tauri::command]
+pub fn save_build_flags(cflags: Vec<String>, cxxflags: Vec<String>, app: AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let active = app.state::<crate::ActiveProject>().0.lock().unwrap().clone();
+    let project_dir = projects_dir(&app).join(&active);
+    let mut manifest = ensure_manifest(&project_dir)?;
+    manifest.build.cflags = cflags;
+    manifest.build.cxxflags = cxxflags;
+    write_manifest(&project_dir, &manifest)
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -326,6 +372,7 @@ type = "native"
                 created_with: "0.2".to_string(),
             },
             paths: PathsInfo::default(),
+            build: BuildInfo::default(),
             toolchain: ToolchainInfo::default(),
         };
         write_manifest(dir.path(), &m).unwrap();
@@ -373,8 +420,8 @@ type = "native"
     fn is_supported_extension_works() {
         assert!(is_supported_extension("c"));
         assert!(is_supported_extension("cpp"));
-        assert!(is_supported_extension("zig"));
-        assert!(is_supported_extension("rs"));
+        assert!(!is_supported_extension("zig"));
+        assert!(!is_supported_extension("rs"));
         assert!(!is_supported_extension("py"));
         assert!(!is_supported_extension("go"));
         assert!(!is_supported_extension(""));

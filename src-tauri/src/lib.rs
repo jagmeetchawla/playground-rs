@@ -6,6 +6,7 @@ mod book_chapters;
 mod cargo_commands;
 mod content_commands;
 mod export;
+mod knr_chapters;
 mod menu;
 mod playground_commands;
 pub(crate) mod rustic_manifest;
@@ -194,23 +195,35 @@ pub(crate) fn playground_template(name: &str) -> String {
 fn ensure_project(app: &AppHandle) -> Result<(), String> {
     let workspace = workspace_dir(app);
 
-    // Ensure rustic.toml exists (auto-generates for legacy projects)
-    let manifest = rustic_manifest::ensure_manifest(&workspace)?;
+    // Ensure the project directory itself exists
+    if !workspace.exists() {
+        std::fs::create_dir_all(&workspace)
+            .map_err(|e| format!("Failed to create project directory: {}", e))?;
+    }
 
-    if manifest.project.project_type == "rust" {
-        let bin = workspace.join(&manifest.paths.src);
-        if !bin.exists() {
-            std::fs::create_dir_all(&bin)
-                .map_err(|e| format!("Failed to create project dirs: {}", e))?;
-            let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
-            std::fs::write(
-                workspace.join("Cargo.toml"),
-                project_cargo_toml(&project_name),
-            )
+    // For new Rust projects: create Cargo.toml + src/bin BEFORE ensure_manifest,
+    // so that legacy detection sees Cargo.toml and correctly picks "rust".
+    let cargo_toml = workspace.join("Cargo.toml");
+    let bin = workspace.join("src").join("bin");
+    if !cargo_toml.exists() && !workspace.join("rustic.toml").exists() {
+        // Brand new project — scaffold as Rust by default
+        std::fs::create_dir_all(&bin)
+            .map_err(|e| format!("Failed to create project dirs: {}", e))?;
+        let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
+        std::fs::write(&cargo_toml, project_cargo_toml(&project_name))
             .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
-            std::fs::write(bin.join("hello.rs"), playground_template("hello"))
-                .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
-        }
+        std::fs::write(bin.join("hello.rs"), playground_template("hello"))
+            .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
+    }
+
+    // Ensure rustic.toml exists (auto-generates for legacy projects)
+    let mut manifest = rustic_manifest::ensure_manifest(&workspace)?;
+
+    // Repair: if Cargo.toml exists but rustic.toml was incorrectly generated as "native"
+    // (e.g. from a startup race), fix it.
+    if cargo_toml.exists() && manifest.project.project_type == "native" {
+        manifest.project.project_type = "rust".to_string();
+        rustic_manifest::write_manifest(&workspace, &manifest)?;
     }
 
     let content = workspace.join(&manifest.paths.content);
@@ -285,7 +298,7 @@ pub(crate) fn validate_native_name(filename: &str) -> Result<(String, String), S
         .ok_or_else(|| format!("'{}' has no valid stem", filename))?;
     let ext = path.extension().and_then(|e| e.to_str()).ok_or_else(|| {
         format!(
-            "'{}' has no extension — use .c, .cpp, .zig, or .rs",
+            "'{}' has no extension — use .c or .cpp",
             filename
         )
     })?;
@@ -293,7 +306,7 @@ pub(crate) fn validate_native_name(filename: &str) -> Result<(String, String), S
     validate_name(stem)?;
     if !rustic_manifest::is_supported_extension(ext) {
         return Err(format!(
-            "Unsupported extension '.{}' — use .c, .cpp, .zig, or .rs",
+            "Unsupported extension '.{}' — use .c or .cpp",
             ext
         ));
     }
@@ -543,12 +556,16 @@ pub fn run() {
             };
             let active_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
             // On startup we don't know playground count yet; frontend will call rebuild_menu shortly
+            let ptype = rustic_manifest::detect_project_type(
+                &projects_dir(app.handle()).join(&active_name),
+            );
             let menu = menu::build_menu(
                 app.handle(),
                 &initial_projects,
                 &active_name,
                 usize::MAX,
                 false,
+                &ptype,
             )?;
             app.set_menu(menu)?;
             Ok(())
@@ -577,6 +594,7 @@ pub fn run() {
                 "show_help" => Some("menu:help"),
                 "show_about" => Some("menu:about"),
                 "seed_rust_book" => Some("menu:rust-book"),
+                "seed_knr_book" => Some("menu:knr-book"),
                 _ => None,
             };
             if let Some(name) = event_name {
@@ -635,6 +653,10 @@ pub fn run() {
             // Manifest
             rustic_manifest::get_project_type,
             rustic_manifest::get_project_manifest,
+            rustic_manifest::get_build_flags,
+            rustic_manifest::save_build_flags,
+            // K&R Book
+            knr_chapters::seed_knr_book,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -780,20 +802,6 @@ mod tests {
     }
 
     #[test]
-    fn validate_native_name_accepts_valid_zig() {
-        let (stem, ext) = validate_native_name("fizzbuzz.zig").unwrap();
-        assert_eq!(stem, "fizzbuzz");
-        assert_eq!(ext, "zig");
-    }
-
-    #[test]
-    fn validate_native_name_accepts_valid_rs() {
-        let (stem, ext) = validate_native_name("ownership.rs").unwrap();
-        assert_eq!(stem, "ownership");
-        assert_eq!(ext, "rs");
-    }
-
-    #[test]
     fn validate_native_name_rejects_no_extension() {
         assert!(validate_native_name("hello").is_err());
     }
@@ -802,6 +810,8 @@ mod tests {
     fn validate_native_name_rejects_unsupported_extension() {
         assert!(validate_native_name("hello.py").is_err());
         assert!(validate_native_name("hello.go").is_err());
+        assert!(validate_native_name("hello.zig").is_err());
+        assert!(validate_native_name("hello.rs").is_err());
     }
 
     #[test]

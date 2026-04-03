@@ -81,84 +81,86 @@ v0.1.9 — Rename and Cleanup
 IN PROGRESS
 ───────────
 
-v0.2 — Multi-Language Support (Native Projects)
-  Status: specced — 2026-04-03
+v0.2 — Native C/C++ Projects
+  Status: in progress — 2026-04-03
   See specs/specifications.md
 
   Overview:
   Adds a "native" project type alongside existing Rust (Cargo) projects.
-  Native projects hold loose source files — C, C++, Zig, Rust (rustc) —
-  compiled and run directly. No build system, no dependency management.
-  Languages can be mixed freely in a single native project.
+  Native projects hold loose C and C++ source files compiled directly with
+  clang/clang++. No build system — compiler flags stored in rustic.toml.
+  Default flags include -lsqlite3 (macOS ships sqlite3).
 
   Features:
   1. rustic.toml project manifest
      - Every project gets a rustic.toml at its root
      - [project] — type ("rust" | "native"), created_with version
-     - [paths] — src directory, content directory (app reads these, never hardcodes)
-     - [toolchain] — informational snapshot of compiler versions at creation time
-     - Legacy projects without rustic.toml get one auto-generated on first load
+     - [paths] — src directory, content directory
+     - [build] — cflags and cxxflags arrays (defaults: -lsqlite3, -std=c++17)
+     - [toolchain] — informational snapshot of compiler versions
+     - Legacy projects auto-generate rustic.toml on first load
 
   2. Project type selection
-     - New project dialog offers Rust and Native type choices
+     - New project dialog: Rust vs Native (C/C++)
      - Rust: full Cargo workspace with deps and live checking
-     - Native: loose source files, compiler chosen by extension
+     - Native: C/C++ files compiled with clang, configurable flags
 
   3. Native project playground CRUD
      - Source files in project root (paths.src = ".")
-     - Files named with extension: hello.c, vectors.cpp, fizzbuzz.zig, ownership.rs
+     - Files named with extension: hello.c, vectors.cpp
      - Stem validation: same [a-z][a-z0-9_]* rule as Rust playgrounds
-     - list/new/load/save/rename/delete/duplicate — all path resolution via rustic.toml
+     - list/new/load/save/rename/delete/duplicate via rustic.toml paths
 
   4. Compile and run (native)
-     - .c    → clang <file> -o <out> && <out>
-     - .cpp  → clang++ <file> -o <out> -std=c++17 && <out>
-     - .zig  → zig run <file>
-     - .rs   → rustc <file> -o <out> && <out>
+     - .c   → clang <file> -o <out> [cflags] && <out>
+     - .cpp → clang++ <file> -o <out> [cxxflags] && <out>
+     - Compiler flags from [build] in rustic.toml
      - Output binaries: target/runs/<stem>
      - Same process group kill, stdin, PLAYGROUND_CONTENT as Rust projects
-     - Compiler paths: clang via xcrun, zig via PATH, rustc as cargo sibling
+     - Compiler path: clang via xcrun, fallback /usr/bin/clang
 
-  5. New playground dialog (native)
-     - Language picker: C, C++, Zig, Rust
+  5. Compiler flags UI
+     - Sidebar panel for native projects: C flags + C++ flags text inputs
+     - Saved to rustic.toml [build] section on change
+     - Homebrew libraries: user adds -I/-L/-l flags manually
+
+  6. New playground dialog (native)
+     - Language picker: C, C++
      - Language-appropriate starter template per selection
-     - Rust projects: no language picker (always .rs)
 
-  6. Sidebar adaptation
-     - Native projects: show filenames with extensions, no Cargo.toml entry, no deps
-     - Rust projects: unchanged
+  7. Sidebar adaptation
+     - Native: filenames with extensions, compiler flags panel, no Cargo.toml
+     - Rust: unchanged
 
-  7. Monaco language detection
-     - Set editor language by file extension: .c → "c", .cpp → "cpp", .zig → "zig", .rs → "rust"
-     - Currently hardcoded to "rust" — change to detect from active tab
-
-  8. Setup wizard updates
-     - Detect clang (via xcrun --find clang)
-     - Detect zig (via which zig)
-     - Show status for all toolchains, link to ziglang.org
-     - Does not block on missing Zig or clang
+  8. Monaco language detection
+     - Editor language by file extension: .c → "c", .cpp → "cpp"
 
   9. Conditional menus
-     - Rust-specific items (Add Dependency, Export as Cargo Project, Rust Book) hidden for native
+     - Export Project and Rust Book disabled for native projects
      - Run/Stop/New/Copy work for both types
-     - Menu rebuilds on project switch between types
+     - Menu rebuilds on project switch
 
   Not in scope for v0.2:
-  - No dependency management for native projects
   - No live error checking for native projects
-  - No LSP / autocomplete for C/C++/Zig
-  - No build systems (CMake, Makefiles, zig build)
+  - No LSP / autocomplete for C/C++
+  - No build systems (CMake, Makefiles)
   - No multi-file compilation (each source file is standalone)
-  - No header files for C/C++ (beyond system headers)
-  - No templates beyond starter code per language
-  - No book chapters for C/C++/Zig
+  - No header files beyond system headers
+  - No book chapters for C/C++
 
 ---
 
 NEXT
 ────
 
-  After v0.2: website, DMG distribution, wiki, announcements.
+v0.3 — Zig Support
+  Adds "zig" as a third project type with full zig build system integration.
+  - zig run for single-file playgrounds
+  - zig build for multi-file projects
+  - build.zig.zon package management
+  - Zig language detection in Monaco
+
+  After v0.3: website, DMG distribution, wiki, announcements.
 
 
 ---

@@ -1,23 +1,39 @@
 <script lang="ts">
   import { tick } from 'svelte'
-  import { TEMPLATES, type Template } from './templates'
+  import { TEMPLATES, C_TEMPLATES, CPP_TEMPLATES, type Template } from './templates'
 
   let {
     existingNames,
+    projectType = 'rust',
     onclose,
     oncreate,
   }: {
     existingNames: string[]
+    projectType?: 'rust' | 'native'
     onclose: () => void
     oncreate: (name: string, template: Template) => void
   } = $props()
 
+  let isNative = $derived(projectType === 'native')
+
   let selectedId = $state('blank')
+  let nativeSelectedId = $state('c_blank')
   let name = $state('')
   let nameError = $state('')
   let nameInput = $state<HTMLInputElement | null>(null)
+  let nativeLang: 'c' | 'cpp' = $state('c')
 
-  let selected = $derived(TEMPLATES.find(t => t.id === selectedId) ?? TEMPLATES[0])
+  let nativeTemplates = $derived(nativeLang === 'cpp' ? CPP_TEMPLATES : C_TEMPLATES)
+  let selected = $derived(
+    isNative
+      ? (nativeTemplates.find(t => t.id === nativeSelectedId) ?? nativeTemplates[0])
+      : (TEMPLATES.find(t => t.id === selectedId) ?? TEMPLATES[0])
+  )
+
+  // Reset native template selection when switching language
+  $effect(() => {
+    nativeSelectedId = nativeLang === 'cpp' ? 'cpp_blank' : 'c_blank'
+  })
 
   $effect(() => {
     if (nameInput) {
@@ -37,9 +53,19 @@
       return
     }
     if (trimmed.length > 64) { nameError = 'Max 64 characters'; return }
-    if (existingNames.includes(trimmed)) { nameError = 'Already exists'; return }
-    nameError = ''
-    oncreate(trimmed, selected)
+
+    if (isNative) {
+      // Native: append extension, check for collision with full filename
+      const ext = nativeLang === 'cpp' ? '.cpp' : '.c'
+      const fullName = `${trimmed}${ext}`
+      if (existingNames.includes(fullName)) { nameError = 'Already exists'; return }
+      nameError = ''
+      oncreate(fullName, selected)
+    } else {
+      if (existingNames.includes(trimmed)) { nameError = 'Already exists'; return }
+      nameError = ''
+      oncreate(trimmed, selected)
+    }
   }
 </script>
 
@@ -50,7 +76,11 @@
 <div class="modal" role="dialog" aria-modal="true" aria-label="New Playground">
   <div class="modal-header">
     <div class="header-left">
-      <span class="rs-badge">RS</span>
+      {#if isNative}
+        <span class="native-badge">&#63743;</span>
+      {:else}
+        <span class="rs-badge">RS</span>
+      {/if}
       <span class="modal-title">New Playground</span>
     </div>
     <button class="close-btn" onclick={onclose} aria-label="Close">
@@ -61,51 +91,93 @@
   </div>
 
   <div class="modal-body">
+    {#if isNative}
+      <!-- Language tabs -->
+      <div class="lang-tabs">
+        <button class="lang-tab" class:active={nativeLang === 'c'} onclick={() => nativeLang = 'c'}>
+          <span class="lang-tab-badge">C</span> C
+        </button>
+        <button class="lang-tab" class:active={nativeLang === 'cpp'} onclick={() => nativeLang = 'cpp'}>
+          <span class="lang-tab-badge">C++</span> C++
+        </button>
+      </div>
+    {/if}
+
     <!-- Name input -->
     <div class="name-section">
       <label for="pg-name">Name</label>
-      <input
-        id="pg-name"
-        type="text"
-        bind:this={nameInput}
-        bind:value={name}
-        placeholder="my_playground"
-        spellcheck="false"
-        autocomplete="off"
-        onkeydown={(e) => { if (e.key === 'Enter') validateAndCreate() }}
-      />
+      <div class="name-input-row">
+        <input
+          id="pg-name"
+          type="text"
+          bind:this={nameInput}
+          bind:value={name}
+          placeholder="my_playground"
+          spellcheck="false"
+          autocomplete="off"
+          onkeydown={(e) => { if (e.key === 'Enter') validateAndCreate() }}
+        />
+        {#if isNative}
+          <span class="ext-suffix">.{nativeLang}</span>
+        {/if}
+      </div>
       {#if nameError}
         <span class="name-error">{nameError}</span>
       {/if}
     </div>
 
-    <!-- Template grid -->
-    <div class="template-section">
-      <label>Template</label>
-      <div class="template-grid">
-        {#each TEMPLATES as tmpl (tmpl.id)}
-          <button
-            class="template-card"
-            class:selected={selectedId === tmpl.id}
-            onclick={() => selectedId = tmpl.id}
-          >
-            <span class="tmpl-name">{tmpl.name}</span>
-            <span class="tmpl-desc">{tmpl.description}</span>
-            {#if tmpl.deps?.length}
-              <span class="tmpl-deps">
-                {tmpl.deps.map(d => d.name).join(', ')}
-              </span>
-            {/if}
-          </button>
-        {/each}
+    {#if isNative}
+      <!-- Template grid for native -->
+      <div class="template-section">
+        <label>Template</label>
+        <div class="template-grid">
+          {#each nativeTemplates as tmpl (tmpl.id)}
+            <button
+              class="template-card"
+              class:selected={nativeSelectedId === tmpl.id}
+              onclick={() => nativeSelectedId = tmpl.id}
+            >
+              <span class="tmpl-name">{tmpl.name}</span>
+              <span class="tmpl-desc">{tmpl.description}</span>
+            </button>
+          {/each}
+        </div>
       </div>
-    </div>
 
-    <!-- Preview -->
-    <div class="preview-section">
-      <label>Preview</label>
-      <pre class="preview-code">{selected.code.slice(0, 300)}{selected.code.length > 300 ? '...' : ''}</pre>
-    </div>
+      <!-- Preview -->
+      <div class="preview-section">
+        <label>Preview</label>
+        <pre class="preview-code">{selected.code.slice(0, 300)}{selected.code.length > 300 ? '...' : ''}</pre>
+      </div>
+    {:else}
+      <!-- Template grid for Rust projects -->
+      <div class="template-section">
+        <label>Template</label>
+        <div class="template-grid">
+          {#each TEMPLATES as tmpl (tmpl.id)}
+            <button
+              class="template-card"
+              class:selected={selectedId === tmpl.id}
+              onclick={() => selectedId = tmpl.id}
+            >
+              <span class="tmpl-name">{tmpl.name}</span>
+              <span class="tmpl-desc">{tmpl.description}</span>
+              {#if tmpl.deps?.length}
+                <span class="tmpl-deps">
+                  {tmpl.deps.map(d => d.name).join(', ')}
+                </span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div class="preview-section">
+        <label>Preview</label>
+        <pre class="preview-code">{selected.code.slice(0, 300)}{selected.code.length > 300 ? '...' : ''}</pre>
+      </div>
+    {/if}
   </div>
 
   <div class="modal-footer">
@@ -126,7 +198,7 @@
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
     z-index: 300;
-    width: min(560px, calc(100vw - 40px));
+    width: min(720px, calc(100vw - 40px));
     max-height: calc(100vh - 80px);
     display: flex; flex-direction: column;
     background: var(--bg-elevated);
@@ -147,6 +219,11 @@
     font-size: 8px; font-weight: 800; letter-spacing: 0.04em;
     background: var(--rust-orange); color: #fff;
     border-radius: 3px; padding: 2px 4px; line-height: 1.3;
+  }
+  .native-badge {
+    font-size: 11px; font-weight: 400;
+    background: #4a9; color: #fff;
+    border-radius: 3px; padding: 0 4px; line-height: 1.3;
   }
   .modal-title { font-size: 14px; font-weight: 700; color: var(--text); }
   .close-btn {
@@ -170,20 +247,58 @@
   }
 
   /* Name input */
-  .name-section input {
-    width: 100%; box-sizing: border-box;
+  .name-input-row {
+    display: flex; align-items: center; gap: 0;
+  }
+  .name-input-row input {
+    flex: 1; box-sizing: border-box;
     font-family: var(--font-mono); font-size: 13px;
     background: rgba(0,0,0,0.25); color: var(--text);
     border: 1px solid var(--border); border-radius: var(--radius-xs);
     padding: 6px 10px; outline: none;
   }
-  .name-section input:focus { border-color: var(--accent); }
-  .name-section input::placeholder { color: var(--text-tertiary); opacity: 0.5; }
+  .name-input-row input:focus { border-color: var(--accent); }
+  .name-input-row input::placeholder { color: var(--text-tertiary); opacity: 0.5; }
+  .ext-suffix {
+    font-family: var(--font-mono); font-size: 13px;
+    color: var(--text-tertiary); padding: 6px 8px;
+    background: rgba(0,0,0,0.15); border: 1px solid var(--border);
+    border-left: none; border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  }
+  .ext-suffix ~ input,
+  .name-input-row:has(.ext-suffix) input {
+    border-radius: var(--radius-xs) 0 0 var(--radius-xs);
+  }
   .name-error { font-size: 11px; color: var(--red); margin-top: 4px; display: block; }
+
+  /* Language tabs for native projects */
+  .lang-tabs {
+    display: flex; gap: 0;
+    border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden;
+  }
+  .lang-tab {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 6px 10px;
+    font-size: 12px; font-weight: 600;
+    color: var(--text-tertiary);
+    background: none; border: none;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+  .lang-tab:first-child { border-right: 1px solid var(--border); }
+  .lang-tab:hover { color: var(--text-secondary); background: rgba(255,255,255,0.03); }
+  .lang-tab.active { color: var(--text); background: rgba(68,170,153,0.12); }
+  .lang-tab-badge {
+    font-size: 7px; font-weight: 800;
+    background: #4a9; color: #fff;
+    border-radius: 3px; padding: 1.5px 3px; line-height: 1.3;
+  }
 
   /* Template grid */
   .template-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
   }
   .template-card {
     display: flex; flex-direction: column; gap: 2px;

@@ -5,6 +5,8 @@
   let {
     projects,
     active,
+    projectType = 'rust',
+    projectTypes = {},
     onswitch,
     onnew,
     onrename,
@@ -13,8 +15,10 @@
   }: {
     projects: string[]
     active: string
+    projectType?: 'rust' | 'native'
+    projectTypes?: Record<string, 'rust' | 'native'>
     onswitch: (name: string) => Promise<void>
-    onnew:    (name: string) => Promise<void>
+    onnew:    (name: string, ptype: 'rust' | 'native') => Promise<void>
     onrename: (oldName: string, newName: string) => Promise<void>
     ondelete: (name: string) => Promise<void>
     pendingMode?: 'new' | 'rename' | 'delete-confirm' | null
@@ -38,6 +42,7 @@
   let newValue    = $state('')
   let newError    = $state('')
   let newInputEl: HTMLInputElement | null = $state(null)
+  let newProjectType: 'rust' | 'native' = $state('rust')
 
   // Rename input
   let renameValue   = $state('')
@@ -75,7 +80,7 @@
     if (name.length > 64)                 { newError = 'Max 64 characters'; return }
     if (projects.includes(name))          { newError = 'Already exists'; return }
     busy = true; opError = ''
-    try    { await onnew(name); console.log('[ProjectSwitcher] onnew ok'); close() }
+    try    { await onnew(name, newProjectType); console.log('[ProjectSwitcher] onnew ok'); close() }
     catch  (err) { console.error('[ProjectSwitcher] onnew failed', err); opError = String(err); busy = false }
   }
 
@@ -112,7 +117,11 @@
 
 <div class="project-switcher">
   <button class="pill" onclick={toggle} class:open>
-    <span class="pill-badge">RS</span>
+    {#if projectType === 'native'}
+      <span class="pill-badge native">&#63743;</span>
+    {:else}
+      <span class="pill-badge">RS</span>
+    {/if}
     <span class="pill-name">{active}</span>
     <svg class="pill-caret" width="10" height="6" viewBox="0 0 10 6">
       <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5"
@@ -135,7 +144,11 @@
                 onclick={() => selectProject(name)}
                 disabled={busy}
               >
-                <span class="item-badge">RS</span>
+                {#if (projectTypes[name] ?? 'rust') === 'native'}
+                  <span class="item-badge native">&#63743;</span>
+                {:else}
+                  <span class="item-badge">RS</span>
+                {/if}
                 <span class="project-name">{name}</span>
                 {#if name === active}
                   <svg class="active-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -160,7 +173,27 @@
 
       {:else if mode === 'new'}
         <div class="inline-input-section">
-          <p class="inline-label"><span class="form-badge">RS</span> New Project</p>
+          <p class="inline-label">
+            {#if newProjectType === 'native'}
+              <span class="form-badge native">&#63743;</span>
+            {:else}
+              <span class="form-badge">RS</span>
+            {/if}
+            New Project
+          </p>
+          <div class="type-toggle">
+            <button
+              class="type-btn" class:active={newProjectType === 'rust'}
+              onclick={() => newProjectType = 'rust'}
+            >Rust</button>
+            <button
+              class="type-btn" class:active={newProjectType === 'native'}
+              onclick={() => newProjectType = 'native'}
+            >Native (C/C++)</button>
+          </div>
+          <span class="type-hint">
+            {newProjectType === 'rust' ? 'Cargo workspace with deps and live checking' : 'C/C++ with clang — compiler flags in rustic.toml'}
+          </span>
           <input
             class="inline-input"
             class:error={!!newError}
@@ -184,7 +217,14 @@
 
       {:else if mode === 'rename'}
         <div class="inline-input-section">
-          <p class="inline-label"><span class="form-badge">RS</span> Rename "{active}"</p>
+          <p class="inline-label">
+            {#if projectType === 'native'}
+              <span class="form-badge native">&#63743;</span>
+            {:else}
+              <span class="form-badge">RS</span>
+            {/if}
+            Rename "{active}"
+          </p>
           <input
             class="inline-input"
             class:error={!!renameError}
@@ -251,6 +291,10 @@
     border-radius: 3px; padding: 2px 4px;
     line-height: 1.3; flex-shrink: 0;
   }
+  .pill-badge.native {
+    background: #3478f6; font-size: 11px; font-weight: 400;
+    padding: 0 3px; line-height: 1.2;
+  }
   .pill-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
   .pill-caret { flex-shrink: 0; color: var(--text-tertiary); transition: transform 0.15s; }
   .pill.open .pill-caret { transform: rotate(180deg); }
@@ -258,7 +302,7 @@
   /* ── Popover ── */
   .popover {
     position: absolute; top: calc(100% + 6px); left: 0;
-    min-width: 200px; max-width: 260px;
+    min-width: 240px; max-width: 320px;
     background: var(--bg-elevated);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
@@ -288,12 +332,17 @@
     line-height: 1.3; flex-shrink: 0;
     min-width: 16px; text-align: center;
   }
+  .item-badge.native {
+    background: #3478f6; font-size: 10px; font-weight: 400;
+    padding: 1px 2px; line-height: 1.2;
+  }
   .active-project .item-badge { background: var(--rust-orange); }
+  .active-project .item-badge.native { background: #3478f6; }
 
   /* Active checkmark */
   .active-check { flex-shrink: 0; color: var(--accent); }
 
-  /* RS badge in form label rows */
+  /* RS / Native badge in form label rows */
   .form-badge {
     display: inline-block;
     font-size: 7px; font-weight: 800; letter-spacing: 0.04em;
@@ -302,6 +351,30 @@
     line-height: 1.3;
     vertical-align: middle;
     margin-right: 2px;
+  }
+  .form-badge.native {
+    background: #3478f6; font-size: 10px; font-weight: 400;
+    padding: 1px 3px; line-height: 1.2;
+  }
+
+  /* Type toggle for new project */
+  .type-toggle {
+    display: flex; gap: 0; margin-bottom: 6px;
+    border: 1px solid var(--border); border-radius: 5px; overflow: hidden;
+  }
+  .type-btn {
+    flex: 1; padding: 4px 0; font-size: 11px; font-weight: 600;
+    text-align: center; cursor: pointer;
+    background: transparent; color: var(--text-secondary);
+    border: none; transition: background 0.1s, color 0.1s;
+  }
+  .type-btn:first-child { border-right: 1px solid var(--border); }
+  .type-btn.active {
+    background: var(--bg-hover); color: var(--text);
+  }
+  .type-hint {
+    display: block; font-size: 10px; color: var(--text-tertiary);
+    margin-bottom: 6px; line-height: 1.4;
   }
 
   .project-name {

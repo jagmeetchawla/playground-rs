@@ -3,6 +3,7 @@ export type Template = {
   name: string
   description: string
   code: string
+  lang?: 'c' | 'cpp'
   deps?: { name: string; version: string }[]
 }
 
@@ -435,6 +436,730 @@ fn main() {
             println!("  {} scored {}", u["name"], u["score"]);
         }
     }
+}
+`,
+  },
+]
+
+// ── Native C templates ────────────────────────────────────────────────────────
+
+export const C_TEMPLATES: Template[] = [
+  {
+    id: 'c_blank',
+    name: 'Blank',
+    description: 'Empty C playground',
+    lang: 'c',
+    code: `#include <stdio.h>
+
+int main() {
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'c_hello',
+    name: 'Hello World',
+    description: 'Variables, printf formatting',
+    lang: 'c',
+    code: `#include <stdio.h>
+
+int main() {
+    const char *name = "C";
+    int year = 1972;
+
+    printf("Hello, %s!\\n", name);
+    printf("%s was created in %d.\\n", name, year);
+    printf("Result: %d\\n", 2 + 2);
+
+    // Formatted output
+    double pi = 3.14159;
+    printf("Pi is approximately %.2f\\n", pi);
+    printf("%10s | %10s\\n", "Item", "Price");
+    printf("%10s | %10.2f\\n", "Coffee", 4.5);
+    printf("%10s | %10.2f\\n", "Muffin", 3.25);
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'c_input',
+    name: 'CLI Input',
+    description: 'Read from stdin, parse input',
+    lang: 'c',
+    code: `#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    char name[64];
+    int age;
+
+    printf("What is your name? ");
+    fflush(stdout);
+    if (fgets(name, sizeof(name), stdin)) {
+        // Strip trailing newline
+        for (int i = 0; name[i]; i++) {
+            if (name[i] == '\\n') { name[i] = '\\0'; break; }
+        }
+    }
+
+    printf("How old are you? ");
+    fflush(stdout);
+    if (scanf("%d", &age) == 1) {
+        printf("Hello %s, you will be %d next year!\\n", name, age + 1);
+    } else {
+        printf("That's not a valid number, %s!\\n", name);
+    }
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'c_structs',
+    name: 'Structs',
+    description: 'Structs, typedef, function pointers',
+    lang: 'c',
+    code: `#include <stdio.h>
+#include <math.h>
+
+typedef struct {
+    double x;
+    double y;
+} Point;
+
+double distance(Point a, Point b) {
+    double dx = a.x - b.x;
+    double dy = a.y - b.y;
+    return sqrt(dx * dx + dy * dy);
+}
+
+typedef struct {
+    const char *name;
+    double dimension1;
+    double dimension2;
+    double (*area)(double, double);
+} Shape;
+
+double circle_area(double r, double _unused) {
+    (void)_unused;
+    return 3.14159265 * r * r;
+}
+
+double rect_area(double w, double h) {
+    return w * h;
+}
+
+double tri_area(double b, double h) {
+    return 0.5 * b * h;
+}
+
+int main() {
+    Point a = {0.0, 0.0};
+    Point b = {3.0, 4.0};
+    printf("Distance from (%.1f,%.1f) to (%.1f,%.1f): %.2f\\n",
+           a.x, a.y, b.x, b.y, distance(a, b));
+
+    Shape shapes[] = {
+        {"Circle(5)",      5.0, 0.0, circle_area},
+        {"Rect(4x6)",      4.0, 6.0, rect_area},
+        {"Triangle(3x8)",  3.0, 8.0, tri_area},
+    };
+    int n = sizeof(shapes) / sizeof(shapes[0]);
+
+    for (int i = 0; i < n; i++) {
+        printf("%s -> area = %.2f\\n", shapes[i].name,
+               shapes[i].area(shapes[i].dimension1, shapes[i].dimension2));
+    }
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'c_arrays',
+    name: 'Arrays & Strings',
+    description: 'Arrays, string functions, sorting',
+    lang: 'c',
+    code: `#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int compare_ints(const void *a, const void *b) {
+    return (*(int *)a - *(int *)b);
+}
+
+int main() {
+    // Array basics
+    int numbers[] = {42, 17, 93, 5, 68, 31, 84, 12};
+    int n = sizeof(numbers) / sizeof(numbers[0]);
+
+    printf("Original: ");
+    for (int i = 0; i < n; i++) printf("%d ", numbers[i]);
+    printf("\\n");
+
+    qsort(numbers, n, sizeof(int), compare_ints);
+
+    printf("Sorted:   ");
+    for (int i = 0; i < n; i++) printf("%d ", numbers[i]);
+    printf("\\n");
+
+    // Sum and average
+    int sum = 0;
+    for (int i = 0; i < n; i++) sum += numbers[i];
+    printf("Sum: %d, Average: %.1f\\n\\n", sum, (double)sum / n);
+
+    // String operations
+    char greeting[64] = "Hello";
+    strcat(greeting, ", World!");
+    printf("Greeting: %s (length: %zu)\\n", greeting, strlen(greeting));
+
+    char copy[64];
+    strcpy(copy, greeting);
+    printf("Copy: %s\\n", copy);
+    printf("Compare: %d (0 = equal)\\n", strcmp(greeting, copy));
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'c_pointers',
+    name: 'Pointers & Memory',
+    description: 'Pointers, malloc, linked list',
+    lang: 'c',
+    code: `#include <stdio.h>
+#include <stdlib.h>
+
+// A simple singly-linked list
+typedef struct Node {
+    int value;
+    struct Node *next;
+} Node;
+
+Node *node_new(int value) {
+    Node *n = malloc(sizeof(Node));
+    n->value = value;
+    n->next = NULL;
+    return n;
+}
+
+void list_push(Node **head, int value) {
+    Node *n = node_new(value);
+    n->next = *head;
+    *head = n;
+}
+
+void list_print(Node *head) {
+    for (Node *cur = head; cur; cur = cur->next) {
+        printf("%d", cur->value);
+        if (cur->next) printf(" -> ");
+    }
+    printf("\\n");
+}
+
+void list_free(Node *head) {
+    while (head) {
+        Node *next = head->next;
+        free(head);
+        head = next;
+    }
+}
+
+int main() {
+    // Pointer basics
+    int x = 42;
+    int *p = &x;
+    printf("x = %d, *p = %d, address = %p\\n", x, *p, (void *)p);
+
+    *p = 100;
+    printf("After *p = 100: x = %d\\n\\n", x);
+
+    // Dynamic array
+    int n = 5;
+    int *arr = malloc(n * sizeof(int));
+    for (int i = 0; i < n; i++) arr[i] = (i + 1) * 10;
+
+    printf("Dynamic array: ");
+    for (int i = 0; i < n; i++) printf("%d ", arr[i]);
+    printf("\\n\\n");
+    free(arr);
+
+    // Linked list
+    Node *list = NULL;
+    for (int i = 1; i <= 5; i++) list_push(&list, i * 10);
+
+    printf("Linked list: ");
+    list_print(list);
+    list_free(list);
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'c_file_io',
+    name: 'File I/O',
+    description: 'Read and write files using content folder',
+    lang: 'c',
+    code: `#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main() {
+    // Get the content folder path (set by the playground runner)
+    const char *content_dir = getenv("PLAYGROUND_CONTENT");
+    if (!content_dir) content_dir = ".";
+
+    char path[256];
+    snprintf(path, sizeof(path), "%s/scores.csv", content_dir);
+
+    // Write a file
+    FILE *f = fopen(path, "w");
+    if (!f) { perror("fopen write"); return 1; }
+    fprintf(f, "Name,Score\\n");
+    fprintf(f, "Alice,95\\n");
+    fprintf(f, "Bob,87\\n");
+    fprintf(f, "Charlie,92\\n");
+    fclose(f);
+    printf("Wrote %s\\n\\n", path);
+
+    // Read it back and process
+    f = fopen(path, "r");
+    if (!f) { perror("fopen read"); return 1; }
+
+    char line[128];
+    int total = 0, count = 0;
+
+    fgets(line, sizeof(line), f); // skip header
+    printf("Parsed results:\\n");
+    while (fgets(line, sizeof(line), f)) {
+        char name[64];
+        int score;
+        if (sscanf(line, "%[^,],%d", name, &score) == 2) {
+            printf("  %s: %d\\n", name, score);
+            total += score;
+            count++;
+        }
+    }
+    fclose(f);
+
+    if (count > 0) {
+        printf("\\nAverage: %.1f\\n", (double)total / count);
+    }
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'c_sqlite',
+    name: 'SQLite',
+    description: 'In-memory database with sqlite3',
+    lang: 'c',
+    code: `#include <stdio.h>
+#include <sqlite3.h>
+
+static int print_row(void *unused, int ncols, char **values, char **names) {
+    (void)unused;
+    for (int i = 0; i < ncols; i++) {
+        printf("  %s = %s", names[i], values[i] ? values[i] : "NULL");
+        if (i < ncols - 1) printf(",");
+    }
+    printf("\\n");
+    return 0;
+}
+
+int main() {
+    sqlite3 *db;
+    char *err = NULL;
+
+    if (sqlite3_open(":memory:", &db) != SQLITE_OK) {
+        fprintf(stderr, "Cannot open database: %s\\n", sqlite3_errmsg(db));
+        return 1;
+    }
+
+    // Create table and insert data
+    const char *sql =
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, score INTEGER);"
+        "INSERT INTO users (name, score) VALUES ('Alice', 95);"
+        "INSERT INTO users (name, score) VALUES ('Bob', 87);"
+        "INSERT INTO users (name, score) VALUES ('Charlie', 92);"
+        "INSERT INTO users (name, score) VALUES ('Diana', 78);";
+
+    if (sqlite3_exec(db, sql, NULL, NULL, &err) != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\\n", err);
+        sqlite3_free(err);
+        sqlite3_close(db);
+        return 1;
+    }
+
+    printf("All users:\\n");
+    sqlite3_exec(db, "SELECT * FROM users ORDER BY score DESC;", print_row, NULL, NULL);
+
+    printf("\\nAverage score:\\n");
+    sqlite3_exec(db, "SELECT AVG(score) as avg_score FROM users;", print_row, NULL, NULL);
+
+    sqlite3_close(db);
+    return 0;
+}
+`,
+  },
+]
+
+// ── Native C++ templates ──────────────────────────────────────────────────────
+
+export const CPP_TEMPLATES: Template[] = [
+  {
+    id: 'cpp_blank',
+    name: 'Blank',
+    description: 'Empty C++ playground',
+    lang: 'cpp',
+    code: `#include <iostream>
+
+int main() {
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'cpp_hello',
+    name: 'Hello World',
+    description: 'Variables, streams, formatting',
+    lang: 'cpp',
+    code: `#include <iostream>
+#include <iomanip>
+#include <string>
+
+int main() {
+    std::string name = "C++";
+    int year = 1985;
+
+    std::cout << "Hello, " << name << "!" << std::endl;
+    std::cout << name << " was created in " << year << "." << std::endl;
+    std::cout << "Result: " << 2 + 2 << std::endl;
+
+    // Formatted output
+    double pi = 3.14159;
+    std::cout << "Pi is approximately " << std::fixed << std::setprecision(2) << pi << std::endl;
+    std::cout << std::setw(10) << "Item" << " | " << std::setw(10) << "Price" << std::endl;
+    std::cout << std::setw(10) << "Coffee" << " | " << std::setw(10) << 4.5 << std::endl;
+    std::cout << std::setw(10) << "Muffin" << " | " << std::setw(10) << 3.25 << std::endl;
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'cpp_input',
+    name: 'CLI Input',
+    description: 'Read from stdin, parse input',
+    lang: 'cpp',
+    code: `#include <iostream>
+#include <string>
+
+int main() {
+    std::string name;
+    std::cout << "What is your name? " << std::flush;
+    std::getline(std::cin, name);
+
+    std::cout << "How old are you? " << std::flush;
+    int age;
+    if (std::cin >> age) {
+        std::cout << "Hello " << name << ", you will be " << age + 1 << " next year!" << std::endl;
+    } else {
+        std::cout << "That's not a valid number, " << name << "!" << std::endl;
+    }
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'cpp_classes',
+    name: 'Classes',
+    description: 'Classes, inheritance, polymorphism',
+    lang: 'cpp',
+    code: `#include <iostream>
+#include <string>
+#include <vector>
+#include <memory>
+#include <cmath>
+
+struct Point {
+    double x, y;
+
+    double distance_to(const Point &other) const {
+        double dx = x - other.x;
+        double dy = y - other.y;
+        return std::sqrt(dx * dx + dy * dy);
+    }
+};
+
+class Shape {
+public:
+    virtual ~Shape() = default;
+    virtual std::string name() const = 0;
+    virtual double area() const = 0;
+};
+
+class Circle : public Shape {
+    double radius;
+public:
+    Circle(double r) : radius(r) {}
+    std::string name() const override { return "Circle(" + std::to_string(radius) + ")"; }
+    double area() const override { return M_PI * radius * radius; }
+};
+
+class Rectangle : public Shape {
+    double w, h;
+public:
+    Rectangle(double w, double h) : w(w), h(h) {}
+    std::string name() const override { return "Rect(" + std::to_string(w) + "x" + std::to_string(h) + ")"; }
+    double area() const override { return w * h; }
+};
+
+int main() {
+    Point a{0.0, 0.0}, b{3.0, 4.0};
+    std::cout << "Distance: " << a.distance_to(b) << std::endl;
+
+    std::vector<std::unique_ptr<Shape>> shapes;
+    shapes.push_back(std::make_unique<Circle>(5.0));
+    shapes.push_back(std::make_unique<Rectangle>(4.0, 6.0));
+
+    for (const auto &s : shapes) {
+        std::cout << s->name() << " -> area = " << s->area() << std::endl;
+    }
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'cpp_containers',
+    name: 'Containers',
+    description: 'vector, map, algorithms, ranges',
+    lang: 'cpp',
+    code: `#include <iostream>
+#include <vector>
+#include <map>
+#include <algorithm>
+#include <numeric>
+#include <string>
+#include <sstream>
+
+int main() {
+    // Vector + algorithms
+    std::vector<int> numbers = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+
+    std::vector<int> even_squares;
+    for (int n : numbers) {
+        if (n % 2 == 0) even_squares.push_back(n * n);
+    }
+
+    std::cout << "Even squares: ";
+    for (int n : even_squares) std::cout << n << " ";
+    std::cout << std::endl;
+
+    int sum = std::accumulate(numbers.begin(), numbers.end(), 0);
+    std::cout << "Sum: " << sum << std::endl;
+
+    // Map — word frequency counter
+    std::string text = "the cat sat on the mat the cat";
+    std::map<std::string, int> freq;
+    std::istringstream iss(text);
+    std::string word;
+    while (iss >> word) freq[word]++;
+
+    // Sort by frequency
+    std::vector<std::pair<std::string, int>> sorted(freq.begin(), freq.end());
+    std::sort(sorted.begin(), sorted.end(),
+              [](const auto &a, const auto &b) { return b.second < a.second; });
+
+    std::cout << "\\nWord frequencies:" << std::endl;
+    for (const auto &[w, c] : sorted) {
+        std::cout << "  " << w << " : " << c << std::endl;
+    }
+
+    // Partition: even/odd
+    std::vector<int> evens, odds;
+    for (int n : numbers) {
+        (n % 2 == 0 ? evens : odds).push_back(n);
+    }
+    std::cout << "\\nEvens: ";
+    for (int n : evens) std::cout << n << " ";
+    std::cout << "\\nOdds:  ";
+    for (int n : odds) std::cout << n << " ";
+    std::cout << std::endl;
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'cpp_smart_ptrs',
+    name: 'Smart Pointers',
+    description: 'unique_ptr, shared_ptr, RAII',
+    lang: 'cpp',
+    code: `#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+
+class Resource {
+    std::string name;
+public:
+    Resource(const std::string &n) : name(n) {
+        std::cout << "  [+] " << name << " acquired" << std::endl;
+    }
+    ~Resource() {
+        std::cout << "  [-] " << name << " released" << std::endl;
+    }
+    void use() const { std::cout << "  Using " << name << std::endl; }
+};
+
+int main() {
+    // unique_ptr — exclusive ownership
+    std::cout << "=== unique_ptr ===" << std::endl;
+    {
+        auto r = std::make_unique<Resource>("FileHandle");
+        r->use();
+        // auto copy = r;  // ERROR: can't copy unique_ptr
+        auto moved = std::move(r);
+        moved->use();
+    } // automatically released here
+    std::cout << std::endl;
+
+    // shared_ptr — reference counted
+    std::cout << "=== shared_ptr ===" << std::endl;
+    {
+        auto shared = std::make_shared<Resource>("Connection");
+        std::cout << "  ref count: " << shared.use_count() << std::endl;
+        {
+            auto copy = shared;
+            std::cout << "  ref count: " << shared.use_count() << std::endl;
+            copy->use();
+        }
+        std::cout << "  ref count: " << shared.use_count() << std::endl;
+    }
+    std::cout << std::endl;
+
+    // Vector of unique_ptrs
+    std::cout << "=== vector<unique_ptr> ===" << std::endl;
+    {
+        std::vector<std::unique_ptr<Resource>> resources;
+        resources.push_back(std::make_unique<Resource>("GPU"));
+        resources.push_back(std::make_unique<Resource>("Audio"));
+        for (const auto &r : resources) r->use();
+    }
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'cpp_file_io',
+    name: 'File I/O',
+    description: 'Read and write files using content folder',
+    lang: 'cpp',
+    code: `#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <cstdlib>
+
+int main() {
+    // Get the content folder path (set by the playground runner)
+    const char *env = std::getenv("PLAYGROUND_CONTENT");
+    std::string content_dir = env ? env : ".";
+    std::string path = content_dir + "/scores.csv";
+
+    // Write a file
+    {
+        std::ofstream out(path);
+        out << "Name,Score\\n";
+        out << "Alice,95\\n";
+        out << "Bob,87\\n";
+        out << "Charlie,92\\n";
+    }
+    std::cout << "Wrote " << path << "\\n\\n";
+
+    // Read it back and process
+    std::ifstream in(path);
+    std::string line;
+    int total = 0, count = 0;
+
+    std::getline(in, line); // skip header
+    std::cout << "Parsed results:\\n";
+    while (std::getline(in, line)) {
+        auto comma = line.find(',');
+        if (comma != std::string::npos) {
+            std::string name = line.substr(0, comma);
+            int score = std::stoi(line.substr(comma + 1));
+            std::cout << "  " << name << ": " << score << "\\n";
+            total += score;
+            count++;
+        }
+    }
+
+    if (count > 0) {
+        std::cout << "\\nAverage: " << (double)total / count << "\\n";
+    }
+
+    return 0;
+}
+`,
+  },
+  {
+    id: 'cpp_sqlite',
+    name: 'SQLite',
+    description: 'In-memory database with sqlite3',
+    lang: 'cpp',
+    code: `#include <iostream>
+#include <sqlite3.h>
+
+static int print_row(void *, int ncols, char **values, char **names) {
+    for (int i = 0; i < ncols; i++) {
+        std::cout << "  " << names[i] << " = " << (values[i] ? values[i] : "NULL");
+        if (i < ncols - 1) std::cout << ",";
+    }
+    std::cout << std::endl;
+    return 0;
+}
+
+int main() {
+    sqlite3 *db;
+    char *err = nullptr;
+
+    if (sqlite3_open(":memory:", &db) != SQLITE_OK) {
+        std::cerr << "Cannot open database: " << sqlite3_errmsg(db) << std::endl;
+        return 1;
+    }
+
+    const char *sql =
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, score INTEGER);"
+        "INSERT INTO users (name, score) VALUES ('Alice', 95);"
+        "INSERT INTO users (name, score) VALUES ('Bob', 87);"
+        "INSERT INTO users (name, score) VALUES ('Charlie', 92);"
+        "INSERT INTO users (name, score) VALUES ('Diana', 78);";
+
+    if (sqlite3_exec(db, sql, nullptr, nullptr, &err) != SQLITE_OK) {
+        std::cerr << "SQL error: " << err << std::endl;
+        sqlite3_free(err);
+        sqlite3_close(db);
+        return 1;
+    }
+
+    std::cout << "All users:" << std::endl;
+    sqlite3_exec(db, "SELECT * FROM users ORDER BY score DESC;", print_row, nullptr, nullptr);
+
+    std::cout << "\\nAverage score:" << std::endl;
+    sqlite3_exec(db, "SELECT AVG(score) as avg_score FROM users;", print_row, nullptr, nullptr);
+
+    sqlite3_close(db);
+    return 0;
 }
 `,
   },

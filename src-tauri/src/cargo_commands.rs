@@ -275,6 +275,29 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         .map(|o| o.status.success())
         .unwrap_or(false);
 
+    // Check clang (C/C++ toolchain via Xcode Command Line Tools)
+    let clang_path = std::process::Command::new("xcrun")
+        .args(["--find", "clang"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/usr/bin/clang".to_string());
+
+    let clang_output = std::process::Command::new(&clang_path)
+        .arg("--version")
+        .output()
+        .ok();
+    let clang_installed = clang_output
+        .as_ref()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let clang_version = clang_output
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
+
     let all_good = cargo_installed && rustc_installed;
 
     serde_json::json!({
@@ -298,6 +321,11 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         "components": {
             "rustfmt": has_rustfmt,
             "clippy": has_clippy,
+        },
+        "clang": {
+            "installed": clang_installed,
+            "path": clang_path,
+            "version": clang_version,
         }
     })
 }

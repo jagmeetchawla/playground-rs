@@ -25,6 +25,23 @@
   let draft: Settings = $state({ ...settings })
   const originalTheme = settings.theme
 
+  // Clang toolchain info (read-only display)
+  let clangPath: string = $state('')
+  let clangInstalled: boolean = $state(false)
+  let clangVersion: string = $state('')
+
+  async function detectClang() {
+    try {
+      const tc = await invoke<any>('check_toolchain')
+      if (tc.clang) {
+        clangInstalled = tc.clang.installed ?? false
+        clangPath = tc.clang.path ?? ''
+        clangVersion = tc.clang.version ?? ''
+      }
+    } catch (_) { /* ignore */ }
+  }
+  detectClang()
+
   function setTheme(theme: string) {
     draft.theme = theme
     onthemechange?.(theme)
@@ -156,6 +173,11 @@
             class:seg-active={draft.theme === 'rust'}
             onclick={() => setTheme('rust')}
           >Rust</button>
+          <button
+            class="seg-btn"
+            class:seg-active={draft.theme === 'seagreen'}
+            onclick={() => setTheme('seagreen')}
+          >C</button>
         </div>
       </div>
     </section>
@@ -173,6 +195,19 @@
           class="path-input"
           spellcheck="false"
         />
+      </div>
+
+      <div class="setting-row">
+        <label>Clang</label>
+        {#if clangInstalled}
+          <span class="clang-version">{clangVersion || 'installed'}</span>
+        {:else}
+          <div class="toolchain-missing">
+            <span class="missing-label">Xcode Command Line Tools not installed</span>
+            <p class="missing-hint">C/C++ support requires clang. Run in Terminal:</p>
+            <code class="install-cmd">xcode-select --install</code>
+          </div>
+        {/if}
       </div>
     </section>
 
@@ -284,6 +319,33 @@
   select:focus,
   .path-input:focus {
     border-color: var(--accent);
+  }
+
+  .clang-version {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .setting-row:has(.toolchain-missing) {
+    align-items: flex-start;
+  }
+  .toolchain-missing {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .missing-label {
+    font-size: 12px; font-weight: 600; color: #ff9f0a;
+  }
+  .missing-hint {
+    font-size: 11px; color: var(--text-tertiary); margin: 0;
+  }
+  .install-cmd {
+    display: block;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text); background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 4px; padding: 6px 8px;
+    user-select: all;
   }
 
   select {

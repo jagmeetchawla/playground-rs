@@ -170,6 +170,51 @@
     }
   })
 
+  // ── Custom Sea Green theme — cool, oceanic tones inspired by C ─────────────
+  monaco.editor.defineTheme('playground-seagreen', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment',            foreground: '5d7a74', fontStyle: 'italic' },
+      { token: 'keyword',            foreground: '44aa99' },   // sea green
+      { token: 'type',               foreground: 'd4b83c' },   // sandy gold
+      { token: 'type.identifier',    foreground: 'd4b83c' },
+      { token: 'string',             foreground: '6bae8e' },   // moss green
+      { token: 'string.escape',      foreground: '8bccaa' },
+      { token: 'number',             foreground: '3299aa' },   // ocean blue
+      { token: 'number.float',       foreground: '3299aa' },
+      { token: 'operator',           foreground: 'd0e8e4' },   // seafoam
+      { token: 'delimiter',          foreground: '668a84' },
+      { token: 'attribute',          foreground: '40887a' },   // deep teal
+      { token: 'macro',              foreground: '5cc4b2' },   // bright sea green
+      { token: 'identifier',         foreground: 'd0e8e4' },
+    ],
+    colors: {
+      'editor.background':                  '#0e1a18',
+      'editor.foreground':                  '#d0e8e4',
+      'editorLineNumber.foreground':        '#283d3a',
+      'editorLineNumber.activeForeground':  '#668a84',
+      'editor.lineHighlightBackground':     '#152422',
+      'editor.lineHighlightBorder':         '#00000000',
+      'editor.selectionBackground':         '#44aa9935',
+      'editor.inactiveSelectionBackground': '#44aa9920',
+      'editorCursor.foreground':            '#44aa99',
+      'editorIndentGuide.background':       '#1e2e2c',
+      'editorIndentGuide.activeBackground': '#283d3a',
+      'editorBracketMatch.background':      '#44aa9925',
+      'editorBracketMatch.border':          '#44aa9960',
+      'editorGutter.background':            '#0e1a18',
+      'editor.findMatchBackground':         '#d4b83c40',
+      'editor.findMatchHighlightBackground':'#d4b83c20',
+      'editorError.foreground':             '#e05a5a',
+      'editorWarning.foreground':           '#d4b83c',
+      'editorInfo.foreground':              '#3299aa',
+      'scrollbarSlider.background':         '#44aa9920',
+      'scrollbarSlider.hoverBackground':    '#44aa9935',
+      'scrollbarSlider.activeBackground':   '#44aa9950',
+    }
+  })
+
   const dispatch = createEventDispatcher()
   let {
     code,

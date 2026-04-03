@@ -11,7 +11,9 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     active: &str,
     _playground_count: usize,
     has_active_playground: bool,
+    project_type: &str,
 ) -> tauri::Result<tauri::menu::Menu<R>> {
+    let is_rust = project_type == "rust";
     let app_submenu = SubmenuBuilder::new(handle, "Rustic Playground")
         .item(
             &MenuItemBuilder::with_id("show_settings", "Settings…")
@@ -134,6 +136,12 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .separator()
         .item(
             &MenuItemBuilder::with_id("seed_rust_book", "Load Rust Book Examples…")
+                .enabled(is_rust)
+                .build(handle)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("seed_knr_book", "Load K&R C Book Examples…")
+                .enabled(!is_rust)
                 .build(handle)?,
         )
         .separator()
@@ -156,6 +164,7 @@ pub fn rebuild_menu(
     active: String,
     playground_count: usize,
     has_active_playground: bool,
+    project_type: String,
     app: AppHandle,
 ) -> Result<(), String> {
     let menu = build_menu(
@@ -164,6 +173,7 @@ pub fn rebuild_menu(
         &active,
         playground_count,
         has_active_playground,
+        &project_type,
     )
     .map_err(|e| e.to_string())?;
     app.set_menu(menu).map_err(|e| e.to_string())?;

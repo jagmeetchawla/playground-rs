@@ -17,11 +17,13 @@
     active_toolchain: string | null
     installed_toolchains: string[]
     components: { rustfmt: boolean; clippy: boolean }
+    clang: { installed: boolean; path: string; version: string | null }
   }
 
   let status = $state<ToolchainStatus | null>(null)
   let checking = $state(true)
   let error = $state<string | null>(null)
+  let activeTab: 'rust' | 'native' = $state('rust')
 
   async function runCheck() {
     checking = true
@@ -49,7 +51,6 @@
 <div class="modal" role="dialog" aria-modal="true" aria-label="Toolchain Setup">
   <div class="modal-header">
     <div class="header-left">
-      <span class="rs-badge">RS</span>
       <span class="modal-title">Toolchain Setup</span>
     </div>
     <button class="close-btn" onclick={onclose} aria-label="Close">
@@ -59,11 +60,35 @@
     </button>
   </div>
 
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button
+      class="tab" class:active={activeTab === 'rust'}
+      onclick={() => activeTab = 'rust'}
+    >
+      <span class="tab-badge rs">RS</span>
+      Rust
+      {#if status}
+        <span class="tab-dot" class:ok={status.all_good} class:missing={!status.all_good}></span>
+      {/if}
+    </button>
+    <button
+      class="tab" class:active={activeTab === 'native'}
+      onclick={() => activeTab = 'native'}
+    >
+      <span class="tab-badge native">C</span>
+      C/C++
+      {#if status}
+        <span class="tab-dot" class:ok={status.clang.installed} class:missing={!status.clang.installed}></span>
+      {/if}
+    </button>
+  </div>
+
   <div class="modal-body">
     {#if checking}
       <div class="checking">
         <div class="spinner"></div>
-        <span>Detecting Rust toolchain...</span>
+        <span>Detecting toolchains...</span>
       </div>
     {:else if error}
       <div class="error-box">
@@ -71,136 +96,155 @@
         <button class="btn btn-primary" onclick={runCheck}>Retry</button>
       </div>
     {:else if status}
-      <!-- Status overview: green = all good, yellow = partial, red = nothing -->
-      {@const nothingFound = !status.rustup.installed && !status.cargo.installed && !status.rustc.installed}
-      {#if status.all_good}
-        <div class="status-banner good">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          </svg>
-          <span>Rust toolchain is ready</span>
-        </div>
-      {:else if nothingFound}
-        <div class="status-banner bad">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M7 7l6 6M13 7l-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-          <span>Rust is not installed</span>
-        </div>
-      {:else}
-        <div class="status-banner warn">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M10 2L18.66 17H1.34L10 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-            <path d="M10 8v4M10 14v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-          <span>Rust toolchain is incomplete</span>
-        </div>
-      {/if}
 
-      <!-- Detail rows -->
-      <div class="detail-grid">
-        <div class="detail-row">
-          <span class="detail-icon" class:ok={status.rustup.installed} class:missing={!status.rustup.installed}>
-            {status.rustup.installed ? '●' : '○'}
-          </span>
-          <span class="detail-label">rustup</span>
-          <span class="detail-value">
-            {#if status.rustup.installed}
-              {status.rustup.version ?? 'installed'}
-            {:else}
-              not found
-            {/if}
-          </span>
-        </div>
-
-        <div class="detail-row">
-          <span class="detail-icon" class:ok={status.cargo.installed} class:missing={!status.cargo.installed}>
-            {status.cargo.installed ? '●' : '○'}
-          </span>
-          <span class="detail-label">cargo</span>
-          <span class="detail-value">
-            {#if status.cargo.installed}
-              {status.cargo.version ?? 'installed'}
-            {:else}
-              not found
-            {/if}
-          </span>
-        </div>
-
-        <div class="detail-row">
-          <span class="detail-icon" class:ok={status.rustc.installed} class:missing={!status.rustc.installed}>
-            {status.rustc.installed ? '●' : '○'}
-          </span>
-          <span class="detail-label">rustc</span>
-          <span class="detail-value">
-            {#if status.rustc.installed}
-              {status.rustc.version ?? 'installed'}
-            {:else}
-              not found
-            {/if}
-          </span>
-        </div>
-
-        {#if status.active_toolchain}
-          <div class="detail-row">
-            <span class="detail-icon ok">●</span>
-            <span class="detail-label">toolchain</span>
-            <span class="detail-value">{status.active_toolchain}</span>
+      <!-- ═══════════ Rust tab ═══════════ -->
+      {#if activeTab === 'rust'}
+        {#if status.all_good}
+          <div class="status-banner good">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+            <span>Rust toolchain ready</span>
+          </div>
+        {:else}
+          {@const nothingFound = !status.rustup.installed && !status.cargo.installed && !status.rustc.installed}
+          <div class="status-banner warn">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M10 2L18.66 17H1.34L10 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+              <path d="M10 8v4M10 14v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <span>{nothingFound ? 'Rust toolchain not found' : 'Rust toolchain incomplete'}</span>
           </div>
         {/if}
 
-        <div class="detail-row">
-          <span class="detail-icon" class:ok={status.components.rustfmt} class:missing={!status.components.rustfmt}>
-            {status.components.rustfmt ? '●' : '○'}
-          </span>
-          <span class="detail-label">rustfmt</span>
-          <span class="detail-value">{status.components.rustfmt ? 'installed' : 'not found'}</span>
-        </div>
+        <div class="detail-grid">
+          <div class="detail-row">
+            <span class="detail-icon" class:ok={status.rustup.installed} class:missing={!status.rustup.installed}>
+              {status.rustup.installed ? '●' : '○'}
+            </span>
+            <span class="detail-label">rustup</span>
+            <span class="detail-value">{status.rustup.installed ? (status.rustup.version ?? 'installed') : 'not found'}</span>
+          </div>
 
-        <div class="detail-row">
-          <span class="detail-icon" class:ok={status.components.clippy} class:missing={!status.components.clippy}>
-            {status.components.clippy ? '●' : '○'}
-          </span>
-          <span class="detail-label">clippy</span>
-          <span class="detail-value">{status.components.clippy ? 'installed' : 'not found'}</span>
-        </div>
-      </div>
+          <div class="detail-row">
+            <span class="detail-icon" class:ok={status.cargo.installed} class:missing={!status.cargo.installed}>
+              {status.cargo.installed ? '●' : '○'}
+            </span>
+            <span class="detail-label">cargo</span>
+            <span class="detail-value">{status.cargo.installed ? (status.cargo.version ?? 'installed') : 'not found'}</span>
+          </div>
 
-      {#if status.cargo.installed && status.cargo.path}
-        <div class="path-row">
-          <span class="path-label">cargo path</span>
-          <code class="path-value">{status.cargo.path}</code>
-        </div>
-      {/if}
+          <div class="detail-row">
+            <span class="detail-icon" class:ok={status.rustc.installed} class:missing={!status.rustc.installed}>
+              {status.rustc.installed ? '●' : '○'}
+            </span>
+            <span class="detail-label">rustc</span>
+            <span class="detail-value">{status.rustc.installed ? (status.rustc.version ?? 'installed') : 'not found'}</span>
+          </div>
 
-      {#if !status.all_good}
-        <div class="install-section">
-          <p class="install-text">Install Rust using the official installer:</p>
-          <code class="install-cmd">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code>
-          <p class="install-hint">Run this in Terminal, then click "Re-check" below.</p>
-          <p class="install-hint">Or visit <button class="link-btn" onclick={() => shellOpen('https://rustup.rs')}>rustup.rs</button> for more options.</p>
-        </div>
-      {/if}
-
-      {#if !status.components.rustfmt || !status.components.clippy}
-        <div class="install-section">
-          <p class="install-text">Install missing components:</p>
-          {#if !status.components.rustfmt}
-            <code class="install-cmd">rustup component add rustfmt</code>
+          {#if status.active_toolchain}
+            <div class="detail-row">
+              <span class="detail-icon ok">●</span>
+              <span class="detail-label">toolchain</span>
+              <span class="detail-value">{status.active_toolchain}</span>
+            </div>
           {/if}
-          {#if !status.components.clippy}
-            <code class="install-cmd">rustup component add clippy</code>
-          {/if}
+
+          <div class="detail-row">
+            <span class="detail-icon" class:ok={status.components.rustfmt} class:missing={!status.components.rustfmt}>
+              {status.components.rustfmt ? '●' : '○'}
+            </span>
+            <span class="detail-label">rustfmt</span>
+            <span class="detail-value">{status.components.rustfmt ? 'installed' : 'not found'}</span>
+          </div>
+
+          <div class="detail-row">
+            <span class="detail-icon" class:ok={status.components.clippy} class:missing={!status.components.clippy}>
+              {status.components.clippy ? '●' : '○'}
+            </span>
+            <span class="detail-label">clippy</span>
+            <span class="detail-value">{status.components.clippy ? 'installed' : 'not found'}</span>
+          </div>
         </div>
+
+        {#if status.cargo.installed && status.cargo.path}
+          <div class="path-row">
+            <span class="path-label">cargo path</span>
+            <code class="path-value">{status.cargo.path}</code>
+          </div>
+        {/if}
+
+        {#if !status.all_good}
+          <div class="install-section">
+            <p class="install-text">Install Rust using the official installer:</p>
+            <code class="install-cmd">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code>
+            <p class="install-hint">Run this in Terminal, then click "Re-check" below.</p>
+            <p class="install-hint">Or visit <button class="link-btn" onclick={() => shellOpen('https://rustup.rs')}>rustup.rs</button> for more options.</p>
+          </div>
+        {/if}
+
+        {#if !status.components.rustfmt || !status.components.clippy}
+          <div class="install-section">
+            <p class="install-text">Install missing components:</p>
+            {#if !status.components.rustfmt}
+              <code class="install-cmd">rustup component add rustfmt</code>
+            {/if}
+            {#if !status.components.clippy}
+              <code class="install-cmd">rustup component add clippy</code>
+            {/if}
+          </div>
+        {/if}
+
+      <!-- ═══════════ C/C++ tab ═══════════ -->
+      {:else}
+        {#if status.clang.installed}
+          <div class="status-banner good">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+            <span>C/C++ toolchain ready</span>
+          </div>
+        {:else}
+          <div class="status-banner warn">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M10 2L18.66 17H1.34L10 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+              <path d="M10 8v4M10 14v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <span>C/C++ toolchain not found</span>
+          </div>
+        {/if}
+
+        <div class="detail-grid">
+          <div class="detail-row">
+            <span class="detail-icon" class:ok={status.clang.installed} class:missing={!status.clang.installed}>
+              {status.clang.installed ? '●' : '○'}
+            </span>
+            <span class="detail-label">clang</span>
+            <span class="detail-value">{status.clang.installed ? (status.clang.version ?? 'installed') : 'not found'}</span>
+          </div>
+        </div>
+
+        {#if !status.clang.installed}
+          <div class="install-section">
+            <p class="install-text">Install Xcode Command Line Tools:</p>
+            <code class="install-cmd">xcode-select --install</code>
+            <p class="install-hint">This provides clang and clang++ for C/C++ compilation.</p>
+          </div>
+        {:else}
+          <div class="install-section">
+            <p class="install-text">C/C++ support uses the system clang compiler from Xcode Command Line Tools. No additional setup needed.</p>
+            <p class="install-hint">Compiler flags for each project can be configured in the sidebar when a native project is active.</p>
+          </div>
+        {/if}
       {/if}
     {/if}
   </div>
 
   <div class="modal-footer">
     {#if !checking}
-      {#if !status?.all_good}
+      {#if !status?.all_good || (activeTab === 'native' && !status?.clang.installed)}
         <button class="btn btn-secondary" onclick={runCheck}>Re-check</button>
       {/if}
       <button class="btn btn-primary" onclick={finish}>
@@ -239,11 +283,6 @@
     flex-shrink: 0;
   }
   .header-left { display: flex; align-items: center; gap: 8px; }
-  .rs-badge {
-    font-size: 8px; font-weight: 800; letter-spacing: 0.04em;
-    background: var(--rust-orange); color: #fff;
-    border-radius: 3px; padding: 2px 4px; line-height: 1.3;
-  }
   .modal-title { font-size: 14px; font-weight: 700; color: var(--text); }
   .close-btn {
     width: 24px; height: 24px;
@@ -252,6 +291,41 @@
     transition: background 0.1s, color 0.1s;
   }
   .close-btn:hover { background: var(--bg-hover); color: var(--text); }
+
+  /* ── Tab bar ── */
+  .tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--bg-elevated);
+  }
+  .tab {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 9px 12px;
+    font-size: 12px; font-weight: 600;
+    color: var(--text-tertiary);
+    border: none; background: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .tab:hover { color: var(--text-secondary); background: rgba(255,255,255,0.03); }
+  .tab.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+  .tab-badge {
+    font-size: 7px; font-weight: 800; letter-spacing: 0.04em;
+    color: #fff; border-radius: 3px; padding: 1.5px 3.5px; line-height: 1.3;
+  }
+  .tab-badge.rs { background: var(--rust-orange); }
+  .tab-badge.native { background: #4a9; }
+  .tab-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+  .tab-dot.ok { background: var(--green); }
+  .tab-dot.missing { background: var(--text-tertiary); }
 
   .modal-body {
     flex: 1; overflow-y: auto;
@@ -318,11 +392,6 @@
     border: 1px solid rgba(255, 159, 10, 0.3);
     color: #ff9f0a;
   }
-  .status-banner.bad {
-    background: rgba(255, 69, 58, 0.12);
-    border: 1px solid rgba(255, 69, 58, 0.3);
-    color: #ff453a;
-  }
 
   /* Detail grid */
   .detail-grid {
@@ -351,7 +420,7 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
-  /* Cargo path */
+  /* Path row */
   .path-row {
     display: flex; align-items: center; gap: 10px;
     padding: 6px 8px;

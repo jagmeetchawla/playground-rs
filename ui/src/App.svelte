@@ -30,7 +30,10 @@
   // ── Projects ─────────────────────────────────────────────────────────────────
   let projects:            string[]                                    = $state([])
   let activeProject:       string                                      = $state('')
+  let projectType:         'rust' | 'native'                           = $state('rust')
+  let projectTypes:        Record<string, 'rust' | 'native'>           = $state({})
   let switcherPendingMode: 'new' | 'rename' | 'delete-confirm' | null = $state(null)
+  let isNative             = $derived(projectType === 'native')
 
   // ── Playground list ──────────────────────────────────────────────────────────
   let playgrounds: string[] = $state([])
@@ -59,6 +62,12 @@
       const meta = tabMeta[id]
       if (meta?.type === 'content') return [id, 'content' as const]
       if (id === CARGO_TAB) return [id, 'cargo' as const]
+      // For native projects, derive type from extension
+      if (isNative) {
+        const ext = id.split('.').pop()?.toLowerCase() ?? ''
+        const extMap: Record<string, string> = { c: 'c', cpp: 'cpp', zig: 'zig', rs: 'rs' }
+        return [id, (extMap[ext] ?? 'rs') as any]
+      }
       return [id, 'rs' as const]
     }))
   )
@@ -91,11 +100,14 @@
   // ── Toolchain + Cargo.toml ────────────────────────────────────────────────────
   let cargoToml:     string                             = $state('')
   let toolchainInfo: { path: string; version: string } = $state({ path: '', version: '' })
+  let clangInfo:     { path: string; version: string } = $state({ path: '', version: '' })
+  let activeToolchain = $derived(isNative ? clangInfo : toolchainInfo)
   let toolchainLabel = $derived(
-    toolchainInfo.version
-      ? (toolchainInfo.version.match(/\d+\.\d+\.\d+/)?.[0] ?? toolchainInfo.version)
+    activeToolchain.version
+      ? (activeToolchain.version.match(/\d+\.\d+\.\d+/)?.[0] ?? activeToolchain.version)
       : '…'
   )
+  let toolchainName = $derived(isNative ? 'clang' : 'cargo')
 
   // ── New playground binding ────────────────────────────────────────────────────
   let creatingNew: boolean = $state(false)
@@ -127,6 +139,7 @@
   // Monaco theme name derived from resolved theme
   let monacoTheme = $derived(
     resolvedTheme === 'rust' ? 'playground-rust'
+      : resolvedTheme === 'seagreen' ? 'playground-seagreen'
       : resolvedTheme === 'light' ? 'playground-light'
       : 'playground-dark'
   )
@@ -240,9 +253,12 @@
       settings = await invoke<Settings>('get_settings')
 
       // Show wizard on first launch or if toolchain is missing
-      const tc = await invoke<{ wizard_completed: boolean; all_good: boolean }>('check_toolchain')
+      const tc = await invoke<any>('check_toolchain')
       if (!tc.wizard_completed || !tc.all_good) {
         showWizard = true
+      }
+      if (tc.clang) {
+        clangInfo = { path: tc.clang.path ?? '', version: tc.clang.version ?? '' }
       }
 
       // ── Restore window state ────────────────────────────────────────────────
@@ -293,6 +309,7 @@
         listen('menu:help',              () => { showHelp  = true }),
         listen('menu:about',             () => { showAbout = true }),
         listen('menu:rust-book',         () => seedRustBook()),
+        listen('menu:knr-book',          () => seedKnrBook()),
         listen('menu:rename-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground') renameTarget = activeTab }),
         listen('menu:delete-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground') deletePending = activeTab }),
       ])
@@ -328,12 +345,13 @@
       active: activeProject,
       playgroundCount: playgrounds.length,
       hasActivePlayground,
+      projectType,
     }).catch(console.error)
   })
 
   // Apply theme class to document body whenever resolved theme changes
   $effect(() => {
-    document.body.classList.remove('theme-dark', 'theme-light', 'theme-rust')
+    document.body.classList.remove('theme-dark', 'theme-light', 'theme-rust', 'theme-seagreen')
     document.body.classList.add(`theme-${resolvedTheme}`)
   })
 
@@ -348,12 +366,24 @@
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
   async function loadProjectData() {
+    projectType = await invoke<'rust' | 'native'>('get_project_type', { name: activeProject }).catch(() => 'rust' as const)
     playgrounds = await invoke<string[]>('list_playgrounds')
-    cargoToml   = await invoke<string>('get_cargo_toml').catch(() => '')
+    cargoToml   = projectType === 'rust'
+      ? await invoke<string>('get_cargo_toml').catch(() => '')
+      : ''
+    await refreshProjectTypes()
+  }
+
+  async function refreshProjectTypes() {
+    const types: Record<string, 'rust' | 'native'> = {}
+    await Promise.all(projects.map(async (name) => {
+      types[name] = await invoke<'rust' | 'native'>('get_project_type', { name }).catch(() => 'rust' as const)
+    }))
+    projectTypes = types
   }
 
   function syncMenuProjects() {
-    invoke('rebuild_menu', { projects, active: activeProject, playgroundCount: playgrounds.length, hasActivePlayground }).catch(console.error)
+    invoke('rebuild_menu', { projects, active: activeProject, playgroundCount: playgrounds.length, hasActivePlayground, projectType }).catch(console.error)
   }
 
   async function switchProject(name: string) {
@@ -387,24 +417,54 @@
     }
   }
 
+  async function seedKnrBook() {
+    try {
+      const created = await invoke<string[]>('seed_knr_book')
+      projects = await invoke<string[]>('list_projects')
+      if (created.length > 0) {
+        await switchProject(created[0])
+        showToast(`Loaded ${created.length} K&R chapter${created.length > 1 ? 's' : ''}. Starting with ${created[0]}.`)
+      } else {
+        showToast('K&R chapters are already loaded.')
+      }
+    } catch (e) {
+      console.error('seedKnrBook failed:', e)
+      showToast('Failed to load K&R examples.')
+    }
+  }
+
   function contentTabId(filename: string) { return `content:${filename}` }
 
   function languageForTab(id: string | null, meta: TabMeta): string {
     if (!id) return 'rust'
     if (id === CARGO_TAB) return 'ini'
     if (meta.type === 'content') return languageFromFilename(meta.filename)
+    // For native projects, playground names include extension
+    if (isNative) return languageFromFilename(id)
     return 'rust'
   }
 
   function languageFromFilename(filename: string): string {
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
     const map: Record<string, string> = {
-      rs: 'rust', json: 'json', toml: 'ini', md: 'markdown',
+      rs: 'rust', c: 'c', cpp: 'cpp', zig: 'zig',
+      json: 'json', toml: 'ini', md: 'markdown',
       yaml: 'yaml', yml: 'yaml', html: 'html', xml: 'xml',
       js: 'javascript', ts: 'typescript', css: 'css',
       sh: 'shell', bash: 'shell',
     }
     return map[ext] ?? 'plaintext'
+  }
+
+  /** Build a display command string for native project runs */
+  function nativeRunCommand(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+    const stem = filename.replace(/\.[^.]+$/, '')
+    const map: Record<string, string> = {
+      c: `clang ${filename} && ./${stem}`,
+      cpp: `clang++ ${filename} && ./${stem}`,
+    }
+    return map[ext] ?? filename
   }
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────────
@@ -502,6 +562,7 @@
   function scheduleCheck(name: string, code: string) {
     const meta = tabMeta[name]
     if (meta?.type !== 'playground') return
+    if (isNative) return // no live checking for native projects
     if (_checkTimer) clearTimeout(_checkTimer)
     if (_checkRunning) {
       // A check is already in flight — queue this edit and it will fire
@@ -583,8 +644,13 @@
       hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
     })
 
+    // Build display command based on project type
+    const command = isNative
+      ? nativeRunCommand(name)
+      : `cargo run --bin ${name}`
+
     const newBlock: RunBlock = {
-      runNum, command: `cargo run --bin ${name}`, startedAt,
+      runNum, command, startedAt,
       status: 'compiling', exitCode: null,
       compilerLines: [], programLines: [],
       collapsed: false, programStarted: false,
@@ -605,22 +671,34 @@
         }))
       } else if (msg.stream === 'stderr') {
         const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any)
-        // Cargo prints "     Running `target/...`" on stderr when the binary starts.
-        // Use this to transition from 'compiling' → 'running' so the stdin input appears.
-        const isBinaryStart = /^\s*Running\s+`/.test(msg.line)
-        updateLastRun(name, r => {
-          const nowRunning = r.programStarted || isBinaryStart
-          if (isBinaryStart) {
-            // Transition to running but don't add the cargo "Running" line to output
-            return { ...r, programStarted: true, status: 'running' as const }
-          }
-          return {
-            ...r,
-            ...(nowRunning
-              ? { programLines: [...r.programLines, { stream: 'stderr', line: msg.line, ts }] }
-              : { compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line, ts }] }),
-          }
-        })
+        if (isNative) {
+          const isBinaryStart = /^\s*Running\s+`/.test(msg.line)
+          updateLastRun(name, r => {
+            if (isBinaryStart) {
+              return { ...r, programStarted: true, status: 'running' as const }
+            }
+            if (r.programStarted) {
+              return { ...r, programLines: [...r.programLines, { stream: 'stderr', line: msg.line, ts }] }
+            }
+            return { ...r, compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line, ts }] }
+          })
+        } else {
+          // Cargo prints "     Running `target/...`" on stderr when the binary starts.
+          // Use this to transition from 'compiling' → 'running' so the stdin input appears.
+          const isBinaryStart = /^\s*Running\s+`/.test(msg.line)
+          updateLastRun(name, r => {
+            const nowRunning = r.programStarted || isBinaryStart
+            if (isBinaryStart) {
+              return { ...r, programStarted: true, status: 'running' as const }
+            }
+            return {
+              ...r,
+              ...(nowRunning
+                ? { programLines: [...r.programLines, { stream: 'stderr', line: msg.line, ts }] }
+                : { compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line, ts }] }),
+            }
+          })
+        }
       }
     }
 
@@ -683,25 +761,30 @@
 
   async function onNewPlayground(name: string, template: Template) {
     try {
-      await invoke('new_playground', { name, content: template.code })
+      if (isNative) {
+        // Native: name already includes extension, no template deps
+        await invoke('new_playground', { name, content: template.code || null })
+      } else {
+        await invoke('new_playground', { name, content: template.code })
 
-      // Auto-add dependencies if the template requires them
-      if (template.deps?.length) {
-        let cargoContent = await invoke<string>('get_cargo_toml')
-        for (const dep of template.deps) {
-          try {
-            cargoContent = await invoke<string>('add_dependency', {
-              content: cargoContent,
-              name: dep.name,
-              version: dep.version,
-            })
-          } catch {
-            // Dep may already exist — that's fine
+        // Auto-add dependencies if the template requires them
+        if (template.deps?.length) {
+          let cargoContent = await invoke<string>('get_cargo_toml')
+          for (const dep of template.deps) {
+            try {
+              cargoContent = await invoke<string>('add_dependency', {
+                content: cargoContent,
+                name: dep.name,
+                version: dep.version,
+              })
+            } catch {
+              // Dep may already exist — that's fine
+            }
           }
+          // Update the editor if Cargo.toml tab is open
+          tabCode = { ...tabCode, [CARGO_TAB]: cargoContent }
+          cargoToml = cargoContent
         }
-        // Update the editor if Cargo.toml tab is open
-        tabCode = { ...tabCode, [CARGO_TAB]: cargoContent }
-        cargoToml = cargoContent
       }
 
       playgrounds = await invoke<string[]>('list_playgrounds')
@@ -761,8 +844,8 @@
 
   // ── Project management ───────────────────────────────────────────────────────
 
-  async function onNewProject(name: string) {
-    await invoke('new_project', { name })
+  async function onNewProject(name: string, ptype: 'rust' | 'native' = 'rust') {
+    await invoke('new_project', { name, projectType: ptype })
     projects = await invoke<string[]>('list_projects')
     await switchProject(name)
   }
@@ -771,6 +854,7 @@
     await invoke('rename_project', { oldName, newName })
     projects = await invoke<string[]>('list_projects')
     activeProject = newName
+    await refreshProjectTypes()
     syncMenuProjects()
   }
 
@@ -890,6 +974,8 @@
       <ProjectSwitcher
         {projects}
         active={activeProject}
+        {projectType}
+        {projectTypes}
         onswitch={switchProject}
         onnew={onNewProject}
         onrename={onRenameProject}
@@ -904,17 +990,27 @@
         title="Settings (⌘,)"
         onclick={() => showSettings = true}
       >&#9881;&#65038;</button>
-      <button class="toolchain-pill" title="{toolchainInfo.path} — Click for toolchain details" onclick={() => showWizard = true}>
-        <!-- Isometric crate — crates.io style -->
-        <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
-          <path d="M7 1L13 4L7 7L1 4Z"
-                stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
-          <path d="M1 4L1 8.5L7 11.5L7 7Z"
-                stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
-          <path d="M13 4L13 8.5L7 11.5L7 7Z"
-                stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
-        </svg>
-        cargo {toolchainLabel}
+      <button class="toolchain-pill" title="{activeToolchain.path} — Click for toolchain details" onclick={() => showWizard = true}>
+        {#if isNative}
+          <!-- C bracket icon for clang -->
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M5 2C3.5 2 2 3 2 5L2 9C2 11 3.5 12 5 12"
+                  stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+            <path d="M9 2C10.5 2 12 3 12 5L12 9C12 11 10.5 12 9 12"
+                  stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+          </svg>
+        {:else}
+          <!-- Isometric crate — crates.io style -->
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
+            <path d="M7 1L13 4L7 7L1 4Z"
+                  stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
+            <path d="M1 4L1 8.5L7 11.5L7 7Z"
+                  stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
+            <path d="M13 4L13 8.5L7 11.5L7 7Z"
+                  stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
+          </svg>
+        {/if}
+        {toolchainName} {toolchainLabel}
       </button>
     </div>
 
@@ -1009,6 +1105,7 @@
           selected={activeTab && tabMeta[activeTab]?.type === 'playground' ? activeTab : null}
           {dirtyTabs}
           {cargoToml}
+          {projectType}
           onNewPlayground={requestNewPlayground}
           bind:renameTarget
           on:select={(e) => openTab(e.detail, { type: 'playground' })}
@@ -1163,6 +1260,7 @@
 {#if creatingNew}
   <NewPlaygroundModal
     existingNames={playgrounds}
+    {projectType}
     onclose={() => creatingNew = false}
     oncreate={onNewPlayground}
   />

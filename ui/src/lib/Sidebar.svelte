@@ -10,6 +10,7 @@
     selected,
     dirtyTabs,
     cargoToml = '',
+    projectType = 'rust',
     onNewPlayground = () => {},
     renameTarget = $bindable(null),
   }: {
@@ -17,9 +18,12 @@
     selected: string | null
     dirtyTabs: string[]
     cargoToml: string
+    projectType?: 'rust' | 'native'
     onNewPlayground?: () => void
     renameTarget?: string | null
   } = $props()
+
+  let isNative = $derived(projectType === 'native')
 
   // ── Sidebar tab ───────────────────────────────────────────────────────────────
   let sidebarTab: 'playgrounds' | 'content' = $state('playgrounds')
@@ -75,6 +79,32 @@
   }
 
   let cargoExpanded: boolean = $state(false)
+
+  // ── Compiler flags state (native projects) ────────────────────────────────────
+  let flagsExpanded: boolean = $state(false)
+  let cflagsText: string = $state('')
+  let cxxflagsText: string = $state('')
+
+  // Load build flags when switching to a native project
+  $effect(() => {
+    if (isNative) {
+      invoke<{ cflags: string[]; cxxflags: string[] }>('get_build_flags')
+        .then(flags => {
+          cflagsText = flags.cflags.join(' ')
+          cxxflagsText = flags.cxxflags.join(' ')
+        })
+        .catch(() => {
+          cflagsText = '-lsqlite3'
+          cxxflagsText = '-std=c++17 -lsqlite3'
+        })
+    }
+  })
+
+  function saveBuildFlags() {
+    const cflags = cflagsText.trim().split(/\s+/).filter(Boolean)
+    const cxxflags = cxxflagsText.trim().split(/\s+/).filter(Boolean)
+    invoke('save_build_flags', { cflags, cxxflags }).catch(console.error)
+  }
 
   // ── Content tab state ─────────────────────────────────────────────────────────
   export type ContentFile = { filename: string; size_bytes: number; is_text: boolean }
@@ -323,7 +353,12 @@
               onclick={(e) => e.stopPropagation()} autofocus
             />
           {:else}
-            <span class="file-icon">RS</span>
+            {#if isNative}
+              {@const ext = name.split('.').pop()?.toLowerCase() ?? ''}
+              <span class="file-icon native">{ext === 'cpp' ? 'C++' : 'C'}</span>
+            {:else}
+              <span class="file-icon">RS</span>
+            {/if}
             <span class="name">{name}</span>
             {#if isDirty}<span class="dirty-dot" title="Unsaved changes">●</span>{/if}
           {/if}
@@ -337,7 +372,8 @@
       {/if}
     </ul>
 
-    <!-- Cargo.toml panel -->
+    <!-- Cargo.toml panel (Rust projects only) -->
+    {#if !isNative}
     <div class="cargo-section">
       <div
         class="cargo-header"
@@ -365,6 +401,47 @@
         </div>
       {/if}
     </div>
+    {/if}
+
+    <!-- Compiler Flags panel (Native C/C++ projects only) -->
+    {#if isNative}
+    <div class="cargo-section">
+      <div
+        class="cargo-header"
+        role="button" tabindex="0"
+        onclick={() => flagsExpanded = !flagsExpanded}
+        onkeydown={(e) => e.key === 'Enter' && (flagsExpanded = !flagsExpanded)}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" class="chevron" class:open={flagsExpanded}>
+          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+        </svg>
+        <span class="cargo-label">Compiler Flags</span>
+      </div>
+      {#if flagsExpanded}
+        <div class="flags-body">
+          <label class="flags-label">C flags</label>
+          <input
+            class="flags-input"
+            type="text"
+            value={cflagsText}
+            placeholder="-lsqlite3"
+            spellcheck="false"
+            onchange={(e) => { cflagsText = e.currentTarget.value; saveBuildFlags() }}
+          />
+          <label class="flags-label">C++ flags</label>
+          <input
+            class="flags-input"
+            type="text"
+            value={cxxflagsText}
+            placeholder="-std=c++17 -lsqlite3"
+            spellcheck="false"
+            onchange={(e) => { cxxflagsText = e.currentTarget.value; saveBuildFlags() }}
+          />
+          <span class="flags-hint">Space-separated. Saved to rustic.toml.</span>
+        </div>
+      {/if}
+    </div>
+    {/if}
 
   <!-- ════════════════════════════════════════ -->
   <!-- CONTENT TAB                             -->
@@ -674,6 +751,7 @@
   .playground-item.active { background: var(--accent); }
   .playground-item.active .name { color: #fff; }
   .playground-item.active .file-icon { background: rgba(255,255,255,0.25); color: #fff; }
+  .playground-item.active .file-icon.native { background: rgba(68,170,153,0.5); }
   .playground-item.active .dirty-dot { color: rgba(255,255,255,0.7); }
 
   .file-icon {
@@ -682,6 +760,9 @@
     border-radius: 3px; padding: 2px 3px;
     flex-shrink: 0; line-height: 1.3;
     min-width: 18px; text-align: center;
+  }
+  .file-icon.native {
+    background: #4a9; letter-spacing: 0;
   }
 
   .name {
@@ -723,6 +804,29 @@
     color: var(--text-secondary); white-space: pre-wrap; word-break: break-word;
   }
   .cargo-empty { display: block; padding: 8px 10px; font-size: 11px; color: var(--text-tertiary); font-style: italic; }
+
+  /* ── Compiler flags panel ── */
+  .flags-body {
+    padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .flags-label {
+    font-size: 10px; font-weight: 600; color: var(--text-tertiary);
+    letter-spacing: 0.03em; text-transform: uppercase;
+  }
+  .flags-input {
+    font-family: var(--font-mono); font-size: 11px;
+    padding: 4px 8px;
+    background: rgba(0,0,0,0.2); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-xs);
+    outline: none; width: 100%; box-sizing: border-box;
+  }
+  .flags-input:focus { border-color: var(--accent); }
+  .flags-input::placeholder { color: var(--text-tertiary); opacity: 0.5; }
+  .flags-hint {
+    font-size: 9px; color: var(--text-tertiary);
+    margin-top: 2px;
+  }
 
   /* ── Content tab ── */
   .content-empty-state {

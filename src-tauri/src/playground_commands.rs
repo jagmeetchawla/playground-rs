@@ -90,14 +90,6 @@ pub fn native_starter_template(name: &str, ext: &str) -> String {
             "#include <iostream>\n\nint main() {{\n    std::cout << \"Hello from {}!\" << std::endl;\n    return 0;\n}}\n",
             name
         ),
-        "zig" => format!(
-            "const std = @import(\"std\");\n\npub fn main() !void {{\n    const stdout = std.io.getStdOut().writer();\n    try stdout.print(\"Hello from {}!\\n\", .{{}});\n}}\n",
-            name
-        ),
-        "rs" => format!(
-            "fn main() {{\n    println!(\"Hello from {}!\");\n}}\n",
-            name
-        ),
         _ => format!("// Hello from {}!\n", name),
     }
 }
@@ -320,32 +312,20 @@ fn resolve_clang() -> String {
         .unwrap_or_else(|| "/usr/bin/clang".to_string())
 }
 
-/// Resolve rustc path as a sibling of cargo.
-fn resolve_rustc() -> String {
-    let cargo = cargo_path();
-    let cargo_dir = std::path::Path::new(&cargo)
-        .parent()
-        .unwrap_or(std::path::Path::new(""));
-    let rustc = cargo_dir.join("rustc");
-    if rustc.exists() {
-        rustc.to_string_lossy().to_string()
-    } else {
-        "rustc".to_string()
-    }
-}
-
-/// Resolve zig path from PATH.
-fn resolve_zig() -> Result<String, String> {
-    std::process::Command::new("which")
-        .arg("zig")
+/// Resolve the macOS SDK path via `xcrun --show-sdk-path`.
+/// Needed because Tauri app bundles get a minimal environment where
+/// clang can't find system headers (stdio.h etc.) without -isysroot.
+fn resolve_sdk_path() -> Option<String> {
+    std::process::Command::new("xcrun")
+        .args(["--show-sdk-path"])
         .output()
         .ok()
         .filter(|o| o.status.success())
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| "Zig not found — install from ziglang.org".to_string())
 }
+
 
 #[tauri::command]
 pub async fn run_playground(
@@ -412,98 +392,93 @@ async fn run_native_playground(
     std::fs::create_dir_all(&runs_dir)
         .map_err(|e| format!("Failed to create target/runs: {}", e))?;
 
-    match ext.as_str() {
-        "zig" => {
-            // Zig: single-step `zig run <file>`
-            let zig = resolve_zig()?;
-            let mut child = Command::new(&zig)
-                .args(["run", source_path.to_str().unwrap()])
-                .current_dir(&workspace)
-                .env("PLAYGROUND_CONTENT", &content_path)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .process_group(0)
-                .spawn()
-                .map_err(|e| format!("Failed to start zig: {}", e))?;
+    // Read build flags from manifest
+    let manifest = rustic_manifest::ensure_manifest(&workspace)
+        .unwrap_or_else(|_| rustic_manifest::new_native_manifest());
 
-            stream_child_output(&mut child, &on_output, &app).await
+    // Compile then run
+    let out_binary = runs_dir.join(&stem);
+    let (compiler, user_flags): (String, &[String]) = match ext.as_str() {
+        "c" => (resolve_clang(), &manifest.build.cflags),
+        "cpp" => {
+            let clang = resolve_clang();
+            let clangpp = clang.replace("clang", "clang++");
+            (clangpp, &manifest.build.cxxflags)
         }
-        _ => {
-            // C, C++, Rust: compile then run
-            let out_binary = runs_dir.join(&stem);
-            let (compiler, extra_args): (String, Vec<&str>) = match ext.as_str() {
-                "c" => (resolve_clang(), vec![]),
-                "cpp" => {
-                    // clang++ is a sibling of clang
-                    let clang = resolve_clang();
-                    let clangpp = clang.replace("clang", "clang++");
-                    (clangpp, vec!["-std=c++17"])
-                }
-                "rs" => (resolve_rustc(), vec!["--edition", "2021"]),
-                _ => return Err(format!("Unsupported extension: {}", ext)),
-            };
+        _ => return Err(format!("Unsupported extension: {}", ext)),
+    };
 
-            // Step 1: Compile
-            let mut compile_args: Vec<&str> = vec![
-                source_path.to_str().unwrap(),
-                "-o",
-                out_binary.to_str().unwrap(),
-            ];
-            compile_args.extend(&extra_args);
-
-            let compile = Command::new(&compiler)
-                .args(&compile_args)
-                .current_dir(&workspace)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .process_group(0)
-                .spawn()
-                .map_err(|e| format!("Failed to start {}: {}", compiler, e))?;
-
-            // Store PID for kill support during compilation
-            if let Some(pid) = compile.id() {
-                *app.state::<RunningProcess>().0.lock().unwrap() = Some(pid);
-            }
-
-            let output = compile
-                .wait_with_output()
-                .await
-                .map_err(|e| e.to_string())?;
-
-            // Stream compile errors/warnings to stderr
-            let stderr_text = String::from_utf8_lossy(&output.stderr);
-            for line in stderr_text.lines() {
-                on_output
-                    .send(serde_json::json!({ "stream": "stderr", "line": line }))
-                    .ok();
-            }
-
-            if !output.status.success() {
-                *app.state::<RunningProcess>().0.lock().unwrap() = None;
-                on_output
-                    .send(serde_json::json!({
-                        "stream": "complete",
-                        "code": output.status.code().unwrap_or(1)
-                    }))
-                    .ok();
-                return Ok(());
-            }
-
-            // Step 2: Run the compiled binary
-            let mut child = Command::new(out_binary.to_str().unwrap())
-                .current_dir(&workspace)
-                .env("PLAYGROUND_CONTENT", &content_path)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .process_group(0)
-                .spawn()
-                .map_err(|e| format!("Failed to run compiled binary: {}", e))?;
-
-            stream_child_output(&mut child, &on_output, &app).await
-        }
+    // Step 1: Compile
+    let mut compile_args: Vec<String> = vec![
+        source_path.to_str().unwrap().to_string(),
+        "-o".to_string(),
+        out_binary.to_str().unwrap().to_string(),
+    ];
+    // Inject SDK sysroot so clang can find system headers (stdio.h etc.)
+    // Tauri app bundles get a minimal environment without the default search paths.
+    if let Some(sdk) = resolve_sdk_path() {
+        compile_args.push("-isysroot".to_string());
+        compile_args.push(sdk);
     }
+    compile_args.extend(user_flags.iter().cloned());
+
+    let compile = Command::new(&compiler)
+        .args(&compile_args)
+        .current_dir(&workspace)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .map_err(|e| format!("Failed to start {}: {}", compiler, e))?;
+
+    // Store PID for kill support during compilation
+    if let Some(pid) = compile.id() {
+        *app.state::<RunningProcess>().0.lock().unwrap() = Some(pid);
+    }
+
+    let output = compile
+        .wait_with_output()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Stream compile errors/warnings to stderr
+    let stderr_text = String::from_utf8_lossy(&output.stderr);
+    for line in stderr_text.lines() {
+        on_output
+            .send(serde_json::json!({ "stream": "stderr", "line": line }))
+            .ok();
+    }
+
+    if !output.status.success() {
+        *app.state::<RunningProcess>().0.lock().unwrap() = None;
+        on_output
+            .send(serde_json::json!({
+                "stream": "complete",
+                "code": output.status.code().unwrap_or(1)
+            }))
+            .ok();
+        return Ok(());
+    }
+
+    // Signal frontend: compilation done, binary starting.
+    // Format matches Cargo's "Running `target/...`" pattern so the frontend
+    // transitions from 'compiling' → 'running' (stdin input appears).
+    on_output
+        .send(serde_json::json!({ "stream": "stderr", "line": format!("     Running `{}`", out_binary.display()) }))
+        .ok();
+
+    // Step 2: Run the compiled binary
+    let mut child = Command::new(out_binary.to_str().unwrap())
+        .current_dir(&workspace)
+        .env("PLAYGROUND_CONTENT", &content_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .map_err(|e| format!("Failed to run compiled binary: {}", e))?;
+
+    stream_child_output(&mut child, &on_output, &app).await
 }
 
 /// Shared logic: store PID, capture stdin, stream stdout/stderr, wait, send complete.

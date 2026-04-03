@@ -92,6 +92,33 @@
   --rust-orange:     #ce422b;
 }
 
+.theme-seagreen {
+  /* Cool, oceanic C-inspired palette */
+  --bg:              #0e1a18;   /* deep ocean */
+  --bg-sidebar:      #152422;   /* dark teal */
+  --bg-elevated:     #1e2e2c;   /* muted seagreen */
+  --bg-tab:          #0e1a18;
+  --bg-tab-active:   #152422;
+  --bg-hover:        rgba(68,170,153,0.10);
+  --bg-input:        rgba(68,170,153,0.08);
+
+  --border:          rgba(68,170,153,0.15);
+  --border-strong:   rgba(68,170,153,0.25);
+
+  --text:            #d0e8e4;   /* seafoam */
+  --text-secondary:  rgba(208,232,228,0.75);
+  --text-tertiary:   rgba(208,232,228,0.45);
+
+  --accent:          #44aa99;   /* sea green */
+  --accent-hover:    #5cc4b2;
+  --accent-text:     #ffffff;
+
+  --red:             #e05a5a;
+  --amber:           #d4b83c;   /* sandy gold */
+  --green:           #44aa99;   /* sea green */
+  --rust-orange:     #ce422b;
+}
+
 html, body, #app {
   height: 100%;
   background: var(--bg);
