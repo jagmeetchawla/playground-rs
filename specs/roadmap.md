@@ -98,19 +98,26 @@ v0.1.9 — Rename and Cleanup
 
 ---
 
----
+IN PROGRESS
+───────────
 
-NEXT
-────
+v0.3 — Language Module Architecture + Zig & Swift Support
+  Status: in progress — 2026-04-03
+  See specs/specifications.md
 
-v0.3 — Zig Support
-  Adds "zig" as a third project type with full zig build system integration.
-  - zig run for single-file playgrounds
-  - zig build for multi-file projects
-  - build.zig.zon package management
-  - Zig language detection in Monaco
+  Overview:
+  Refactor backend and frontend into per-language modules. Add Zig and Swift
+  as new project types. Central Lang enum with exhaustive match dispatch.
+  Shared helpers for flat-directory languages (native, zig, swift).
 
-  After v0.3: website, DMG distribution, wiki, announcements.
+  Phases:
+  1. Extract Rust module into languages/rust.rs (no behavior change)
+  2. Extract Native module into languages/native.rs + rewire dispatchers
+  3. Zig backend (languages/zig.rs + manifest expansion)
+  4. Swift backend (languages/swift.rs)
+  5. Frontend language registry + Zig/Swift UI + themes
+
+  After v0.3: website (rustic-playground.app), DMG distribution, wiki, announcements.
 
 
 ---

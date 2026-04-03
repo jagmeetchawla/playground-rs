@@ -15,10 +15,16 @@ Backend Module Structure
 
 src-tauri/src/
 ├── lib.rs                   — app state, paths, validation, config, settings, window state, run()
-├── playground_commands.rs   — project CRUD (7 commands) + playground CRUD (8) + run/kill/check/cancel/stdin
+├── languages/               — per-language modules (v0.3)
+│   ├── mod.rs               — Lang enum, RunConfig enum, shared FileLanguage helpers
+│   ├── rust.rs              — Cargo workspace: scaffold, run, check, export
+│   ├── native.rs            — C/C++ with clang: scaffold, compile+run, export
+│   ├── zig.rs               — Zig: scaffold, zig run (direct), export
+│   └── swift.rs             — Swift: scaffold, swiftc compile+run, export
+├── playground_commands.rs   — thin dispatchers: CRUD + run/kill/check via Lang enum
 ├── cargo_commands.rs        — Cargo.toml get/save, add/remove dependency, toolchain info/check, wizard
-├── content_commands.rs      — content file CRUD (9 commands: list/create/read/save/delete/rename/import/reveal/path)
-├── export.rs                — project export: routes by type to Rust or native export (see below)
+├── content_commands.rs      — content file CRUD (9 commands)
+├── export.rs                — thin router: Lang enum → per-language export
 ├── menu.rs                  — build_menu + rebuild_menu (macOS menu bar)
 ├── book_chapters.rs         — seed_rust_book command (20 Rust Book chapter projects)
 ├── knr_chapters.rs          — seed_knr_book command (8 K&R C Book chapter projects)
@@ -39,7 +45,10 @@ ui/src/
 │   ├── ProjectSwitcher.svelte — project list popover, new/rename/delete project
 │   ├── ToolchainWizard.svelte — first-run wizard, tabbed (Rust / C/C++)
 │   ├── TabBar.svelte        — editor tab bar with language-aware badges
-│   └── templates.ts         — Rust, C, and C++ starter templates (see below)
+│   ├── templates.ts         — Rust, C, and C++ starter templates
+│   ├── languages.ts         — frontend language registry (v0.3)
+│   ├── zig_templates.ts     — Zig starter templates (v0.3)
+│   └── swift_templates.ts   — Swift starter templates (v0.3)
 ├── app.css                  — global CSS variables (dark/light themes)
 └── main.ts                  — Svelte mount point
 
@@ -86,23 +95,25 @@ knr_chapters.rs (~1,200 lines):
 - seed_knr_book: creates 8 K&R C Book chapter projects (native type) with attribution
 - Fully separate module from book_chapters.rs — no shared code
 
-Project Types & Code Separation
+Project Types & Language Module Architecture
 
-Two project types: "rust" (default, first-class) and "native" (C/C++).
+Four project types: "rust" (default, first-class), "native" (C/C++), "zig", "swift".
 
 Rust is the first-class citizen. The app always starts with Rust toolchain detection,
-defaults to creating Rust projects, and the native path is additive — never modifies
-Rust-specific code paths.
+defaults to creating Rust projects. Other languages are additive.
 
-Separation strategy to prevent regressions:
-- Backend: native-only modules are fully isolated (knr_chapters.rs). Shared modules
-  (export.rs, playground_commands.rs) use separate functions per type with a thin
-  router at the top. The Rust code path is never modified when adding native support.
-- Frontend: templates.ts contains TEMPLATES (Rust), C_TEMPLATES, and CPP_TEMPLATES
-  as separate exported arrays — no cross-references. Components branch on projectType
-  prop to render type-specific UI.
-- Manifest: native projects use rustic.toml ([project] type = "native"), Rust projects
-  use Cargo.toml. Detection is via rustic.toml presence + type field.
+Architecture (v0.3):
+- Backend: Lang enum in languages/mod.rs with exhaustive match dispatch.
+  Each language has its own module (rust.rs, native.rs, zig.rs, swift.rs).
+  Shared FileLanguage helpers serve flat-directory languages (native, zig, swift).
+  Dispatcher files (playground_commands.rs, export.rs) are thin routers.
+  Adding a new language = new module + new enum arm → compiler catches all missing arms.
+- Frontend: languages.ts registry with LanguageConfig objects per language.
+  Components check capabilities (lang.hasBuildFlags, lang.supportsLiveCheck)
+  instead of hardcoded project type checks.
+  Templates in separate files per language (templates.ts, zig_templates.ts, etc.).
+- Manifest: rustic.toml [project] type field determines everything. Detection
+  heuristic: rustic.toml → Cargo.toml → .zig → .swift → "native".
 
 How It Works
 
@@ -151,6 +162,13 @@ Toolchain Detection & Setup
     2. clang --version for display
   - Not required at startup — detected when first native project is created
   - Wizard has a separate C/C++ tab showing status and install instructions
+- Zig (detected on demand):
+    1. which zig or PATH lookup
+    2. zig version for display
+  - Not required at startup
+- Swift (detected on demand):
+    1. swiftc --version (ships with Xcode CLI tools)
+  - Not required at startup — same install as clang (xcode-select --install)
 
 Sibling tool resolution (rustup, rustc, rustfmt, cargo-clippy):
 - macOS app bundles launched from /Applications get a minimal PATH that excludes

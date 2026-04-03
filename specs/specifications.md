@@ -1,7 +1,7 @@
 SPECIFICATION
 
 Status
-- Version: v0.2
+- Version: v0.3
 - Date: 2026-04-03
 - Owner: Jagmeet Chawla
 
@@ -10,271 +10,203 @@ Status
 Product
 
 What
-  Rustic Playground v0.2 — Native C/C++ projects. Add a **native project** type
-  alongside the existing Rust (Cargo) project type. Native projects hold loose
-  C and C++ source files compiled directly with clang/clang++. Compiler flags
-  are configurable per project via rustic.toml. Default flags include -lsqlite3
-  (macOS ships sqlite3) and -std=c++17 for C++.
+  Rustic Playground v0.3 — Language Module Architecture + Zig & Swift Support.
 
-  Rust projects remain unchanged — full Cargo workspace experience with
-  dependencies, live checking, book chapters, and export.
+  Refactor the backend and frontend into per-language modules so each language
+  is self-contained and higher-level code dispatches via enum match. Then add
+  Zig and Swift as new project types alongside Rust and Native (C/C++).
+
+  Rust remains the first-class citizen — no compromise on the Rust experience.
 
 Why
-  Panache before public release. C/C++ come free on macOS (clang ships with
-  Xcode Command Line Tools). Supporting native languages differentiates Rustic
-  Playground from single-language tools. Zig support deferred to v0.3 to keep
-  this release tight and well-polished.
+  v0.2 added Native C/C++ with ~61 hardcoded if/else branch points. Adding
+  more languages would be unmaintainable. A proper module architecture makes
+  each language isolated (can't break another) and adding a new language is
+  mechanical — implement the module, add an enum arm, compiler tells you
+  every place that needs updating.
+
+  Zig and Swift round out the macOS developer experience — Zig is a rising
+  systems language, Swift ships free with Xcode CLI tools.
 
 Design Principle
-  Project-level typing. The project type determines the experience:
-  - **Rust project** — Cargo workspace. Full feature set.
-  - **Native (C/C++) project** — folder of .c/.cpp files. Compiled with
-    clang/clang++. Configurable compiler flags. No build system.
+  Language modules. Each language is a Rust module that implements all
+  language-specific behavior. A central Lang enum dispatches to the right
+  module. Shared helpers (flat-directory listing, shell export) serve
+  file-based languages (native, zig, swift). Rust is the outlier with its
+  Cargo workspace structure.
 
 ---
 
-Data Model Changes
+Architecture — Backend
 
-rustic.toml — project manifest
-  Every project has a `rustic.toml` at its root. This is the project's own
-  manifest — metadata, structure, build flags, and toolchain info.
+Lang enum (`src-tauri/src/languages/mod.rs`)
+  Enum with exhaustive match dispatch — compiler forces every arm to be
+  handled when a new language is added.
 
-  Rust project:
-    [project]
-    type = "rust"
-    created_with = "0.2"
+  enum Lang { Rust, Native, Zig, Swift }
 
-    [paths]
-    src = "src/bin"
-    content = "content"
+  Each variant dispatches to its module's functions:
+  - project_type() → &str
+  - extensions() → &[&str]
+  - src_dir() → &str
+  - scaffold_project(path, name) → Result
+  - new_manifest() → RusticManifest
+  - starter_template(name, ext) → String
+  - list_playgrounds(dir) → Vec<String>
+  - validate_name(name) → Result<(stem, ext)>
+  - playground_path(name, dir) → Result<PathBuf>
+  - build_run_command(...) → Result<RunConfig>
+  - supports_live_check() → bool
+  - detect_toolchain() → Vec<ToolInfo>
+  - export_project(...) → Result<PathBuf>
 
-    [build]
-    cflags = []
-    cxxflags = []
+RunConfig enum
+  Two run strategies:
+  - Direct { program, args, env, cwd } — cargo run, zig run
+  - CompileThenRun { compiler, args, binary_path, env, cwd } — clang, swiftc
 
-    [toolchain]
-    rustc = "1.82.0"
-    cargo = "1.82.0"
+  Generic runners in playground_commands.rs handle both variants with shared
+  output streaming (stream_child_output).
 
-  Native project:
-    [project]
-    type = "native"
-    created_with = "0.2"
+Shared FileLanguage helpers
+  Native, Zig, and Swift share flat-directory pattern. Helpers avoid
+  code duplication:
+  - file_list_playgrounds(dir, extensions)
+  - file_validate_name(name, extensions)
+  - file_playground_path(name, dir)
+  - file_export_shell(workspace, name, dest, ...)
 
-    [paths]
-    src = "."
-    content = "content"
+  Only Rust is different (src/bin/, no extension, Cargo.toml, clap export).
 
-    [build]
-    cflags = ["-lsqlite3"]
-    cxxflags = ["-std=c++17", "-lsqlite3"]
-
-    [toolchain]
-    clang = "Apple clang 16.0.0"
-
-  The [build] section holds compiler flags passed to clang/clang++ during
-  compilation. These are user-editable via the sidebar UI and saved to
-  rustic.toml. Standard libraries like stdio.h need no flags. For
-  homebrew-installed libraries, the user adds flags like:
-    -I/opt/homebrew/include -L/opt/homebrew/lib -lfoo
-
-  The [toolchain] section is informational — populated at creation time.
-  The [paths] section tells the app where to find source and content files.
-
-Project type detection
-  Primary: read rustic.toml → project.type
-  Fallback (legacy): Cargo.toml exists → "rust", otherwise → "native"
-  Legacy projects get rustic.toml auto-generated on first load.
-
-Rust project structure (unchanged)
-  projects/<name>/
-  ├── rustic.toml
-  ├── Cargo.toml
-  ├── src/bin/
-  │   └── <playground>.rs
-  └── content/
-
-Native project structure
-  projects/<name>/
-  ├── rustic.toml
-  ├── <playground>.c
-  ├���─ <playground>.cpp
-  └── content/
-
-  Source files live directly in the project root (paths.src = ".").
-
-Supported extensions and compilers
-  .c   → clang <file> -o <out> [cflags] && <out>
-  .cpp → clang++ <file> -o <out> [cxxflags] && <out>
-
-  Output binaries: projects/<name>/target/runs/<stem>
-
-Playground naming for native projects
-  Names include the extension: `hello.c`, `vectors.cpp`.
-  Validation: stem follows `[a-z][a-z0-9_]*` rule. Extension must be .c or .cpp.
+Module structure
+  src-tauri/src/languages/
+  ├── mod.rs       — Lang enum, RunConfig, ToolInfo, shared helpers
+  ├── rust.rs      — Cargo workspace, cargo run, live check, clap export
+  ├── native.rs    — C/C++ with clang, compile+run, Makefile export
+  ├── zig.rs       — zig run (direct), zig flags
+  └── swift.rs     — swiftc compile+run, swift flags
 
 ---
 
-Feature 1 — Project Type Selection
+Architecture — Frontend
 
-New project dialog
-  - **Rust** — "Cargo workspace with deps and live checking"
-  - **Native (C/C++)** — "C/C++ with clang — compiler flags in rustic.toml"
+Language registry (`ui/src/lib/languages.ts`)
+  TypeScript config objects per language. Components read capabilities
+  instead of checking project type strings.
 
-  The choice is permanent for the project.
+  type ProjectType = 'rust' | 'native' | 'zig' | 'swift'
 
-Backend
-  new_project gains optional `project_type` parameter (default: "rust").
+  interface LanguageConfig {
+    type, label, badge, badgeClass, color, extensions,
+    hasCargoToml, hasBuildFlags, buildFlagLabels,
+    supportsLiveCheck, runCommandDisplay, toolchainName,
+    needsExtension, subLanguages?
+  }
 
-  For native: creates rustic.toml (type=native, default build flags), content/,
-  and hello.c starter.
-  For rust: unchanged (rustic.toml + Cargo.toml + src/bin/hello.rs).
-
-  Commands: get_project_type, get_project_manifest
-
----
-
-Feature 2 — Native Project: Playground CRUD
-
-  list_playgrounds reads .c/.cpp files from paths.src directory.
-  new_playground takes name WITH extension (e.g., "hello.c").
-  Starter templates: stdio.h for C, iostream for C++.
-  All CRUD operations resolve paths via rustic.toml [paths].
+  Components use: getLang(projectType).hasBuildFlags instead of isNative.
 
 ---
 
-Feature 3 — Compile and Run
+Language Specifications
 
-  1. Read [build] flags from rustic.toml (cflags for .c, cxxflags for .cpp)
-  2. Compile: clang/clang++ <source> -o target/runs/<stem> [flags]
-  3. If compile fails, stream stderr and complete with error code
-  4. If compile succeeds, run the binary with stdin/stdout/stderr streaming
+Rust (unchanged from v0.2)
+  - Project type: "rust"
+  - Extensions: [".rs"]
+  - Source dir: src/bin/
+  - Run: cargo run --bin <name>
+  - Live check: cargo check (300ms debounce)
+  - Export: clap CLI runner + merged Cargo.toml
+  - Manifest: [build] cflags/cxxflags empty (unused)
+  - Toolchain: cargo, rustc via ~/.cargo/bin/
 
-  Compiler path: clang via `xcrun --find clang`, fallback /usr/bin/clang.
-  clang++ derived as sibling of clang.
+Native C/C++ (unchanged from v0.2)
+  - Project type: "native"
+  - Extensions: [".c", ".cpp"]
+  - Source dir: . (project root)
+  - Run: clang/clang++ compile → run binary
+  - Live check: none
+  - Export: POSIX shell runner + Makefile
+  - Manifest: [build] cflags, cxxflags
+  - Toolchain: clang via xcrun
 
-  Process management: same process_group + SIGTERM/SIGKILL pattern.
-  PLAYGROUND_CONTENT env var set the same way.
+Zig (new)
+  - Project type: "zig"
+  - Extensions: [".zig"]
+  - Source dir: . (project root)
+  - Run: zig run <file>.zig (Direct — single step)
+  - Live check: none (future: zig ast-check)
+  - Export: POSIX shell runner with zig run commands
+  - Manifest: [build] zigflags (e.g. -O ReleaseSafe)
+  - Toolchain: zig version
+  - Starter: const std = @import("std"); pub fn main() !void { ... }
 
----
-
-Feature 4 — New Playground Dialog (Native)
-
-  Language picker: C, C++ (2 buttons).
-  Selected language determines file extension and starter template.
-  Default: C.
-
-  Rust projects: no language picker (always .rs, unchanged).
-
----
-
-Feature 5 — Compiler Flags UI
-
-  Sidebar panel visible for native projects (replaces Cargo.toml section):
-  - C flags text input (space-separated)
-  - C++ flags text input (space-separated)
-  - "Saved to rustic.toml" hint
-
-  Changes save immediately to [build] in rustic.toml via save_build_flags.
-  Loaded on project switch via get_build_flags.
-
-  Default flags: -lsqlite3 (C), -std=c++17 -lsqlite3 (C++).
-
----
-
-Feature 6 — Sidebar Adaptation
-
-  Native projects: show filenames with extensions, compiler flags panel,
-  no Cargo.toml entry, no deps.
-  Rust projects: unchanged.
-
----
-
-Feature 7 — Monaco Language Detection
-
-  Editor language by file extension: .c → "c", .cpp → "cpp".
-  Rust projects unchanged. Cargo.toml still gets TOML highlighting.
+Swift (new)
+  - Project type: "swift"
+  - Extensions: [".swift"]
+  - Source dir: . (project root)
+  - Run: swiftc compile → run binary (CompileThenRun)
+  - Live check: none (future: swiftc -typecheck)
+  - Export: POSIX shell runner with swiftc compile + run
+  - Manifest: [build] swiftflags (e.g. -O)
+  - Toolchain: swiftc --version (ships with Xcode CLI tools)
+  - Starter: print("Hello from \(name)!")
 
 ---
 
-Feature 8 — Conditional Menus
+Manifest Evolution (rustic.toml)
 
-  - "Export Project" disabled for native projects
-  - "Load Rust Book Examples" disabled for native projects
-  - Run/Stop/New/Copy work for both types
-  - rebuild_menu receives project_type parameter
+  [build] section gains new fields with #[serde(default)]:
+    zigflags = []           # zig compiler flags
+    swiftflags = []         # swift compiler flags
+
+  [toolchain] section gains new optional fields:
+    zig = "0.13.0"          # zig version
+    swiftc = "6.0"          # swiftc version
+
+  Backward compatible — existing manifests parse without error.
+  Empty arrays/None values are harmless.
+
+  detect_project_type heuristic fallback chain:
+    rustic.toml → Cargo.toml → .zig files → .swift files → "native"
 
 ---
 
-Feature 9 — Backwards Compatibility
+Implementation Phases
 
-  Legacy projects without rustic.toml get one auto-generated on first load.
-  Cargo.toml present → rust. Otherwise → native.
-  All existing Rust projects work without manual changes.
+Phase 1 — Extract Rust module (no behavior change)
+  Create languages/ directory with Lang enum, RunConfig, shared helpers.
+  Extract Rust logic into languages/rust.rs.
+  Checkpoint: all tests pass, app works identically.
+
+Phase 2 — Extract Native module (no behavior change)
+  Extract C/C++ logic into languages/native.rs.
+  Replace all if/else in dispatchers with Lang::from_str() match.
+  Extract generic run_direct / run_compile_then_execute.
+  Checkpoint: all tests pass, app works identically.
+
+Phase 3 — Zig backend
+  Expand manifest structs. Implement languages/zig.rs fully.
+  Add Lang::Zig arm to all match blocks.
+  Checkpoint: cargo test passes.
+
+Phase 4 — Swift backend
+  Expand manifest structs. Implement languages/swift.rs fully.
+  Add Lang::Swift arm to all match blocks.
+  Checkpoint: cargo test passes.
+
+Phase 5 — Frontend registry + Zig/Swift UI
+  Create languages.ts registry. Create zig/swift templates.
+  Refactor all components to use registry.
+  Add Monaco themes + app themes for Zig and Swift.
+  Checkpoint: create/run/export all 4 project types.
 
 ---
 
-Scope Boundaries — What v0.2 Does NOT Include
+Scope Boundaries — What v0.3 Does NOT Include
 
-  - No Zig support (deferred to v0.3)
-  - No live error checking for native projects (future: clang -fsyntax-only)
-  - No LSP / autocomplete for C/C++
-  - No build systems (CMake, Makefiles)
-  - No multi-file compilation (each source file is standalone)
-  - No header files beyond system headers
+  - No live error checking for Zig/Swift/Native (future)
+  - No LSP / autocomplete for any non-Rust language
+  - No package managers (Swift PM, Zig build.zig.zon)
+  - No multi-file compilation
+  - No book chapters for Zig/Swift (templates are enough)
   - No conversion between project types
-  - No book chapters for C/C++
-
----
-
-Acceptance Criteria
-
-Feature 1 — Project Type Selection
-  [ ] New project dialog offers Rust and Native (C/C++) type choices
-  [ ] Rust project creates rustic.toml + Cargo.toml + src/bin/
-  [ ] Native project creates rustic.toml + content/ + hello.c starter
-  [ ] rustic.toml contains [project], [paths], [build], [toolchain] sections
-  [ ] get_project_type returns correct type for new and existing projects
-  [ ] Legacy projects get rustic.toml auto-generated on first load
-
-Feature 2 — Native Playground CRUD
-  [ ] list_playgrounds reads .c/.cpp files from paths.src
-  [ ] new_playground creates file with language-appropriate template
-  [ ] load/save/rename/delete/duplicate work for native playgrounds
-  [ ] All path resolution uses rustic.toml [paths]
-  [ ] Stem validation enforced
-
-Feature 3 — Compile and Run
-  [ ] .c files compile and run via clang with cflags
-  [ ] .cpp files compile and run via clang++ with cxxflags
-  [ ] Compilation errors stream to stderr
-  [ ] Process kill works (SIGTERM + SIGKILL on process group)
-  [ ] stdin input works for native playgrounds
-  [ ] PLAYGROUND_CONTENT env var is set
-
-Feature 4 — New Playground Dialog
-  [ ] Native projects show language picker (C, C++)
-  [ ] Rust projects show no language picker
-
-Feature 5 — Compiler Flags
-  [ ] Sidebar shows cflags and cxxflags inputs for native projects
-  [ ] Changes saved to rustic.toml [build] section
-  [ ] Default flags: -lsqlite3 (C), -std=c++17 -lsqlite3 (C++)
-  [ ] Flags loaded on project switch
-
-Feature 6 — Sidebar
-  [ ] Native: filenames with extensions, compiler flags panel, no Cargo.toml
-  [ ] Rust: unchanged
-
-Feature 7 — Monaco
-  [ ] .c files get C syntax highlighting
-  [ ] .cpp files get C++ syntax highlighting
-
-Feature 8 — Menus
-  [ ] Export and Rust Book disabled for native projects
-  [ ] Run/Stop/New/Copy work for both types
-  [ ] Menu rebuilds on project switch
-
-Feature 9 — Backwards Compatibility
-  [ ] Legacy projects get rustic.toml auto-generated
-  [ ] All existing Rust projects work without changes

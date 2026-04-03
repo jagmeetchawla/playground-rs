@@ -74,7 +74,12 @@ All runtime data lives under:
 | Path | Purpose |
 |---|---|
 | `src-tauri/src/lib.rs` | App state, paths, validation, config/settings, window state, run() entry (~550 lines) |
-| `src-tauri/src/playground_commands.rs` | Project CRUD + playground CRUD + run/kill/check/cancel/stdin (~450 lines) |
+| `src-tauri/src/languages/mod.rs` | Lang enum, RunConfig enum, shared FileLanguage helpers (v0.3) |
+| `src-tauri/src/languages/rust.rs` | Rust: Cargo scaffold, cargo run, live check, clap export (v0.3) |
+| `src-tauri/src/languages/native.rs` | C/C++: clang scaffold, compile+run, Makefile export (v0.3) |
+| `src-tauri/src/languages/zig.rs` | Zig: scaffold, zig run, shell export (v0.3) |
+| `src-tauri/src/languages/swift.rs` | Swift: scaffold, swiftc compile+run, shell export (v0.3) |
+| `src-tauri/src/playground_commands.rs` | Thin dispatchers: CRUD + run/kill/check via Lang enum (~450 lines) |
 | `src-tauri/src/cargo_commands.rs` | Cargo.toml management, toolchain checks, setup wizard (~300 lines) |
 | `src-tauri/src/content_commands.rs` | Content file CRUD commands (~120 lines) |
 | `src-tauri/src/export.rs` | Project export: Rust (CLI runner) and native (shell runner + Makefile) (~400 lines) |
@@ -104,13 +109,13 @@ All runtime data lives under:
 
 ## Current Version Status
 
+**v0.3** — in progress (language module architecture: Lang enum dispatch, per-language modules, shared FileLanguage helpers. Adding Zig and Swift project types. Frontend language registry replacing if/else branching).
+
 **v0.2** — shipped (native C/C++ projects: rustic.toml manifest, C/C++ templates, native export with POSIX shell runner + Makefile, K&R C Book examples, sea green theme, tabbed toolchain wizard, compiler flags UI, project-type badges, settings clang display).
 
 **v0.1.9** — shipped (renamed from playground-rs to rustic-playground, cleaned up src/bin).
 
-**v0.1.8.1** — shipped (production testing fixes: toolchain detection on app bundles, serde_json template dep, stop-and-run confirmation dialog, menu items for Copy Code/Export Project/Rename Playground, menu sync with active tab, rustup.rs link in wizard).
-
-Next: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
+After v0.3: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
 
 ---
 
