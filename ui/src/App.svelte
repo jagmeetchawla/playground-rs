@@ -1029,7 +1029,13 @@
         class="settings-btn"
         title="Settings (⌘,)"
         onclick={() => showSettings = true}
-      >&#9881;&#65038;</button>
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M6.8 1.5h2.4l.3 1.7.8.3 1.4-1 1.7 1.7-1 1.4.3.8 1.7.3v2.4l-1.7.3-.3.8 1 1.4-1.7 1.7-1.4-1-.8.3-.3 1.7H6.8l-.3-1.7-.8-.3-1.4 1-1.7-1.7 1-1.4-.3-.8-1.7-.3V6.8l1.7-.3.3-.8-1-1.4 1.7-1.7 1.4 1 .8-.3.3-1.7z"
+                stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" fill="none"/>
+          <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.1" fill="none"/>
+        </svg>
+      </button>
       <button class="toolchain-pill" title="{activeToolchain.path ?? ''} — Click for toolchain details" onclick={() => showWizard = true}>
         {#if projectType === 'native'}
           <!-- C bracket icon for clang -->
@@ -1553,7 +1559,6 @@
   .settings-btn {
     display: flex; align-items: center; justify-content: center;
     width: 28px; height: 28px;
-    font-size: 21px; line-height: 1;
     color: var(--text-tertiary);
     background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.11);
     border-radius: 8px;
