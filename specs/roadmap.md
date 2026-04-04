@@ -139,6 +139,19 @@ v0.3.4 — Linux Port (Rust Edition only)
   - Dark/Light/System/Rust themes (Monaco + app chrome)
   - Toolchain wizard: Rust only (cargo, rustc, rustfmt, clippy)
 
+  GNOME HIG Compliance:
+  Feature parity with macOS, but following GNOME Human Interface Guidelines
+  instead of Apple HIG. Key differences from macOS version:
+  - Header bar pattern: CSS-based GtkHeaderBar-style header replacing macOS
+    toolbar (Tauri on Linux doesn't use native GtkHeaderBar — custom in frontend)
+  - Flat/borderless buttons instead of macOS tinted pills
+  - Adwaita-inspired color palette: follow libadwaita light/dark tokens
+  - Larger touch targets, 6px border radius (GNOME standard)
+  - No system tray (GNOME doesn't support it)
+  - Rounded bottom corners on panels/cards matching Adwaita style
+  - Platform-conditional CSS: detect Linux and apply GNOME overrides
+    (same components, different styling — not a fork)
+
   Linux-specific work:
   - Tauri Linux capabilities and permissions
   - GTK file dialogs (Tauri handles this, but needs testing)
@@ -159,11 +172,13 @@ v0.3.4 — Linux Port (Rust Edition only)
   3. Keyboard shortcut remapping verification (Ctrl vs ⌘)
   4. GTK file dialog and system integration testing
   5. Desktop entry file with icon
-  6. .deb packaging verification (Tauri bundler)
-  7. .AppImage packaging verification (Tauri bundler)
-  8. .rpm packaging (additional tooling)
-  9. CI: GitHub Actions Linux build matrix (Ubuntu + Fedora)
-  10. End-to-end testing on Ubuntu 22.04 and Fedora 38+
+  6. GNOME HIG styling: header bar, flat buttons, Adwaita palette
+  7. Platform-conditional CSS (detect Linux, apply GNOME overrides)
+  8. .deb packaging verification (Tauri bundler)
+  9. .AppImage packaging verification (Tauri bundler)
+  10. .rpm packaging (additional tooling)
+  11. CI: GitHub Actions Linux build matrix (Ubuntu + Fedora)
+  12. End-to-end testing on Ubuntu 22.04 and Fedora 38+
 
 ---
 
