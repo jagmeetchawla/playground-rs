@@ -410,7 +410,7 @@ fn main() &#123;
       </ul>
 
       <h2>Your Responsibility</h2>
-      <p>Only run code you wrote or fully understand. Do not run pre-built binaries from untrusted sources.</p>
+      <p>Only run code you wrote or fully understand. Do not run code or binaries from untrusted sources.</p>
     {/if}
   </div>
 </div>

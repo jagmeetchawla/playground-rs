@@ -457,7 +457,7 @@
                 <option value="dark">Dark</option>
                 <option value="light">Light</option>
               </optgroup>
-              <optgroup label="Languages">
+              <optgroup label={edition.isSingleLanguage ? 'Language' : 'Languages'}>
                 {#if !edition.isSingleLanguage}
                   <option value="auto">Auto (match language)</option>
                 {/if}
