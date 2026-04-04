@@ -1,6 +1,7 @@
 <script lang="ts">
   import { open as shellOpen } from '@tauri-apps/plugin-shell'
   import appIcon from './app-icon.png'
+  import { getLang, type ProjectType } from './languages'
   import type { EditionConfig } from './editions'
 
   let { onclose, enabledLanguages = ['rust', 'clang', 'zig', 'swift'], edition }: {
@@ -11,6 +12,10 @@
 
   let activeSection: string = $state('overview')
 
+  const editionLang = edition.isSingleLanguage ? getLang(edition.languages![0] as ProjectType) : null
+  const editionBookName = editionLang?.book?.commandLabel ?? null
+  const booksLabel = editionBookName ?? 'Book Examples'
+
   const allSections = [
     { id: 'overview', label: 'Overview' },
     ...(!edition.isSingleLanguage ? [{ id: 'languages', label: 'Languages' }] : []),
@@ -19,7 +24,7 @@
     { id: 'console', label: 'Console' },
     { id: 'content', label: 'Content Files' },
     { id: 'shortcuts', label: 'Shortcuts' },
-    { id: 'books', label: 'Book Examples' },
+    ...(editionBookName !== null || !edition.isSingleLanguage ? [{ id: 'books', label: booksLabel }] : []),
     { id: 'security', label: 'Security' },
   ]
   const sections = allSections
@@ -66,7 +71,7 @@
     {#if activeSection === 'overview'}
       <h1>Getting Started</h1>
       <p class="lead">
-        Rustic Playground is a macOS desktop app for running code experiments — inspired
+        {edition.displayName} is a macOS desktop app for running code experiments — inspired
         by Swift Playgrounds. Write code, press <kbd>⌘R</kbd>, see output stream live.
       </p>
 
@@ -79,7 +84,7 @@
         <div class="card">
           <span class="card-icon">⌘,</span>
           <h3>Settings</h3>
-          <p>Choose languages, themes, fonts, and manage toolchains. Open from the gear button or menu.</p>
+          <p>{edition.isSingleLanguage ? 'Choose themes, fonts, and manage your toolchain.' : 'Choose languages, themes, fonts, and manage toolchains.'} Open from the gear button or menu.</p>
         </div>
         <div class="card">
           <span class="card-icon">📖</span>
@@ -327,10 +332,11 @@ fn main() &#123;
       </table>
 
     {:else if activeSection === 'books'}
-      <h1>Book Examples</h1>
+      <h1>{booksLabel}</h1>
       <p class="lead">
-        Learn from curated example projects based on popular programming books.
-        Load them from the <strong>Learn</strong> menu or the Welcome Wizard.
+        {edition.isSingleLanguage
+          ? `Learn from curated example projects based on ${editionBookName}. Load from the Learn menu or the Welcome Wizard.`
+          : 'Learn from curated example projects based on popular programming books. Load them from the Learn menu or the Welcome Wizard.'}
       </p>
 
       <div class="book-list">
@@ -369,16 +375,16 @@ fn main() &#123;
         <strong>Copy to Project</strong> to create an editable copy in your own project.
       </p>
 
-      <h2>Managing Books</h2>
+      <h2>{edition.isSingleLanguage ? 'Managing' : 'Managing Books'}</h2>
       <p>
-        Load or remove books from <strong>Settings → Books</strong>. Removing a book deletes
-        its projects from disk. You can re-load them at any time.
+        Load or remove {edition.isSingleLanguage ? 'the book' : 'books'} from <strong>Settings → {booksLabel}</strong>. Removing {edition.isSingleLanguage ? 'it' : 'a book'} deletes
+        the projects from disk. You can re-load at any time.
       </p>
 
       <p class="footnote">
         Playground code is original educational material — not verbatim from the books.
         Each chapter includes an <code>attribution.md</code> in its Files folder.
-        Rustic Playground is not affiliated with or endorsed by the original authors.
+        {edition.displayName} is not affiliated with or endorsed by the original authors.
       </p>
 
     {:else if activeSection === 'security'}
@@ -386,9 +392,8 @@ fn main() &#123;
       <div class="warn-banner">
         <h2>This app is intentionally not sandboxed</h2>
         <p>
-          Like Xcode, VS Code, and Terminal, Rustic Playground compiles and executes arbitrary
-          code using your local toolchains (<code>cargo</code>, <code>clang</code>,
-          <code>zig</code>, <code>swiftc</code>).
+          Like Xcode, VS Code, and Terminal, {edition.displayName} compiles and executes arbitrary
+          code using your local {edition.isSingleLanguage ? 'toolchain' : 'toolchains'} ({#if enabledLanguages.includes('rust')}<code>cargo</code>{/if}{#if enabledLanguages.includes('clang')}{#if enabledLanguages.includes('rust')}, {/if}<code>clang</code>{/if}{#if enabledLanguages.includes('zig')}{#if enabledLanguages.includes('rust') || enabledLanguages.includes('clang')}, {/if}<code>zig</code>{/if}{#if enabledLanguages.includes('swift')}{#if enabledLanguages.length > 1}, {/if}<code>swiftc</code>{/if}).
         </p>
         <p>
           Any playground you run has <strong>full access</strong> to your filesystem, network,

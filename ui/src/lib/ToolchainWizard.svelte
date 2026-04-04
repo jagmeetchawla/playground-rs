@@ -55,21 +55,27 @@
       .map(l => l.type)
   )
 
+  // Edition-aware labels for single-language editions
+  const editionLang = edition.isSingleLanguage ? getLang(edition.languages![0] as ProjectType) : null
+  const editionBookName = editionLang?.book?.commandLabel ?? null
+  const toolchainLabel = edition.isSingleLanguage ? 'Toolchain' : 'Toolchains'
+  const booksLabel = editionBookName ?? 'Books'
+
   // Edition-aware steps/tabs: single-language editions skip language picker
   const allWizardSteps = edition.isSingleLanguage
-    ? ['Toolchains', 'Appearance', 'Books', 'Finish']
+    ? [toolchainLabel, 'Appearance', ...(editionBookName ? [booksLabel] : []), 'Finish']
     : ['Languages', 'Toolchains', 'Appearance', 'Books', 'Finish']
   const allWizardPanels = edition.isSingleLanguage
-    ? (['toolchains', 'appearance', 'books', 'finish'] as const)
+    ? (['toolchains', 'appearance', ...(editionBookName ? ['books' as const] : []), 'finish'] as const)
     : (['languages', 'toolchains', 'appearance', 'books', 'finish'] as const)
   const wizardSteps = allWizardSteps
   const totalSteps = wizardSteps.length
 
   const allSettingsTabs: { id: typeof activeTab; label: string }[] = [
     ...(!edition.isSingleLanguage ? [{ id: 'languages' as const, label: 'Languages' }] : []),
-    { id: 'toolchains', label: 'Toolchains' },
+    { id: 'toolchains', label: toolchainLabel },
     { id: 'appearance', label: 'Appearance' },
-    { id: 'books', label: 'Books' },
+    ...(!edition.isSingleLanguage || editionBookName ? [{ id: 'books' as const, label: booksLabel }] : []),
   ]
   const settingsTabs = allSettingsTabs
 
@@ -303,8 +309,8 @@
     <!-- ═══════════ Panel: Toolchains ═══════════ -->
     {:else if currentPanel === 'toolchains'}
       <div class="step-content">
-        <h2 class="step-heading">Toolchain Check</h2>
-        <p class="step-desc">Checking if the required compilers are installed.</p>
+        <h2 class="step-heading">{edition.isSingleLanguage ? `${editionLang!.label} Toolchain` : 'Toolchain Check'}</h2>
+        <p class="step-desc">{edition.isSingleLanguage ? `Checking if ${editionLang!.label.toLowerCase()} is installed.` : 'Checking if the required compilers are installed.'}</p>
 
         {#if checking}
           <div class="checking">
@@ -511,8 +517,10 @@
     <!-- ═══════════ Panel: Books ═══════════ -->
     {:else if currentPanel === 'books'}
       <div class="step-content">
-        <h2 class="step-heading">Example Books</h2>
-        <p class="step-desc">{mode === 'wizard' ? 'Load book examples to learn from. Each book creates read-only reference projects.' : 'Manage loaded book examples.'}</p>
+        <h2 class="step-heading">{editionBookName ?? 'Example Books'}</h2>
+        <p class="step-desc">{mode === 'wizard'
+          ? (edition.isSingleLanguage ? `Load ${editionBookName} examples to learn from.` : 'Load book examples to learn from. Each book creates read-only reference projects.')
+          : (edition.isSingleLanguage ? `Manage ${editionBookName} examples.` : 'Manage loaded book examples.')}</p>
 
         {#if availableBooks.length === 0}
           <div class="no-books">
@@ -557,19 +565,26 @@
         <h2 class="step-heading">You're All Set!</h2>
 
         <div class="summary">
+          {#if !edition.isSingleLanguage}
           <div class="summary-row">
             <span class="summary-label">Languages</span>
             <span class="summary-value">
               {selectedLangs.map(t => getLang(t as ProjectType).label).join(', ')}
             </span>
           </div>
+          {:else}
+          <div class="summary-row">
+            <span class="summary-label">Language</span>
+            <span class="summary-value">{editionLang!.label}</span>
+          </div>
+          {/if}
           <div class="summary-row">
             <span class="summary-label">Theme</span>
             <span class="summary-value">{({ system: 'System', auto: 'Auto (match language)', dark: 'Dark', light: 'Light', rust: 'Rust', seagreen: 'Clang', zig: 'Zig', swift: 'Swift' } as Record<string, string>)[draftSettings.theme] ?? draftSettings.theme}</span>
           </div>
           {#if booksChecked.length > 0}
             <div class="summary-row">
-              <span class="summary-label">Books to load</span>
+              <span class="summary-label">{edition.isSingleLanguage ? 'Book' : 'Books to load'}</span>
               <span class="summary-value">
                 {booksChecked.map(t => getLang(t as ProjectType).book?.commandLabel).filter(Boolean).join(', ')}
               </span>
