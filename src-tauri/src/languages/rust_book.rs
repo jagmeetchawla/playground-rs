@@ -1,8 +1,8 @@
-use tauri::AppHandle;
+use std::path::Path;
 
-#[tauri::command]
-pub fn seed_rust_book(app: AppHandle) -> Result<Vec<String>, String> {
-    let pdir = crate::projects_dir(&app);
+/// Seed Rust Book chapter projects into the given projects directory.
+/// Returns the list of newly created project names.
+pub fn seed_book(pdir: &Path) -> Result<Vec<String>, String> {
     let mut created: Vec<String> = Vec::new();
 
     // Attribution text placed in every chapter's content/ folder.
@@ -37,7 +37,7 @@ Project or its contributors.
     let chapters: Vec<(&str, &str, Vec<(&str, &str)>)> = vec![
         // ── Chapter 1: Getting Started ────────────────────────────────────────
         (
-            "ch01_getting_started",
+            "rust_ch01_getting_started",
             "",
             vec![
                 (
@@ -108,7 +108,7 @@ fn main() {
         ),
         // ── Chapter 2: Guessing Game ──────────────────────────────────────────
         (
-            "ch02_guessing_game",
+            "rust_ch02_guessing_game",
             "rand = \"0.8\"\n",
             vec![(
                 "guessing_game",
@@ -152,7 +152,7 @@ fn main() {
         ),
         // ── Chapter 3: Common Programming Concepts ────────────────────────────
         (
-            "ch03_concepts",
+            "rust_ch03_concepts",
             "",
             vec![
                 (
@@ -301,7 +301,7 @@ fn main() {
         ),
         // ── Chapter 4: Ownership ──────────────────────────────────────────────
         (
-            "ch04_ownership",
+            "rust_ch04_ownership",
             "",
             vec![
                 (
@@ -430,7 +430,7 @@ fn main() {
         ),
         // ── Chapter 5: Structs ────────────────────────────────────────────────
         (
-            "ch05_structs",
+            "rust_ch05_structs",
             "",
             vec![
                 (
@@ -578,7 +578,7 @@ fn main() {
         ),
         // ── Chapter 6: Enums and Pattern Matching ─────────────────────────────
         (
-            "ch06_enums",
+            "rust_ch06_enums",
             "",
             vec![
                 (
@@ -738,7 +738,7 @@ fn main() {
         ),
         // ── Chapter 7: Packages, Crates, Modules ─────────────────────────────
         (
-            "ch07_modules",
+            "rust_ch07_modules",
             "",
             vec![
                 (
@@ -893,7 +893,7 @@ fn main() {
         ),
         // ── Chapter 8: Collections ────────────────────────────────────────────
         (
-            "ch08_collections",
+            "rust_ch08_collections",
             "",
             vec![
                 (
@@ -1035,7 +1035,7 @@ fn main() {
         ),
         // ── Chapter 9: Error Handling ─────────────────────────────────────────
         (
-            "ch09_errors",
+            "rust_ch09_errors",
             "",
             vec![
                 (
@@ -1169,7 +1169,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
         // ── Chapter 10: Generics, Traits, Lifetimes ───────────────────────────
         (
-            "ch10_generics",
+            "rust_ch10_generics",
             "",
             vec![
                 (
@@ -1335,7 +1335,7 @@ fn main() {
         ),
         // ── Chapter 11: Writing Automated Tests ──────────────────────────────
         (
-            "ch11_testing",
+            "rust_ch11_testing",
             "",
             vec![
                 (
@@ -1487,7 +1487,7 @@ fn main() {
         ),
         // ── Chapter 12: An I/O Project ────────────────────────────────────────
         (
-            "ch12_minigrep",
+            "rust_ch12_minigrep",
             "",
             vec![
                 (
@@ -1594,7 +1594,7 @@ fn main() {
         ),
         // ── Chapter 13: Closures and Iterators ────────────────────────────────
         (
-            "ch13_closures",
+            "rust_ch13_closures",
             "",
             vec![
                 (
@@ -1738,7 +1738,7 @@ fn main() {
         ),
         // ── Chapter 14: More About Cargo ──────────────────────────────────────
         (
-            "ch14_cargo",
+            "rust_ch14_cargo",
             "",
             vec![
                 (
@@ -1839,7 +1839,7 @@ fn main() {
         ),
         // ── Chapter 15: Smart Pointers ────────────────────────────────────────
         (
-            "ch15_smart_pointers",
+            "rust_ch15_smart_pointers",
             "",
             vec![
                 (
@@ -1986,7 +1986,7 @@ fn main() {
         ),
         // ── Chapter 16: Fearless Concurrency ──────────────────────────────────
         (
-            "ch16_concurrency",
+            "rust_ch16_concurrency",
             "",
             vec![
                 (
@@ -2121,7 +2121,7 @@ fn main() {
         ),
         // ── Chapter 17: OOP Features of Rust ──────────────────────────────────
         (
-            "ch17_oop",
+            "rust_ch17_oop",
             "",
             vec![
                 (
@@ -2271,7 +2271,7 @@ fn main() {
         ),
         // ── Chapter 18: Patterns and Matching ─────────────────────────────────
         (
-            "ch18_patterns",
+            "rust_ch18_patterns",
             "",
             vec![
                 (
@@ -2402,7 +2402,7 @@ fn main() {
         ),
         // ── Chapter 19: Advanced Features ─────────────────────────────────────
         (
-            "ch19_advanced",
+            "rust_ch19_advanced",
             "",
             vec![
                 (
@@ -2579,7 +2579,7 @@ fn main() {
         ),
         // ── Chapter 20: Final Project – Web Server ─────────────────────────────
         (
-            "ch20_web_server",
+            "rust_ch20_web_server",
             "",
             vec![
                 (
@@ -2725,6 +2725,13 @@ fn main() {
         );
         std::fs::write(project_path.join("Cargo.toml"), &cargo)
             .map_err(|e| format!("seed {chapter} Cargo.toml: {e}"))?;
+
+        // Write rustic.toml with source = "rust_book"
+        let mut manifest = crate::rustic_manifest::new_rust_manifest();
+        manifest.project.source = "rust_book".to_string();
+        manifest.project.readonly = true;
+        crate::rustic_manifest::write_manifest(&project_path, &manifest)?;
+
         let content_dir = project_path.join("content");
         std::fs::create_dir_all(&content_dir)
             .map_err(|e| format!("seed {chapter} content/: {e}"))?;

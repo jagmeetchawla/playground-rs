@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-use crate::{content_dir, workspace_dir, ActiveProject};
+use crate::languages::Lang;
 use crate::rustic_manifest;
+use crate::{content_dir, workspace_dir, ActiveProject};
 
 /// The exact main.rs from the v0.1 CLI playground runner (commit 231314e),
 /// with PLAYGROUND_CONTENT env var added for content file support.
@@ -419,15 +420,17 @@ case "${1:-}" in
 esac
 "##;
 
-/// Export the active project. Routes to Rust or Native export based on project type.
+/// Export the active project. Routes to per-language export via Lang dispatch.
 #[tauri::command]
 pub fn export_project(dest: String, app: AppHandle) -> Result<String, String> {
     let workspace = workspace_dir(&app);
     let ptype = rustic_manifest::detect_project_type(&workspace);
-    if ptype == "native" {
-        export_native_project(dest, &app)
-    } else {
-        export_rust_project(dest, &app)
+    let lang = Lang::from_str(&ptype);
+    match lang {
+        Lang::Rust => export_rust_project(dest, &app),
+        Lang::Native => export_native_project(dest, &app),
+        Lang::Zig => export_zig_project(dest, &app),
+        Lang::Swift => export_swift_project(dest, &app),
     }
 }
 
@@ -605,7 +608,11 @@ fn export_native_project(dest: String, app: &AppHandle) -> Result<String, String
     Ok(export_dir.to_string_lossy().to_string())
 }
 
-fn generate_makefile(workspace: &std::path::Path, cflags: &str, cxxflags: &str) -> Result<String, String> {
+fn generate_makefile(
+    workspace: &std::path::Path,
+    cflags: &str,
+    cxxflags: &str,
+) -> Result<String, String> {
     let mut c_files = Vec::new();
     let mut cpp_files = Vec::new();
 
@@ -660,6 +667,380 @@ fn generate_makefile(workspace: &std::path::Path, cflags: &str, cxxflags: &str) 
     mk.push_str(".PHONY: all clean\n");
 
     Ok(mk)
+}
+
+/// Shell script CLI runner for Zig playground projects.
+const CLI_ZIG_SH: &str = r##"#!/bin/sh
+# playground — CLI runner for Zig playground files
+# Exported from Rustic Playground
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$SCRIPT_DIR/src"
+CONTENT_DIR="$SCRIPT_DIR/content"
+
+list_playgrounds() {
+    for f in "$SRC_DIR"/*.zig; do
+        [ -f "$f" ] && basename "$f"
+    done | sort
+}
+
+run_playground() {
+    src="$SRC_DIR/$1"
+    shift
+
+    if [ ! -f "$src" ]; then
+        echo "Error: playground '$(basename "$src")' not found (looked for $src)" >&2
+        exit 1
+    fi
+
+    echo "Running $(basename "$src")..."
+    echo ""
+    PLAYGROUND_CONTENT="$CONTENT_DIR" zig run "$src" "$@"
+}
+
+pick_playground() {
+    count=0
+    for f in "$SRC_DIR"/*.zig; do
+        [ -f "$f" ] || continue
+        count=$((count + 1))
+        eval "file_$count=\"$(basename "$f")\""
+    done
+
+    if [ "$count" -eq 0 ]; then
+        echo "No playgrounds found. Add a .zig file to src/."
+        exit 1
+    fi
+
+    echo "Available playgrounds:"
+    echo ""
+    i=1
+    while [ "$i" -le "$count" ]; do
+        eval "printf '  [%d] %s\\n' $i \"\$file_$i\""
+        i=$((i + 1))
+    done
+
+    while true; do
+        printf "\nPick a playground: "
+        read -r input
+        case "$input" in
+            *[!0-9]*|"") ;;
+            *)
+                if [ "$input" -ge 1 ] 2>/dev/null && [ "$input" -le "$count" ] 2>/dev/null; then
+                    eval "chosen=\"\$file_$input\""
+                    run_playground "$chosen"
+                    return
+                fi
+                ;;
+        esac
+        i=1
+        while [ "$i" -le "$count" ]; do
+            eval "f=\"\$file_$i\""
+            fname="${f%.*}"
+            if [ "$input" = "$f" ] || [ "$input" = "$fname" ]; then
+                run_playground "$f"
+                return
+            fi
+            i=$((i + 1))
+        done
+        echo "Invalid choice. Enter a number (1-$count) or a filename."
+    done
+}
+
+case "${1:-}" in
+    list|ls)
+        list_playgrounds
+        ;;
+    version|v)
+        echo "playground 0.1.0"
+        ;;
+    help|--help|-h)
+        echo "Usage: ./playground.sh [command|filename]"
+        echo ""
+        echo "Commands:"
+        echo "  (none)         Interactive picker"
+        echo "  <file.zig>     Run a specific file"
+        echo "  list, ls       List all playground files"
+        echo "  version, v     Print version"
+        echo "  help           Show this help"
+        ;;
+    "")
+        pick_playground
+        ;;
+    *)
+        # Direct file — try exact, then with extension
+        if [ -f "$SRC_DIR/$1" ]; then
+            run_playground "$@"
+        elif [ -f "$SRC_DIR/$1.zig" ]; then
+            arg="$1.zig"; shift
+            run_playground "$arg" "$@"
+        else
+            echo "Error: playground '$1' not found" >&2
+            exit 1
+        fi
+        ;;
+esac
+"##;
+
+/// Export a Zig project as a standalone CLI playground.
+/// Creates dest/<project>/ with playground.sh runner, src/*.zig, and content/ files.
+fn export_zig_project(dest: String, app: &AppHandle) -> Result<String, String> {
+    let workspace = workspace_dir(app);
+    let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
+
+    let export_dir = PathBuf::from(&dest).join(&project_name);
+    let export_src = export_dir.join("src");
+    std::fs::create_dir_all(&export_src).map_err(|e| e.to_string())?;
+
+    // Write the CLI runner script
+    std::fs::write(export_dir.join("playground.sh"), CLI_ZIG_SH).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o755);
+        std::fs::set_permissions(export_dir.join("playground.sh"), perms)
+            .map_err(|e| e.to_string())?;
+    }
+
+    // Copy all .zig source files
+    for entry in std::fs::read_dir(&workspace)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map(|ext| ext == "zig")
+                .unwrap_or(false)
+        })
+    {
+        std::fs::copy(entry.path(), export_src.join(entry.file_name()))
+            .map_err(|e| e.to_string())?;
+    }
+
+    // Copy content files if they exist
+    copy_content_files(app, &export_dir)?;
+
+    // Write a README
+    let readme = format!(
+        "# {project_name}\n\n\
+        Exported from Rustic Playground.\n\n\
+        ## Usage\n\n\
+        ```bash\n\
+        # Interactive picker\n\
+        ./playground.sh\n\n\
+        # Run a specific file\n\
+        ./playground.sh hello.zig\n\n\
+        # List all playgrounds\n\
+        ./playground.sh list\n\
+        ```\n\n\
+        ## Requirements\n\n\
+        - [Zig](https://ziglang.org/download/) (zig compiler)\n"
+    );
+    std::fs::write(export_dir.join("README.md"), readme).map_err(|e| e.to_string())?;
+
+    Ok(export_dir.to_string_lossy().to_string())
+}
+
+/// Shell script CLI runner for Swift playground projects.
+const CLI_SWIFT_SH: &str = r##"#!/bin/sh
+# playground — CLI runner for Swift playground files
+# Exported from Rustic Playground
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$SCRIPT_DIR/src"
+BUILD_DIR="$SCRIPT_DIR/build"
+CONTENT_DIR="$SCRIPT_DIR/content"
+
+# Source build flags
+if [ -f "$SCRIPT_DIR/flags.sh" ]; then
+    . "$SCRIPT_DIR/flags.sh"
+fi
+
+mkdir -p "$BUILD_DIR"
+
+list_playgrounds() {
+    for f in "$SRC_DIR"/*.swift; do
+        [ -f "$f" ] && basename "$f"
+    done | sort
+}
+
+compile_and_run() {
+    src="$SRC_DIR/$1"
+    name="${1%.*}"
+    out="$BUILD_DIR/$name"
+    shift
+
+    if [ ! -f "$src" ]; then
+        echo "Error: playground '$(basename "$src")' not found (looked for $src)" >&2
+        exit 1
+    fi
+
+    flags="${SWIFTFLAGS:-}"
+
+    echo "Compiling $(basename "$src")..."
+    swiftc "$src" -o "$out" $flags
+    echo ""
+
+    PLAYGROUND_CONTENT="$CONTENT_DIR" "$out" "$@"
+}
+
+pick_playground() {
+    count=0
+    for f in "$SRC_DIR"/*.swift; do
+        [ -f "$f" ] || continue
+        count=$((count + 1))
+        eval "file_$count=\"$(basename "$f")\""
+    done
+
+    if [ "$count" -eq 0 ]; then
+        echo "No playgrounds found. Add a .swift file to src/."
+        exit 1
+    fi
+
+    echo "Available playgrounds:"
+    echo ""
+    i=1
+    while [ "$i" -le "$count" ]; do
+        eval "printf '  [%d] %s\\n' $i \"\$file_$i\""
+        i=$((i + 1))
+    done
+
+    while true; do
+        printf "\nPick a playground: "
+        read -r input
+        case "$input" in
+            *[!0-9]*|"") ;;
+            *)
+                if [ "$input" -ge 1 ] 2>/dev/null && [ "$input" -le "$count" ] 2>/dev/null; then
+                    eval "chosen=\"\$file_$input\""
+                    compile_and_run "$chosen"
+                    return
+                fi
+                ;;
+        esac
+        i=1
+        while [ "$i" -le "$count" ]; do
+            eval "f=\"\$file_$i\""
+            fname="${f%.*}"
+            if [ "$input" = "$f" ] || [ "$input" = "$fname" ]; then
+                compile_and_run "$f"
+                return
+            fi
+            i=$((i + 1))
+        done
+        echo "Invalid choice. Enter a number (1-$count) or a filename."
+    done
+}
+
+case "${1:-}" in
+    list|ls)
+        list_playgrounds
+        ;;
+    version|v)
+        echo "playground 0.1.0"
+        ;;
+    help|--help|-h)
+        echo "Usage: ./playground.sh [command|filename]"
+        echo ""
+        echo "Commands:"
+        echo "  (none)           Interactive picker"
+        echo "  <file.swift>     Compile and run a specific file"
+        echo "  list, ls         List all playground files"
+        echo "  version, v       Print version"
+        echo "  help             Show this help"
+        ;;
+    "")
+        pick_playground
+        ;;
+    *)
+        # Direct file — try exact, then with extension
+        if [ -f "$SRC_DIR/$1" ]; then
+            compile_and_run "$@"
+        elif [ -f "$SRC_DIR/$1.swift" ]; then
+            arg="$1.swift"; shift
+            compile_and_run "$arg" "$@"
+        else
+            echo "Error: playground '$1' not found" >&2
+            exit 1
+        fi
+        ;;
+esac
+"##;
+
+/// Export a Swift project as a standalone CLI playground.
+fn export_swift_project(dest: String, app: &AppHandle) -> Result<String, String> {
+    let workspace = workspace_dir(app);
+    let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
+
+    let export_dir = PathBuf::from(&dest).join(&project_name);
+    let export_src = export_dir.join("src");
+    std::fs::create_dir_all(&export_src).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(export_dir.join("build")).map_err(|e| e.to_string())?;
+
+    // Read build flags from manifest
+    let manifest = rustic_manifest::ensure_manifest(&workspace)
+        .unwrap_or_else(|_| rustic_manifest::new_swift_manifest());
+    let swiftflags = manifest.build.swiftflags.join(" ");
+
+    // Write flags.sh
+    let flags_sh = format!(
+        "# Build flags exported from Rustic Playground\nexport SWIFTFLAGS=\"{swiftflags}\"\n"
+    );
+    std::fs::write(export_dir.join("flags.sh"), flags_sh).map_err(|e| e.to_string())?;
+
+    // Write the CLI runner script
+    std::fs::write(export_dir.join("playground.sh"), CLI_SWIFT_SH).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o755);
+        std::fs::set_permissions(export_dir.join("playground.sh"), perms)
+            .map_err(|e| e.to_string())?;
+    }
+
+    // Copy all .swift source files
+    for entry in std::fs::read_dir(&workspace)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map(|ext| ext == "swift")
+                .unwrap_or(false)
+        })
+    {
+        std::fs::copy(entry.path(), export_src.join(entry.file_name()))
+            .map_err(|e| e.to_string())?;
+    }
+
+    // Copy content files
+    copy_content_files(app, &export_dir)?;
+
+    // Write README
+    let readme = format!(
+        "# {project_name}\n\n\
+        Exported from Rustic Playground.\n\n\
+        ## Usage\n\n\
+        ```bash\n\
+        # Interactive picker\n\
+        ./playground.sh\n\n\
+        # Run a specific file\n\
+        ./playground.sh hello.swift\n\n\
+        # List all playgrounds\n\
+        ./playground.sh list\n\n\
+        # Build flags\n\
+        # Edit flags.sh to change compiler flags\n\
+        ```\n\n\
+        ## Requirements\n\n\
+        - Swift compiler (`swiftc`) — ships with Xcode Command Line Tools\n\
+        - Install: `xcode-select --install`\n"
+    );
+    std::fs::write(export_dir.join("README.md"), readme).map_err(|e| e.to_string())?;
+
+    Ok(export_dir.to_string_lossy().to_string())
 }
 
 fn copy_content_files(app: &AppHandle, export_dir: &std::path::Path) -> Result<(), String> {

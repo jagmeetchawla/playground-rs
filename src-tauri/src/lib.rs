@@ -2,11 +2,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
-mod book_chapters;
 mod cargo_commands;
 mod content_commands;
 mod export;
-mod knr_chapters;
 pub(crate) mod languages;
 mod menu;
 mod playground_commands;
@@ -85,10 +83,6 @@ pub(crate) fn workspace_dir(app: &AppHandle) -> PathBuf {
     projects_dir(app).join(name)
 }
 
-pub(crate) fn bin_dir(app: &AppHandle) -> PathBuf {
-    workspace_dir(app).join("src").join("bin")
-}
-
 /// Source directory for the active project, read from rustic.toml [paths].src.
 /// Falls back to src/bin for Rust projects without a manifest.
 pub(crate) fn src_dir(app: &AppHandle) -> PathBuf {
@@ -102,16 +96,6 @@ pub(crate) fn src_dir(app: &AppHandle) -> PathBuf {
 
 pub(crate) fn content_dir(app: &AppHandle) -> PathBuf {
     workspace_dir(app).join("content")
-}
-
-/// Content directory read from rustic.toml [paths].content.
-pub(crate) fn manifest_content_dir(app: &AppHandle) -> PathBuf {
-    let workspace = workspace_dir(app);
-    if let Some(manifest) = rustic_manifest::read_manifest(&workspace) {
-        workspace.join(&manifest.paths.content)
-    } else {
-        workspace.join("content")
-    }
 }
 
 /// Get the active project's type from rustic.toml.
@@ -274,68 +258,6 @@ pub(crate) fn validate_filename(filename: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBuf, String> {
-    validate_name(name)?;
-    let dir = bin_dir(app);
-    let path = dir.join(format!("{}.rs", name));
-    let resolved_dir = dir.canonicalize().map_err(|e| e.to_string())?;
-    let resolved_parent = path
-        .parent()
-        .and_then(|p| p.canonicalize().ok())
-        .unwrap_or_else(|| resolved_dir.clone());
-    if resolved_parent != resolved_dir {
-        return Err(format!("Path traversal detected for name '{}'", name));
-    }
-    Ok(path)
-}
-
-/// Validate a native playground filename: stem must match naming rules, extension must be supported.
-/// Returns (stem, extension) on success.
-pub(crate) fn validate_native_name(filename: &str) -> Result<(String, String), String> {
-    let path = std::path::Path::new(filename);
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .ok_or_else(|| format!("'{}' has no valid stem", filename))?;
-    let ext = path.extension().and_then(|e| e.to_str()).ok_or_else(|| {
-        format!(
-            "'{}' has no extension — use .c or .cpp",
-            filename
-        )
-    })?;
-
-    validate_name(stem)?;
-    if !rustic_manifest::is_supported_extension(ext) {
-        return Err(format!(
-            "Unsupported extension '.{}' — use .c or .cpp",
-            ext
-        ));
-    }
-    Ok((stem.to_string(), ext.to_string()))
-}
-
-/// Safe path for a native playground file. filename includes extension (e.g. "hello.c").
-pub(crate) fn safe_native_playground_path(
-    filename: &str,
-    app: &AppHandle,
-) -> Result<PathBuf, String> {
-    validate_native_name(filename)?;
-    let dir = src_dir(app);
-    let path = dir.join(filename);
-    // For native projects where src=".", dir may not exist yet on a brand-new project.
-    // Only do traversal check if the directory exists.
-    if let Ok(resolved_dir) = dir.canonicalize() {
-        let resolved_parent = path
-            .parent()
-            .and_then(|p| p.canonicalize().ok())
-            .unwrap_or_else(|| resolved_dir.clone());
-        if resolved_parent != resolved_dir {
-            return Err(format!("Path traversal detected for '{}'", filename));
-        }
-    }
-    Ok(path)
-}
-
 pub(crate) fn safe_content_path(filename: &str, app: &AppHandle) -> Result<PathBuf, String> {
     validate_filename(filename)?;
     Ok(content_dir(app).join(filename))
@@ -495,6 +417,14 @@ fn save_settings(settings: Settings, app: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to write settings.json: {}", e))
 }
 
+// ── Book seeding ─────────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn seed_book(project_type: String, app: AppHandle) -> Result<Vec<String>, String> {
+    let lang = languages::Lang::from_str(&project_type);
+    lang.seed_book(&projects_dir(&app))
+}
+
 // ── App entry ─────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -560,6 +490,23 @@ pub fn run() {
             let ptype = rustic_manifest::detect_project_type(
                 &projects_dir(app.handle()).join(&active_name),
             );
+            let is_book = !rustic_manifest::get_project_source(
+                &projects_dir(app.handle()).join(&active_name),
+            )
+            .is_empty();
+            // Collect project sources for menu grouping
+            let pdir = projects_dir(app.handle());
+            let sources: std::collections::HashMap<String, String> = initial_projects
+                .iter()
+                .filter_map(|name| {
+                    let src = rustic_manifest::get_project_source(&pdir.join(name));
+                    if src.is_empty() {
+                        None
+                    } else {
+                        Some((name.clone(), src))
+                    }
+                })
+                .collect();
             let menu = menu::build_menu(
                 app.handle(),
                 &initial_projects,
@@ -567,6 +514,8 @@ pub fn run() {
                 usize::MAX,
                 false,
                 &ptype,
+                is_book,
+                &sources,
             )?;
             app.set_menu(menu)?;
             Ok(())
@@ -580,6 +529,7 @@ pub fn run() {
             }
             let event_name = match id {
                 "new_project" => Some("menu:new-project"),
+                "duplicate_project" => Some("menu:duplicate-project"),
                 "rename_project" => Some("menu:rename-project"),
                 "delete_project" => Some("menu:delete-project"),
                 "new_playground" => Some("menu:new"),
@@ -594,9 +544,29 @@ pub fn run() {
                 "show_settings" => Some("menu:settings"),
                 "show_help" => Some("menu:help"),
                 "show_about" => Some("menu:about"),
-                "seed_rust_book" => Some("menu:rust-book"),
-                "seed_knr_book" => Some("menu:knr-book"),
-                _ => None,
+                "edit_cut" => Some("menu:edit-cut"),
+                "edit_paste" => Some("menu:edit-paste"),
+                _ => {
+                    // Dynamic book events from language modules
+                    let mut book_event = None;
+                    for lang in languages::Lang::all() {
+                        if let Some(book) = lang.book_info() {
+                            if id == book.menu_id {
+                                book_event = Some(book.event_name);
+                                break;
+                            }
+                            if id == book.remove_menu_id {
+                                book_event = Some(book.remove_event_name);
+                                break;
+                            }
+                            if id == format!("open_book_{}", book.source_tag) {
+                                let _ = std::process::Command::new("open").arg(book.url).spawn();
+                                break;
+                            }
+                        }
+                    }
+                    book_event
+                }
             };
             if let Some(name) = event_name {
                 app.emit(name, ()).ok();
@@ -610,9 +580,10 @@ pub fn run() {
             playground_commands::switch_project,
             playground_commands::rename_project,
             playground_commands::delete_project,
+            playground_commands::remove_book,
             playground_commands::duplicate_project,
             menu::rebuild_menu,
-            book_chapters::seed_rust_book,
+            seed_book,
             get_window_state,
             save_window_state,
             get_settings,
@@ -631,6 +602,7 @@ pub fn run() {
             playground_commands::check_playground,
             playground_commands::cancel_check,
             playground_commands::workspace_path,
+            playground_commands::copy_playground_to_project,
             // Cargo / toolchain
             cargo_commands::get_cargo_toml,
             cargo_commands::save_cargo_toml,
@@ -654,10 +626,12 @@ pub fn run() {
             // Manifest
             rustic_manifest::get_project_type,
             rustic_manifest::get_project_manifest,
+            rustic_manifest::get_project_sources,
+            rustic_manifest::get_project_readonly_map,
+            rustic_manifest::get_locked_playgrounds,
+            rustic_manifest::set_playground_locked,
             rustic_manifest::get_build_flags,
             rustic_manifest::save_build_flags,
-            // K&R Book
-            knr_chapters::seed_knr_book,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -786,45 +760,45 @@ mod tests {
         assert!(validate_filename("..hidden").is_ok());
     }
 
-    // ── validate_native_name ──────────────────────────────────────────────
+    // ── file_validate_name (native) ────────────────────────────────────────
 
     #[test]
-    fn validate_native_name_accepts_valid_c() {
-        let (stem, ext) = validate_native_name("hello.c").unwrap();
+    fn file_validate_name_accepts_valid_c() {
+        let (stem, ext) = languages::file_validate_name("hello.c", &["c", "cpp"]).unwrap();
         assert_eq!(stem, "hello");
         assert_eq!(ext, "c");
     }
 
     #[test]
-    fn validate_native_name_accepts_valid_cpp() {
-        let (stem, ext) = validate_native_name("vectors.cpp").unwrap();
+    fn file_validate_name_accepts_valid_cpp() {
+        let (stem, ext) = languages::file_validate_name("vectors.cpp", &["c", "cpp"]).unwrap();
         assert_eq!(stem, "vectors");
         assert_eq!(ext, "cpp");
     }
 
     #[test]
-    fn validate_native_name_rejects_no_extension() {
-        assert!(validate_native_name("hello").is_err());
+    fn file_validate_name_rejects_no_extension() {
+        assert!(languages::file_validate_name("hello", &["c", "cpp"]).is_err());
     }
 
     #[test]
-    fn validate_native_name_rejects_unsupported_extension() {
-        assert!(validate_native_name("hello.py").is_err());
-        assert!(validate_native_name("hello.go").is_err());
-        assert!(validate_native_name("hello.zig").is_err());
-        assert!(validate_native_name("hello.rs").is_err());
+    fn file_validate_name_rejects_unsupported_extension() {
+        assert!(languages::file_validate_name("hello.py", &["c", "cpp"]).is_err());
+        assert!(languages::file_validate_name("hello.go", &["c", "cpp"]).is_err());
+        assert!(languages::file_validate_name("hello.zig", &["c", "cpp"]).is_err());
+        assert!(languages::file_validate_name("hello.rs", &["c", "cpp"]).is_err());
     }
 
     #[test]
-    fn validate_native_name_rejects_bad_stem() {
-        assert!(validate_native_name("Hello.c").is_err());
-        assert!(validate_native_name("2fast.c").is_err());
-        assert!(validate_native_name("my-file.c").is_err());
+    fn file_validate_name_rejects_bad_stem() {
+        assert!(languages::file_validate_name("Hello.c", &["c", "cpp"]).is_err());
+        assert!(languages::file_validate_name("2fast.c", &["c", "cpp"]).is_err());
+        assert!(languages::file_validate_name("my-file.c", &["c", "cpp"]).is_err());
     }
 
     #[test]
-    fn validate_native_name_accepts_underscores_and_digits_in_stem() {
-        let (stem, ext) = validate_native_name("my_test_2.cpp").unwrap();
+    fn file_validate_name_accepts_underscores_and_digits_in_stem() {
+        let (stem, ext) = languages::file_validate_name("my_test_2.cpp", &["c", "cpp"]).unwrap();
         assert_eq!(stem, "my_test_2");
         assert_eq!(ext, "cpp");
     }

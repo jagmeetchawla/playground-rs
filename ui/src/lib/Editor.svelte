@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, createEventDispatcher } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import * as monaco from 'monaco-editor'
   import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 
@@ -215,7 +215,67 @@
     }
   })
 
-  const dispatch = createEventDispatcher()
+  // ── Register Zig language (not built into Monaco) ─────────────────────────
+  monaco.languages.register({ id: 'zig' })
+  monaco.languages.setMonarchTokensProvider('zig', {
+    keywords: [
+      'addrspace', 'align', 'allowzero', 'and', 'anyframe', 'anytype',
+      'asm', 'async', 'await', 'break', 'catch', 'comptime', 'const',
+      'continue', 'defer', 'else', 'enum', 'errdefer', 'error', 'export',
+      'extern', 'false', 'fn', 'for', 'if', 'inline', 'linksection',
+      'noalias', 'nosuspend', 'null', 'opaque', 'or', 'orelse', 'packed',
+      'pub', 'resume', 'return', 'struct', 'suspend', 'switch', 'test',
+      'threadlocal', 'true', 'try', 'undefined', 'union', 'unreachable',
+      'var', 'volatile', 'while',
+    ],
+    typeKeywords: [
+      'i8', 'u8', 'i16', 'u16', 'i32', 'u32', 'i64', 'u64', 'i128', 'u128',
+      'isize', 'usize', 'f16', 'f32', 'f64', 'f80', 'f128',
+      'bool', 'void', 'noreturn', 'type', 'anyerror', 'comptime_int', 'comptime_float',
+    ],
+    operators: ['=', '>', '<', '!', '~', '?', ':', '==', '<=', '>=', '!=',
+      '&&', '||', '++', '--', '+', '-', '*', '/', '&', '|', '^', '%',
+      '<<', '>>', '>>>', '+=', '-=', '*=', '/=', '&=', '|=', '^=',
+      '%=', '<<=', '>>=', '>>>='],
+    symbols: /[=><!~?:&|+\-*/^%]+/,
+    escapes: /\\(?:[abefnrtv\\"']|x[0-9A-Fa-f]{2}|u\{[0-9A-Fa-f]+\})/,
+    tokenizer: {
+      root: [
+        [/[a-z_$][\w$]*/, { cases: {
+          '@typeKeywords': 'type',
+          '@keywords': 'keyword',
+          '@default': 'identifier'
+        }}],
+        [/[A-Z][\w$]*/, 'type.identifier'],
+        [/@[a-zA-Z_]\w*/, 'attribute'],
+        { include: '@whitespace' },
+        [/[{}()[\]]/, '@brackets'],
+        [/[<>](?!@symbols)/, '@brackets'],
+        [/@symbols/, { cases: { '@operators': 'operator', '@default': '' }}],
+        [/\d*\.\d+([eE][-+]?\d+)?/, 'number.float'],
+        [/0[xX][0-9a-fA-F_]+/, 'number.hex'],
+        [/0[oO][0-7_]+/, 'number.octal'],
+        [/0[bB][01_]+/, 'number.binary'],
+        [/\d[0-9_]*/, 'number'],
+        [/[;,.]/, 'delimiter'],
+        [/"([^"\\]|\\.)*$/, 'string.invalid'],
+        [/"/, { token: 'string.quote', bracket: '@open', next: '@string' }],
+        [/'[^\\']'/, 'string'],
+        [/'/, 'string.invalid'],
+      ],
+      string: [
+        [/[^\\"]+/, 'string'],
+        [/@escapes/, 'string.escape'],
+        [/\\./, 'string.escape.invalid'],
+        [/"/, { token: 'string.quote', bracket: '@close', next: '@pop' }],
+      ],
+      whitespace: [
+        [/[ \t\r\n]+/, 'white'],
+        [/\/\/.*$/, 'comment'],
+      ],
+    },
+  })
+
   let {
     code,
     language = 'rust',
@@ -224,9 +284,11 @@
     tabSize = 4,
     theme = 'playground-dark',
     diagnostics = [],
+    readOnly = false,
     onSave = () => {},
     onRun = () => {},
     onNew = () => {},
+    onChange = (_code: string) => {},
   }: {
     code: string
     language?: string
@@ -235,9 +297,11 @@
     tabSize?: number
     theme?: string
     diagnostics?: any[]
+    readOnly?: boolean
     onSave?: () => void
     onRun?: () => void
     onNew?: () => void
+    onChange?: (code: string) => void
   } = $props()
 
   let container: HTMLDivElement
@@ -273,6 +337,8 @@
       overviewRulerBorder: false,
       hideCursorInOverviewRuler: true,
       renderLineHighlightOnlyWhenFocus: false,
+      readOnly,
+      domReadOnly: readOnly,
       scrollbar: {
         verticalScrollbarSize: 6,
         horizontalScrollbarSize: 6,
@@ -282,12 +348,12 @@
 
     editor.onDidChangeModelContent(() => {
       if (ignoreNextChange) { ignoreNextChange = false; return }
-      dispatch('change', editor.getValue())
+      onChange(editor.getValue())
     })
 
     // Route keyboard shortcuts through our callbacks so Monaco doesn't swallow them.
     // addCommand() calls stopPropagation internally — empty handlers silently drop events.
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => onSave())
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => { if (!readOnly) onSave() })
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyR, () => onRun())
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyN, () => onNew())
   })
@@ -320,6 +386,12 @@
       tabSize,
     })
     editor.getModel()?.updateOptions({ tabSize })
+  })
+
+  // Sync readOnly when it changes (e.g. switching between book and user projects)
+  $effect(() => {
+    if (!editor) return
+    editor.updateOptions({ readOnly, domReadOnly: readOnly })
   })
 
   // Sync theme when it changes

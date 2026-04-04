@@ -11,6 +11,7 @@
     dirtyTabs,
     cargoToml = '',
     projectType = 'rust',
+    readOnly = false,
     onNewPlayground = () => {},
     renameTarget = $bindable(null),
   }: {
@@ -18,12 +19,14 @@
     selected: string | null
     dirtyTabs: string[]
     cargoToml: string
-    projectType?: 'rust' | 'native'
+    projectType?: import('./languages').ProjectType
+    readOnly?: boolean
     onNewPlayground?: () => void
     renameTarget?: string | null
   } = $props()
 
-  let isNative = $derived(projectType === 'native')
+  import { getLang } from './languages'
+  let lang = $derived(getLang(projectType))
 
   // ── Sidebar tab ───────────────────────────────────────────────────────────────
   let sidebarTab: 'playgrounds' | 'content' = $state('playgrounds')
@@ -80,30 +83,33 @@
 
   let cargoExpanded: boolean = $state(false)
 
-  // ── Compiler flags state (native projects) ────────────────────────────────────
+  // ── Compiler flags state (file-based projects with build flags) ────────────────
   let flagsExpanded: boolean = $state(false)
   let cflagsText: string = $state('')
   let cxxflagsText: string = $state('')
+  let zigflagsText: string = $state('')
+  let swiftflagsText: string = $state('')
 
-  // Load build flags when switching to a native project
+  // Load build flags when switching to a project with build flags
   $effect(() => {
-    if (isNative) {
-      invoke<{ cflags: string[]; cxxflags: string[] }>('get_build_flags')
+    if (lang.hasBuildFlags) {
+      invoke<any>('get_build_flags')
         .then(flags => {
-          cflagsText = flags.cflags.join(' ')
-          cxxflagsText = flags.cxxflags.join(' ')
+          cflagsText = (flags.cflags ?? []).join(' ')
+          cxxflagsText = (flags.cxxflags ?? []).join(' ')
+          zigflagsText = (flags.zigflags ?? []).join(' ')
+          swiftflagsText = (flags.swiftflags ?? []).join(' ')
         })
-        .catch(() => {
-          cflagsText = '-lsqlite3'
-          cxxflagsText = '-std=c++17 -lsqlite3'
-        })
+        .catch(() => {})
     }
   })
 
   function saveBuildFlags() {
     const cflags = cflagsText.trim().split(/\s+/).filter(Boolean)
     const cxxflags = cxxflagsText.trim().split(/\s+/).filter(Boolean)
-    invoke('save_build_flags', { cflags, cxxflags }).catch(console.error)
+    const zigflags = zigflagsText.trim().split(/\s+/).filter(Boolean)
+    const swiftflags = swiftflagsText.trim().split(/\s+/).filter(Boolean)
+    invoke('save_build_flags', { cflags, cxxflags, zigflags, swiftflags }).catch(console.error)
   }
 
   // ── Content tab state ─────────────────────────────────────────────────────────
@@ -316,7 +322,7 @@
 
     <div class="sidebar-header">
       <span class="sidebar-title">Playgrounds</span>
-      <button class="icon-btn" title="New playground (⌘N)" onclick={onNewPlayground}>
+      <button class="icon-btn" title="New playground (⌘N)" onclick={onNewPlayground} disabled={readOnly}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
@@ -353,11 +359,15 @@
               onclick={(e) => e.stopPropagation()} autofocus
             />
           {:else}
-            {#if isNative}
-              {@const ext = name.split('.').pop()?.toLowerCase() ?? ''}
-              <span class="file-icon native">{ext === 'cpp' ? 'C++' : 'C'}</span>
-            {:else}
-              <span class="file-icon">RS</span>
+            {@const badgeType = lang.needsExtension ? (name.split('.').pop()?.toLowerCase() ?? '') : 'rs'}
+            <span class="file-icon" class:native={badgeType === 'c' || badgeType === 'cpp'} class:zig={badgeType === 'zig'} class:swift={badgeType === 'swift'}>
+              {badgeType === 'cpp' ? 'C++' : badgeType === 'c' ? 'C' : badgeType === 'zig' ? 'ZIG' : badgeType === 'swift' ? 'SW' : 'RS'}
+            </span>
+            {#if readOnly}
+              <svg class="lock-icon" width="9" height="10" viewBox="0 0 10 11" fill="none">
+                <rect x="1" y="5" width="8" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.1" fill="none"/>
+                <path d="M3 5V3.5a2 2 0 0 1 4 0V5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+              </svg>
             {/if}
             <span class="name">{name}</span>
             {#if isDirty}<span class="dirty-dot" title="Unsaved changes">●</span>{/if}
@@ -373,7 +383,7 @@
     </ul>
 
     <!-- Cargo.toml panel (Rust projects only) -->
-    {#if !isNative}
+    {#if lang.hasCargoToml}
     <div class="cargo-section">
       <div
         class="cargo-header"
@@ -403,8 +413,8 @@
     </div>
     {/if}
 
-    <!-- Compiler Flags panel (Native C/C++ projects only) -->
-    {#if isNative}
+    <!-- Build Flags panel (projects with build flags) -->
+    {#if lang.hasBuildFlags}
     <div class="cargo-section">
       <div
         class="cargo-header"
@@ -415,28 +425,26 @@
         <svg width="10" height="10" viewBox="0 0 10 10" class="chevron" class:open={flagsExpanded}>
           <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
         </svg>
-        <span class="cargo-label">Compiler Flags</span>
+        <span class="cargo-label">Build Flags</span>
       </div>
       {#if flagsExpanded}
         <div class="flags-body">
-          <label class="flags-label">C flags</label>
-          <input
-            class="flags-input"
-            type="text"
-            value={cflagsText}
-            placeholder="-lsqlite3"
-            spellcheck="false"
-            onchange={(e) => { cflagsText = e.currentTarget.value; saveBuildFlags() }}
-          />
-          <label class="flags-label">C++ flags</label>
-          <input
-            class="flags-input"
-            type="text"
-            value={cxxflagsText}
-            placeholder="-std=c++17 -lsqlite3"
-            spellcheck="false"
-            onchange={(e) => { cxxflagsText = e.currentTarget.value; saveBuildFlags() }}
-          />
+          {#if projectType === 'native'}
+            <label class="flags-label">C flags</label>
+            <input class="flags-input" type="text" value={cflagsText} placeholder="-lsqlite3" spellcheck="false"
+              onchange={(e) => { cflagsText = e.currentTarget.value; saveBuildFlags() }} />
+            <label class="flags-label">C++ flags</label>
+            <input class="flags-input" type="text" value={cxxflagsText} placeholder="-std=c++17 -lsqlite3" spellcheck="false"
+              onchange={(e) => { cxxflagsText = e.currentTarget.value; saveBuildFlags() }} />
+          {:else if projectType === 'zig'}
+            <label class="flags-label">Zig flags</label>
+            <input class="flags-input" type="text" value={zigflagsText} placeholder="-O ReleaseSafe" spellcheck="false"
+              onchange={(e) => { zigflagsText = e.currentTarget.value; saveBuildFlags() }} />
+          {:else if projectType === 'swift'}
+            <label class="flags-label">Swift flags</label>
+            <input class="flags-input" type="text" value={swiftflagsText} placeholder="-O" spellcheck="false"
+              onchange={(e) => { swiftflagsText = e.currentTarget.value; saveBuildFlags() }} />
+          {/if}
           <span class="flags-hint">Space-separated. Saved to rustic.toml.</span>
         </div>
       {/if}
@@ -578,10 +586,14 @@
     onclick={(e) => e.stopPropagation()}
     onkeydown={(e) => e.key === 'Escape' && closeContext()}
   >
-    <button onclick={() => startRename(contextMenu!.name)}>Rename</button>
-    <button onclick={() => { dispatch('duplicate', contextMenu!.name); contextMenu = null }}>Duplicate</button>
-    <hr />
-    <button class="danger" onclick={() => { dispatch('delete', contextMenu!.name); contextMenu = null }}>Delete</button>
+    {#if readOnly}
+      <button onclick={() => { dispatch('copyToProject', contextMenu!.name); contextMenu = null }}>Copy to Project…</button>
+    {:else}
+      <button onclick={() => startRename(contextMenu!.name)}>Rename</button>
+      <button onclick={() => { dispatch('duplicate', contextMenu!.name); contextMenu = null }}>Duplicate</button>
+      <hr />
+      <button class="danger" onclick={() => { dispatch('delete', contextMenu!.name); contextMenu = null }}>Delete</button>
+    {/if}
   </div>
 {/if}
 
@@ -764,6 +776,14 @@
   .file-icon.native {
     background: #4a9; letter-spacing: 0;
   }
+  .file-icon.zig {
+    background: #f7a41d; letter-spacing: 0; font-size: 6px;
+  }
+  .file-icon.swift {
+    background: #f05138; letter-spacing: 0;
+  }
+
+  .lock-icon { flex-shrink: 0; color: var(--text-tertiary); }
 
   .name {
     flex: 1; font-size: 13px;

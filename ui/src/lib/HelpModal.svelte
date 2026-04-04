@@ -276,7 +276,7 @@ tokio = &#123; version = "1", features = ["full"] &#125;</pre>
 
   kbd {
     display: inline-block;
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
     font-size: 10.5px; font-weight: 600;
     color: var(--text);
     background: rgba(255,255,255,0.08);

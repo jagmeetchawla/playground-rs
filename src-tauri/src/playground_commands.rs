@@ -1,12 +1,11 @@
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager};
 
+use crate::languages::{Lang, RunConfig};
+use crate::rustic_manifest;
 use crate::{
-    active_project_type, bin_dir, cargo_path, manifest_content_dir, playground_template,
-    project_cargo_toml, projects_dir,
-    rustic_manifest::{self, write_manifest},
-    safe_native_playground_path, safe_playground_path, save_config, src_dir, validate_name,
-    validate_native_name, workspace_dir, ActiveProject, CheckProcess, RunningProcess, StdinHandle,
+    active_project_type, projects_dir, save_config, src_dir, workspace_dir, ActiveProject,
+    CheckProcess, RunningProcess, StdinHandle,
 };
 
 // ── Project commands ──────────────────────────────────────────────────────────
@@ -38,60 +37,15 @@ pub fn new_project(
     project_type: Option<String>,
     app: AppHandle,
 ) -> Result<(), String> {
-    validate_name(&name)?;
+    crate::validate_name(&name)?;
     let project_path = projects_dir(&app).join(&name);
     if project_path.exists() {
         return Err(format!("Project '{}' already exists", name));
     }
 
     let ptype = project_type.as_deref().unwrap_or("rust");
-
-    match ptype {
-        "native" => {
-            std::fs::create_dir_all(&project_path)
-                .map_err(|e| format!("Failed to create project: {}", e))?;
-            std::fs::create_dir_all(project_path.join("content"))
-                .map_err(|e| format!("Failed to create content dir: {}", e))?;
-            let manifest = rustic_manifest::new_native_manifest();
-            write_manifest(&project_path, &manifest)?;
-            std::fs::write(
-                project_path.join("hello.c"),
-                native_starter_template("hello", "c"),
-            )
-            .map_err(|e| format!("Failed to seed hello.c: {}", e))?;
-        }
-        _ => {
-            // Rust project (default)
-            let bin = project_path.join("src").join("bin");
-            std::fs::create_dir_all(&bin)
-                .map_err(|e| format!("Failed to create project: {}", e))?;
-            std::fs::write(project_path.join("Cargo.toml"), project_cargo_toml(&name))
-                .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
-            std::fs::write(bin.join("hello.rs"), playground_template("hello"))
-                .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
-            std::fs::create_dir_all(project_path.join("content"))
-                .map_err(|e| format!("Failed to create content dir: {}", e))?;
-            let manifest = rustic_manifest::new_rust_manifest();
-            write_manifest(&project_path, &manifest)?;
-        }
-    }
-
-    Ok(())
-}
-
-/// Starter template for native project files, based on language extension.
-pub fn native_starter_template(name: &str, ext: &str) -> String {
-    match ext {
-        "c" => format!(
-            "#include <stdio.h>\n\nint main() {{\n    printf(\"Hello from {}!\\n\");\n    return 0;\n}}\n",
-            name
-        ),
-        "cpp" => format!(
-            "#include <iostream>\n\nint main() {{\n    std::cout << \"Hello from {}!\" << std::endl;\n    return 0;\n}}\n",
-            name
-        ),
-        _ => format!("// Hello from {}!\n", name),
-    }
+    let lang = Lang::from_str(ptype);
+    lang.scaffold_project(&project_path, &name)
 }
 
 #[tauri::command]
@@ -106,7 +60,7 @@ pub fn switch_project(name: String, app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn rename_project(old_name: String, new_name: String, app: AppHandle) -> Result<(), String> {
-    validate_name(&new_name)?;
+    crate::validate_name(&new_name)?;
     let old_path = projects_dir(&app).join(&old_name);
     let new_path = projects_dir(&app).join(&new_name);
     if !old_path.exists() {
@@ -136,6 +90,27 @@ pub fn delete_project(name: String, app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn remove_book(source_tag: String, app: AppHandle) -> Result<Vec<String>, String> {
+    let pdir = projects_dir(&app);
+    let mut removed = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&pdir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                let source = crate::rustic_manifest::get_project_source(&path);
+                if source == source_tag {
+                    if let Some(name) = entry.file_name().to_str() {
+                        removed.push(name.to_string());
+                    }
+                    let _ = std::fs::remove_dir_all(&path);
+                }
+            }
+        }
+    }
+    Ok(removed)
+}
+
+#[tauri::command]
 pub fn duplicate_project(name: String, app: AppHandle) -> Result<String, String> {
     let src = projects_dir(&app).join(&name);
     if !src.exists() {
@@ -148,8 +123,19 @@ pub fn duplicate_project(name: String, app: AppHandle) -> Result<String, String>
         new_name = format!("{}_copy{}", name, i);
         i += 1;
     }
-    copy_dir_all(&src, &projects_dir(&app).join(&new_name))
-        .map_err(|e| format!("Failed to duplicate project: {}", e))?;
+    let dst = projects_dir(&app).join(&new_name);
+    copy_dir_all(&src, &dst).map_err(|e| format!("Failed to duplicate project: {}", e))?;
+
+    // Clear source and readonly so the duplicate becomes a regular user project
+    if let Some(mut manifest) = crate::rustic_manifest::read_manifest(&dst) {
+        if !manifest.project.source.is_empty() || manifest.project.readonly {
+            manifest.project.source = String::new();
+            manifest.project.readonly = false;
+            crate::rustic_manifest::write_manifest(&dst, &manifest)
+                .map_err(|e| format!("Failed to update manifest: {}", e))?;
+        }
+    }
+
     Ok(new_name)
 }
 
@@ -173,55 +159,23 @@ fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result
 
 // ── Playground commands ───────────────────────────────────────────────────────
 
-#[tauri::command]
-pub fn list_playgrounds(app: AppHandle) -> Vec<String> {
-    let ptype = active_project_type(&app);
-    if ptype == "native" {
-        // Native: list supported source files from paths.src directory
-        let dir = src_dir(&app);
-        let mut names: Vec<String> = match std::fs::read_dir(&dir) {
-            Ok(entries) => entries
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().is_file())
-                .map(|e| e.file_name().to_string_lossy().to_string())
-                .filter(|f| {
-                    std::path::Path::new(f)
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .map(rustic_manifest::is_supported_extension)
-                        .unwrap_or(false)
-                })
-                .collect(),
-            Err(_) => vec![],
-        };
-        names.sort();
-        names
-    } else {
-        // Rust: list .rs files from src/bin, strip extension
-        let dir = bin_dir(&app);
-        let mut names: Vec<String> = match std::fs::read_dir(&dir) {
-            Ok(entries) => entries
-                .filter_map(|e| e.ok())
-                .map(|e| e.file_name().to_string_lossy().to_string())
-                .filter(|f| f.ends_with(".rs"))
-                .map(|f| f.trim_end_matches(".rs").to_string())
-                .collect(),
-            Err(_) => vec![],
-        };
-        names.sort();
-        names
-    }
+/// Get the Lang for the active project.
+fn active_lang(app: &AppHandle) -> Lang {
+    Lang::from_str(&active_project_type(app))
 }
 
-/// Resolve a playground file path based on project type.
-/// Rust: name is stem only (e.g. "hello"), file is src/bin/hello.rs
-/// Native: name includes extension (e.g. "hello.c"), file is <src>/hello.c
+#[tauri::command]
+pub fn list_playgrounds(app: AppHandle) -> Vec<String> {
+    let lang = active_lang(&app);
+    let dir = src_dir(&app);
+    lang.list_playgrounds(&dir)
+}
+
+/// Resolve a playground file path using the Lang dispatch.
 fn resolve_playground_path(name: &str, app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    if active_project_type(app) == "native" {
-        safe_native_playground_path(name, app)
-    } else {
-        safe_playground_path(name, app)
-    }
+    let lang = active_lang(app);
+    let dir = src_dir(app);
+    lang.playground_path(name, &dir)
 }
 
 #[tauri::command]
@@ -238,23 +192,15 @@ pub fn save_playground(name: String, content: String, app: AppHandle) -> Result<
 
 #[tauri::command]
 pub fn new_playground(name: String, content: Option<String>, app: AppHandle) -> Result<(), String> {
-    let ptype = active_project_type(&app);
-    if ptype == "native" {
-        let (stem, ext) = validate_native_name(&name)?;
-        let path = safe_native_playground_path(&name, &app)?;
-        if path.exists() {
-            return Err(format!("'{}' already exists", name));
-        }
-        let code = content.unwrap_or_else(|| native_starter_template(&stem, &ext));
-        std::fs::write(&path, code).map_err(|e| e.to_string())
-    } else {
-        let path = safe_playground_path(&name, &app)?;
-        if path.exists() {
-            return Err(format!("'{}' already exists", name));
-        }
-        let code = content.unwrap_or_else(|| playground_template(&name));
-        std::fs::write(&path, code).map_err(|e| e.to_string())
+    let lang = active_lang(&app);
+    let (stem, ext) = lang.validate_name(&name)?;
+    let dir = src_dir(&app);
+    let path = lang.playground_path(&name, &dir)?;
+    if path.exists() {
+        return Err(format!("'{}' already exists", name));
     }
+    let code = content.unwrap_or_else(|| lang.starter_template(&stem, &ext));
+    std::fs::write(&path, code).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -275,21 +221,19 @@ pub fn delete_playground(name: String, app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn duplicate_playground(name: String, app: AppHandle) -> Result<String, String> {
-    let ptype = active_project_type(&app);
-    if ptype == "native" {
-        let (stem, ext) = validate_native_name(&name)?;
-        let src = safe_native_playground_path(&name, &app)?;
-        let new_name = format!("{}_copy.{}", stem, ext);
-        let dst = safe_native_playground_path(&new_name, &app)?;
-        std::fs::copy(&src, &dst).map_err(|e| e.to_string())?;
-        Ok(new_name)
-    } else {
-        let src = safe_playground_path(&name, &app)?;
-        let new_name = format!("{}_copy", name);
-        let dst = safe_playground_path(&new_name, &app)?;
-        std::fs::copy(&src, &dst).map_err(|e| e.to_string())?;
-        Ok(new_name)
-    }
+    let lang = active_lang(&app);
+    let (stem, ext) = lang.validate_name(&name)?;
+    let dir = src_dir(&app);
+    let src_path = lang.playground_path(&name, &dir)?;
+
+    // Build new name: Rust uses stem only, file-based langs include extension
+    let new_name = match lang {
+        Lang::Rust => format!("{}_copy", stem),
+        Lang::Native | Lang::Zig | Lang::Swift => format!("{}_copy.{}", stem, ext),
+    };
+    let dst_path = lang.playground_path(&new_name, &dir)?;
+    std::fs::copy(&src_path, &dst_path).map_err(|e| e.to_string())?;
+    Ok(new_name)
 }
 
 #[tauri::command]
@@ -297,35 +241,7 @@ pub fn workspace_path(app: AppHandle) -> String {
     workspace_dir(&app).to_string_lossy().to_string()
 }
 
-// ── Compiler resolution for native projects ──────────────────────────────────
-
-/// Resolve the clang compiler path via xcrun, falling back to /usr/bin/clang.
-fn resolve_clang() -> String {
-    std::process::Command::new("xcrun")
-        .args(["--find", "clang"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "/usr/bin/clang".to_string())
-}
-
-/// Resolve the macOS SDK path via `xcrun --show-sdk-path`.
-/// Needed because Tauri app bundles get a minimal environment where
-/// clang can't find system headers (stdio.h etc.) without -isysroot.
-fn resolve_sdk_path() -> Option<String> {
-    std::process::Command::new("xcrun")
-        .args(["--show-sdk-path"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-}
-
+// ── Run playground (generic via RunConfig) ──────────────────────────────────
 
 #[tauri::command]
 pub async fn run_playground(
@@ -333,98 +249,94 @@ pub async fn run_playground(
     on_output: Channel<serde_json::Value>,
     app: AppHandle,
 ) -> Result<(), String> {
-    let ptype = active_project_type(&app);
-    if ptype == "native" {
-        run_native_playground(name, on_output, app).await
-    } else {
-        run_rust_playground(name, on_output, app).await
+    let lang = active_lang(&app);
+    let workspace = workspace_dir(&app);
+    let dir = src_dir(&app);
+    let source_path = lang.playground_path(&name, &dir)?;
+    let manifest =
+        rustic_manifest::ensure_manifest(&workspace).unwrap_or_else(|_| lang.new_manifest());
+
+    let config = lang.build_run_command(&name, &source_path, &workspace, &manifest)?;
+
+    match config {
+        RunConfig::Direct {
+            program,
+            args,
+            env,
+            cwd,
+        } => run_direct(program, args, env, cwd, on_output, app).await,
+        RunConfig::CompileThenRun {
+            compiler,
+            compile_args,
+            binary_path,
+            env,
+            cwd,
+        } => {
+            run_compile_then_run(
+                compiler,
+                compile_args,
+                binary_path,
+                env,
+                cwd,
+                on_output,
+                app,
+            )
+            .await
+        }
     }
 }
 
-async fn run_rust_playground(
-    name: String,
+/// Run a single-command playground (e.g. cargo run, zig run).
+async fn run_direct(
+    program: String,
+    args: Vec<String>,
+    env: Vec<(String, String)>,
+    cwd: std::path::PathBuf,
     on_output: Channel<serde_json::Value>,
     app: AppHandle,
 ) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::process::Command;
 
-    validate_name(&name)?;
-
-    let cargo = cargo_path();
-    let workspace = workspace_dir(&app);
-    let playground_target = workspace.join("target").join("playground-runs");
-    let content_path = manifest_content_dir(&app);
-
-    let mut child = Command::new(&cargo)
-        .args([
-            "run",
-            "--bin",
-            &name,
-            "--target-dir",
-            playground_target.to_str().unwrap(),
-        ])
-        .current_dir(&workspace)
-        .env("PLAYGROUND_CONTENT", &content_path)
+    let mut cmd = Command::new(&program);
+    cmd.args(&args).current_dir(&cwd);
+    for (key, val) in &env {
+        cmd.env(key, val);
+    }
+    let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0)
         .spawn()
-        .map_err(|e| format!("Failed to start cargo: {}", e))?;
+        .map_err(|e| format!("Failed to start {}: {}", program, e))?;
 
     stream_child_output(&mut child, &on_output, &app).await
 }
 
-async fn run_native_playground(
-    name: String,
+/// Run a two-step playground: compile, then execute the binary.
+async fn run_compile_then_run(
+    compiler: String,
+    compile_args: Vec<String>,
+    binary_path: std::path::PathBuf,
+    env: Vec<(String, String)>,
+    cwd: std::path::PathBuf,
     on_output: Channel<serde_json::Value>,
     app: AppHandle,
 ) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::process::Command;
 
-    let (stem, ext) = validate_native_name(&name)?;
-    let source_path = safe_native_playground_path(&name, &app)?;
-    let workspace = workspace_dir(&app);
-    let content_path = manifest_content_dir(&app);
-    let runs_dir = workspace.join("target").join("runs");
-    std::fs::create_dir_all(&runs_dir)
-        .map_err(|e| format!("Failed to create target/runs: {}", e))?;
-
-    // Read build flags from manifest
-    let manifest = rustic_manifest::ensure_manifest(&workspace)
-        .unwrap_or_else(|_| rustic_manifest::new_native_manifest());
-
-    // Compile then run
-    let out_binary = runs_dir.join(&stem);
-    let (compiler, user_flags): (String, &[String]) = match ext.as_str() {
-        "c" => (resolve_clang(), &manifest.build.cflags),
-        "cpp" => {
-            let clang = resolve_clang();
-            let clangpp = clang.replace("clang", "clang++");
-            (clangpp, &manifest.build.cxxflags)
-        }
-        _ => return Err(format!("Unsupported extension: {}", ext)),
-    };
+    // Ensure the output directory exists
+    if let Some(parent) = binary_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create build dir: {}", e))?;
+    }
 
     // Step 1: Compile
-    let mut compile_args: Vec<String> = vec![
-        source_path.to_str().unwrap().to_string(),
-        "-o".to_string(),
-        out_binary.to_str().unwrap().to_string(),
-    ];
-    // Inject SDK sysroot so clang can find system headers (stdio.h etc.)
-    // Tauri app bundles get a minimal environment without the default search paths.
-    if let Some(sdk) = resolve_sdk_path() {
-        compile_args.push("-isysroot".to_string());
-        compile_args.push(sdk);
-    }
-    compile_args.extend(user_flags.iter().cloned());
-
     let compile = Command::new(&compiler)
         .args(&compile_args)
-        .current_dir(&workspace)
+        .current_dir(&cwd)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0)
@@ -461,16 +373,17 @@ async fn run_native_playground(
     }
 
     // Signal frontend: compilation done, binary starting.
-    // Format matches Cargo's "Running `target/...`" pattern so the frontend
-    // transitions from 'compiling' → 'running' (stdin input appears).
     on_output
-        .send(serde_json::json!({ "stream": "stderr", "line": format!("     Running `{}`", out_binary.display()) }))
+        .send(serde_json::json!({ "stream": "stderr", "line": format!("     Running `{}`", binary_path.display()) }))
         .ok();
 
     // Step 2: Run the compiled binary
-    let mut child = Command::new(out_binary.to_str().unwrap())
-        .current_dir(&workspace)
-        .env("PLAYGROUND_CONTENT", &content_path)
+    let mut cmd = Command::new(binary_path.to_str().unwrap());
+    cmd.current_dir(&cwd);
+    for (key, val) in &env {
+        cmd.env(key, val);
+    }
+    let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -556,7 +469,7 @@ pub async fn kill_playground(app: AppHandle) -> Result<(), String> {
 
 /// Run `cargo check` in the background and stream diagnostics to the frontend.
 /// Cancels any previously running check before starting a new one.
-/// Only works for Rust (Cargo) projects — returns immediately for native projects.
+/// Only works for languages that support live checking — returns immediately for others.
 #[tauri::command]
 pub async fn check_playground(
     name: String,
@@ -568,15 +481,17 @@ pub async fn check_playground(
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
 
-    // Native projects don't support live checking
-    if active_project_type(&app) == "native" {
+    let lang = active_lang(&app);
+
+    // Only languages with live checking support proceed
+    if !lang.supports_live_check() {
         on_diagnostics
             .send(serde_json::json!({ "type": "done" }))
             .ok();
         return Ok(());
     }
 
-    validate_name(&name)?;
+    crate::validate_name(&name)?;
 
     // Save the code first so cargo check sees the latest version
     let workspace = workspace_dir(&app);
@@ -595,7 +510,7 @@ pub async fn check_playground(
             .await;
     }
 
-    let cargo = cargo_path();
+    let cargo = crate::cargo_path();
     let check_target = workspace.join("target").join("check-runs");
 
     let mut child = Command::new(&cargo)
@@ -682,6 +597,38 @@ pub async fn cancel_check(app: AppHandle) -> Result<(), String> {
             .await;
     }
     Ok(())
+}
+
+/// Copy a playground's code into a different project.
+/// Writes the file to the target project's source directory.
+#[tauri::command]
+pub fn copy_playground_to_project(
+    code: String,
+    target_project: String,
+    playground_name: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    let target_dir = crate::projects_dir(&app).join(&target_project);
+    if !target_dir.exists() {
+        return Err(format!("Project '{}' does not exist", target_project));
+    }
+    let target_type = crate::rustic_manifest::detect_project_type(&target_dir);
+    let target_lang = Lang::from_str(&target_type);
+    let (_stem, _ext) = target_lang.validate_name(&playground_name)?;
+
+    let src_dir = if let Some(manifest) = crate::rustic_manifest::read_manifest(&target_dir) {
+        target_dir.join(&manifest.paths.src)
+    } else {
+        target_dir.join("src").join("bin")
+    };
+    let path = target_lang.playground_path(&playground_name, &src_dir)?;
+    if path.exists() {
+        return Err(format!(
+            "'{}' already exists in project '{}'",
+            playground_name, target_project
+        ));
+    }
+    std::fs::write(&path, code).map_err(|e| e.to_string())
 }
 
 /// Send a line of input to the running playground's stdin.

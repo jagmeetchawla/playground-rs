@@ -9,6 +9,74 @@ Active specs live in specifications.md. Completed specs live in archive/.
 RELEASED
 ────────
 
+v0.3 — Language Module Architecture + Zig & Swift Support
+  Status: complete — released 2026-04-03
+
+  Shipped:
+  1. Lang enum with exhaustive match dispatch (languages/mod.rs)
+  2. Per-language modules: rust.rs, native.rs, zig.rs, swift.rs
+  3. RunConfig enum (Direct vs CompileThenRun) with generic runners
+  4. Shared FileLanguage helpers for flat-directory languages
+  5. Zig project type: zig run, custom Monaco tokenizer, 6 templates
+  6. Swift project type: swiftc compile+run with SDK resolution, 6 templates
+  7. Frontend language registry (languages.ts) replacing if/else branching
+  8. Zig marked experimental with badge in ProjectSwitcher
+  9. Manifest expansion: zigflags, swiftflags, zig/swiftc toolchain info
+  10. Toolchain wizard: Zig + Swift tabs with install instructions
+  11. Settings: Zig + Swift toolchain version display
+  12. Book system modularization: generic seed_book dispatch via Lang enum
+  13. Apple's Swift Programming Language book examples (8 chapters, 14 playgrounds)
+  14. Dynamic Help menu: book items generated from language modules
+
+  After v0.3: website (rustic-playground.app), DMG distribution, wiki, announcements.
+
+---
+
+IN PROGRESS
+───────────
+
+v0.3.1 — Read-Only Book Projects, Copy to Project, Learn Menu
+  Status: in progress — 2026-04-03
+
+  Overview:
+  Book projects (The Rust Book, The K&R C Book, The Swift Book) become read-only
+  reference material. Editor non-editable, save/rename/delete disabled. "Copy to
+  Project…" lets users copy any book playground into their own project. Books are
+  surfaced prominently via Learn menu, project switcher, and empty state.
+
+  Completed:
+  1. Read-only editor mode for book projects (Monaco readOnly + domReadOnly)
+  2. Save/rename/delete disabled for book playgrounds and book projects
+  3. Menu items dynamically disabled for book projects (is_book_project param)
+  4. Custom Cut/Paste menu items (disabled for read-only, replacing predefined)
+  5. Sidebar context menu: hides Rename/Delete, shows "Copy to Project…" for books
+  6. ProjectSwitcher: hides rename/delete for book projects
+  7. CopyToProjectModal — pick target user project + playground name
+  8. Backend copy_playground_to_project command (writes to target project directly)
+  9. Project source metadata in rustic.toml (source field in ProjectInfo)
+  10. Per-playground locking: locked Vec<String> in manifest, toggle per playground
+  11. Lock toggle button in toolbar (red=locked, green=unlocked, disabled for books)
+  12. Read-only pill indicator in toolbar for book projects
+  13. Duplicate Project: clears source + readonly so copy becomes user project
+  14. About modal: version derived from tauri.conf.json (getVersion())
+  15. Shortcut key badges: system UI font for proper ⌘/⇧ rendering
+  16. Editor onChange: Svelte 5 callback prop (fixed silent failure with old pattern)
+  17. Toolbar button restyle: Save=green, Share=yellow, Run=orange (all solid)
+  18. "Learn" top-level menu: book submenus moved from Help for discoverability
+  19. Books section in ProjectSwitcher: macOS-style flyout submenus for loaded books,
+      "Load" tag for unloaded books, always visible at bottom of dropdown
+  20. Empty state: "Learn from examples" buttons for unloaded books
+  21. Consistent book naming: "The Rust Book", "The K&R C Book", "The Swift Book"
+  22. Grouped project list with search filter in ProjectSwitcher
+  23. Remove book: backend command + Help/Learn menu integration
+  24. Help menu restructured: books in Learn, Help has only Help + About
+
+  Still TODO:
+  - Visual read-only indicator in sidebar (lock icons next to locked playgrounds)
+  - Theme verification for lock button colors across all themes
+
+---
+
 v0.2 — Native C/C++ Projects
   Status: complete — released 2026-04-03
 
@@ -97,28 +165,6 @@ v0.1.9 — Rename and Cleanup
   Renamed from playground-rs to rustic-playground. Cleaned up src/bin.
 
 ---
-
-IN PROGRESS
-───────────
-
-v0.3 — Language Module Architecture + Zig & Swift Support
-  Status: in progress — 2026-04-03
-  See specs/specifications.md
-
-  Overview:
-  Refactor backend and frontend into per-language modules. Add Zig and Swift
-  as new project types. Central Lang enum with exhaustive match dispatch.
-  Shared helpers for flat-directory languages (native, zig, swift).
-
-  Phases:
-  1. Extract Rust module into languages/rust.rs (no behavior change)
-  2. Extract Native module into languages/native.rs + rewire dispatchers
-  3. Zig backend (languages/zig.rs + manifest expansion)
-  4. Swift backend (languages/swift.rs)
-  5. Frontend language registry + Zig/Swift UI + themes
-
-  After v0.3: website (rustic-playground.app), DMG distribution, wiki, announcements.
-
 
 ---
 

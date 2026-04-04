@@ -1,5 +1,5 @@
 use std::path::Path;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::{cargo_path, projects_dir};
 
@@ -14,6 +14,8 @@ pub struct RusticManifest {
     pub build: BuildInfo,
     #[serde(default)]
     pub toolchain: ToolchainInfo,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locked: Vec<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -22,6 +24,16 @@ pub struct ProjectInfo {
     pub project_type: String,
     #[serde(default)]
     pub created_with: String,
+    /// Where this project came from: "user" (default), "rust_book", "knr_book", "swift_book".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source: String,
+    /// Whether the project is read-only (no editing, renaming, or deleting).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub readonly: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !v
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -39,14 +51,18 @@ impl Default for PathsInfo {
     }
 }
 
-/// Compiler flags for native (C/C++) projects.
-/// Default flags include `-lsqlite3` (macOS ships sqlite3).
+/// Compiler/build flags per language.
+/// Native: cflags/cxxflags. Zig: zigflags. Swift: swiftflags (Phase 4).
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BuildInfo {
     #[serde(default = "default_cflags")]
     pub cflags: Vec<String>,
     #[serde(default = "default_cxxflags")]
     pub cxxflags: Vec<String>,
+    #[serde(default)]
+    pub zigflags: Vec<String>,
+    #[serde(default)]
+    pub swiftflags: Vec<String>,
 }
 
 fn default_cflags() -> Vec<String> {
@@ -62,6 +78,8 @@ impl Default for BuildInfo {
         Self {
             cflags: default_cflags(),
             cxxflags: default_cxxflags(),
+            zigflags: vec![],
+            swiftflags: vec![],
         }
     }
 }
@@ -74,6 +92,10 @@ pub struct ToolchainInfo {
     pub cargo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clang: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zig: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub swiftc: Option<String>,
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -83,8 +105,10 @@ const APP_VERSION: &str = "0.2";
 
 // ── Supported native extensions ──────────────────────────────────────────────
 
+#[allow(dead_code)] // used by tests and future language expansion
 pub const NATIVE_EXTENSIONS: &[&str] = &["c", "cpp"];
 
+#[allow(dead_code)] // used by tests and future language expansion
 pub fn is_supported_extension(ext: &str) -> bool {
     NATIVE_EXTENSIONS.contains(&ext)
 }
@@ -114,11 +138,21 @@ pub fn detect_project_type(project_dir: &Path) -> String {
     if let Some(manifest) = read_manifest(project_dir) {
         return manifest.project.project_type;
     }
-    // Fallback: Cargo.toml present → rust
+    // Fallback heuristics
     if project_dir.join("Cargo.toml").exists() {
         return "rust".to_string();
     }
-    // Otherwise: native
+    // Check for .zig or .swift files
+    if let Ok(entries) = std::fs::read_dir(project_dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            match entry.path().extension().and_then(|e| e.to_str()) {
+                Some("zig") => return "zig".to_string(),
+                Some("swift") => return "swift".to_string(),
+                _ => {}
+            }
+        }
+    }
+    // Default: native
     "native".to_string()
 }
 
@@ -130,6 +164,8 @@ pub fn new_rust_manifest() -> RusticManifest {
         project: ProjectInfo {
             project_type: "rust".to_string(),
             created_with: APP_VERSION.to_string(),
+            source: String::new(),
+            readonly: false,
         },
         paths: PathsInfo {
             src: "src/bin".to_string(),
@@ -138,8 +174,11 @@ pub fn new_rust_manifest() -> RusticManifest {
         build: BuildInfo {
             cflags: vec![],
             cxxflags: vec![],
+            zigflags: vec![],
+            swiftflags: vec![],
         },
         toolchain: detect_rust_toolchain(),
+        locked: vec![],
     }
 }
 
@@ -149,6 +188,8 @@ pub fn new_native_manifest() -> RusticManifest {
         project: ProjectInfo {
             project_type: "native".to_string(),
             created_with: APP_VERSION.to_string(),
+            source: String::new(),
+            readonly: false,
         },
         paths: PathsInfo {
             src: ".".to_string(),
@@ -156,6 +197,55 @@ pub fn new_native_manifest() -> RusticManifest {
         },
         build: BuildInfo::default(),
         toolchain: detect_native_toolchain(),
+        locked: vec![],
+    }
+}
+
+/// Create a manifest for a new Zig project.
+pub fn new_zig_manifest() -> RusticManifest {
+    RusticManifest {
+        project: ProjectInfo {
+            project_type: "zig".to_string(),
+            created_with: APP_VERSION.to_string(),
+            source: String::new(),
+            readonly: false,
+        },
+        paths: PathsInfo {
+            src: ".".to_string(),
+            content: "content".to_string(),
+        },
+        build: BuildInfo {
+            cflags: vec![],
+            cxxflags: vec![],
+            zigflags: vec![],
+            swiftflags: vec![],
+        },
+        toolchain: detect_zig_toolchain(),
+        locked: vec![],
+    }
+}
+
+/// Create a manifest for a new Swift project.
+pub fn new_swift_manifest() -> RusticManifest {
+    RusticManifest {
+        project: ProjectInfo {
+            project_type: "swift".to_string(),
+            created_with: APP_VERSION.to_string(),
+            source: String::new(),
+            readonly: false,
+        },
+        paths: PathsInfo {
+            src: ".".to_string(),
+            content: "content".to_string(),
+        },
+        build: BuildInfo {
+            cflags: vec![],
+            cxxflags: vec![],
+            zigflags: vec![],
+            swiftflags: vec![],
+        },
+        toolchain: detect_swift_toolchain(),
+        locked: vec![],
     }
 }
 
@@ -166,19 +256,29 @@ pub fn generate_legacy_manifest(project_dir: &Path) -> RusticManifest {
             project: ProjectInfo {
                 project_type: "rust".to_string(),
                 created_with: String::new(), // unknown — legacy
+                source: String::new(),
+                readonly: false,
             },
             paths: PathsInfo {
                 src: "src/bin".to_string(),
                 content: "content".to_string(),
             },
-            build: BuildInfo { cflags: vec![], cxxflags: vec![] },
+            build: BuildInfo {
+                cflags: vec![],
+                cxxflags: vec![],
+                zigflags: vec![],
+                swiftflags: vec![],
+            },
             toolchain: detect_rust_toolchain(),
+            locked: vec![],
         }
     } else {
         RusticManifest {
             project: ProjectInfo {
                 project_type: "native".to_string(),
                 created_with: String::new(),
+                source: String::new(),
+                readonly: false,
             },
             paths: PathsInfo {
                 src: ".".to_string(),
@@ -186,6 +286,7 @@ pub fn generate_legacy_manifest(project_dir: &Path) -> RusticManifest {
             },
             build: BuildInfo::default(),
             toolchain: detect_native_toolchain(),
+            locked: vec![],
         }
     }
 }
@@ -219,6 +320,8 @@ fn detect_rust_toolchain() -> ToolchainInfo {
         cargo: run_version_command(&cargo_bin, &["--version"]),
         rustc: run_version_command(&rustc_bin, &["--version"]),
         clang: None,
+        zig: None,
+        swiftc: None,
     }
 }
 
@@ -227,6 +330,36 @@ fn detect_native_toolchain() -> ToolchainInfo {
         rustc: None,
         cargo: None,
         clang: detect_clang_version(),
+        zig: None,
+        swiftc: None,
+    }
+}
+
+fn detect_zig_toolchain() -> ToolchainInfo {
+    ToolchainInfo {
+        rustc: None,
+        cargo: None,
+        clang: None,
+        zig: run_version_command("zig", &["version"]),
+        swiftc: None,
+    }
+}
+
+fn detect_swift_toolchain() -> ToolchainInfo {
+    // swiftc --version outputs multiple lines; take the first
+    let version = std::process::Command::new("swiftc")
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
+    ToolchainInfo {
+        rustc: None,
+        cargo: None,
+        clang: None,
+        zig: None,
+        swiftc: version,
     }
 }
 
@@ -264,10 +397,101 @@ fn run_version_command(cmd: &str, args: &[&str]) -> Option<String> {
 
 // ── Tauri commands ───────────────────────────────────────────────────────────
 
+/// Get the source tag for a single project (empty string = user project).
+/// Falls back to name-prefix detection for projects created before the source field existed.
+pub fn get_project_source(project_dir: &Path) -> String {
+    if let Some(manifest) = read_manifest(project_dir) {
+        return manifest.project.source;
+    }
+    String::new()
+}
+
 #[tauri::command]
 pub fn get_project_type(name: String, app: AppHandle) -> String {
     let project_dir = projects_dir(&app).join(&name);
     detect_project_type(&project_dir)
+}
+
+/// Returns a map of project name → readonly flag for all projects.
+#[tauri::command]
+pub fn get_project_readonly_map(app: AppHandle) -> std::collections::HashMap<String, bool> {
+    let pdir = projects_dir(&app);
+    let mut result = std::collections::HashMap::new();
+    if let Ok(entries) = std::fs::read_dir(&pdir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            if entry.path().is_dir() {
+                if let Some(name) = entry.file_name().to_str() {
+                    if let Some(manifest) = read_manifest(&entry.path()) {
+                        if manifest.project.readonly {
+                            result.insert(name.to_string(), true);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    result
+}
+
+/// Returns the list of locked playground names for the active project.
+#[tauri::command]
+pub fn get_locked_playgrounds(app: AppHandle) -> Vec<String> {
+    let project = app
+        .state::<crate::ActiveProject>()
+        .0
+        .lock()
+        .unwrap()
+        .clone();
+    let project_dir = projects_dir(&app).join(&project);
+    if let Some(manifest) = read_manifest(&project_dir) {
+        return manifest.locked;
+    }
+    vec![]
+}
+
+/// Adds or removes a playground from the locked list.
+#[tauri::command]
+pub fn set_playground_locked(
+    playground: String,
+    locked: bool,
+    app: AppHandle,
+) -> Result<(), String> {
+    let project = app
+        .state::<crate::ActiveProject>()
+        .0
+        .lock()
+        .unwrap()
+        .clone();
+    let project_dir = projects_dir(&app).join(&project);
+    let mut manifest = ensure_manifest(&project_dir)?;
+    if locked {
+        if !manifest.locked.contains(&playground) {
+            manifest.locked.push(playground);
+        }
+    } else {
+        manifest.locked.retain(|n| n != &playground);
+    }
+    write_manifest(&project_dir, &manifest)
+}
+
+/// Returns a map of project name → source tag for all projects.
+#[tauri::command]
+pub fn get_project_sources(app: AppHandle) -> std::collections::HashMap<String, String> {
+    let pdir = projects_dir(&app);
+    let mut sources = std::collections::HashMap::new();
+    if let Ok(entries) = std::fs::read_dir(&pdir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            if entry.path().is_dir() {
+                if let Some(name) = entry.file_name().to_str() {
+                    let source = get_project_source(&entry.path());
+                    if !source.is_empty() {
+                        sources.insert(name.to_string(), source);
+                    }
+                }
+            }
+        }
+    }
+    sources
 }
 
 #[tauri::command]
@@ -282,20 +506,38 @@ pub fn get_project_manifest(name: String, app: AppHandle) -> Result<RusticManife
 #[tauri::command]
 pub fn get_build_flags(app: AppHandle) -> Result<BuildInfo, String> {
     use tauri::Manager;
-    let active = app.state::<crate::ActiveProject>().0.lock().unwrap().clone();
+    let active = app
+        .state::<crate::ActiveProject>()
+        .0
+        .lock()
+        .unwrap()
+        .clone();
     let project_dir = projects_dir(&app).join(&active);
     let manifest = ensure_manifest(&project_dir)?;
     Ok(manifest.build)
 }
 
 #[tauri::command]
-pub fn save_build_flags(cflags: Vec<String>, cxxflags: Vec<String>, app: AppHandle) -> Result<(), String> {
+pub fn save_build_flags(
+    cflags: Vec<String>,
+    cxxflags: Vec<String>,
+    zigflags: Vec<String>,
+    swiftflags: Vec<String>,
+    app: AppHandle,
+) -> Result<(), String> {
     use tauri::Manager;
-    let active = app.state::<crate::ActiveProject>().0.lock().unwrap().clone();
+    let active = app
+        .state::<crate::ActiveProject>()
+        .0
+        .lock()
+        .unwrap()
+        .clone();
     let project_dir = projects_dir(&app).join(&active);
     let mut manifest = ensure_manifest(&project_dir)?;
     manifest.build.cflags = cflags;
     manifest.build.cxxflags = cxxflags;
+    manifest.build.zigflags = zigflags;
+    manifest.build.swiftflags = swiftflags;
     write_manifest(&project_dir, &manifest)
 }
 
@@ -370,10 +612,13 @@ type = "native"
             project: ProjectInfo {
                 project_type: "native".to_string(),
                 created_with: "0.2".to_string(),
+                source: String::new(),
+                readonly: false,
             },
             paths: PathsInfo::default(),
             build: BuildInfo::default(),
             toolchain: ToolchainInfo::default(),
+            locked: vec![],
         };
         write_manifest(dir.path(), &m).unwrap();
         assert_eq!(detect_project_type(dir.path()), "native");

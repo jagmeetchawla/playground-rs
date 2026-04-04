@@ -5,11 +5,32 @@
 //! dispatches to the right module via exhaustive match — the compiler ensures
 //! every arm is handled when a new language is added.
 
+mod knr_book;
+pub mod native;
 pub mod rust;
+mod rust_book;
+pub mod swift;
+mod swift_book;
+pub mod zig;
 
 use std::path::{Path, PathBuf};
 
 use crate::rustic_manifest::RusticManifest;
+
+// ── BookInfo ────────────────────────────────────────────────────────────────
+
+/// Metadata for a language's companion book. Used to build dynamic menu items,
+/// event mappings, and frontend toast messages.
+pub struct BookInfo {
+    pub book_name: &'static str,
+    pub menu_id: &'static str,
+    pub remove_menu_id: &'static str,
+    pub event_name: &'static str,
+    pub remove_event_name: &'static str,
+    /// Value written into rustic.toml `project.source` (e.g. "rust_book").
+    pub source_tag: &'static str,
+    pub url: &'static str,
+}
 
 // ── Lang enum ────────────────────────────────────────────────────────────────
 
@@ -19,8 +40,8 @@ use crate::rustic_manifest::RusticManifest;
 pub enum Lang {
     Rust,
     Native,
-    // Zig,   — Phase 3
-    // Swift, — Phase 4
+    Zig,
+    Swift,
 }
 
 impl Lang {
@@ -28,14 +49,69 @@ impl Lang {
         match s {
             "rust" => Lang::Rust,
             "native" => Lang::Native,
+            "zig" => Lang::Zig,
+            "swift" => Lang::Swift,
             _ => Lang::Rust, // fallback
         }
     }
 
+    #[allow(dead_code)]
     pub fn project_type(&self) -> &'static str {
         match self {
             Lang::Rust => "rust",
             Lang::Native => "native",
+            Lang::Zig => "zig",
+            Lang::Swift => "swift",
+        }
+    }
+
+    /// All language variants, in display order.
+    pub fn all() -> &'static [Lang] {
+        &[Lang::Rust, Lang::Native, Lang::Zig, Lang::Swift]
+    }
+
+    /// Returns book info if this language has a companion book.
+    pub fn book_info(&self) -> Option<BookInfo> {
+        match self {
+            Lang::Rust => Some(BookInfo {
+                book_name: "The Rust Book",
+                menu_id: "seed_rust_book",
+                remove_menu_id: "remove_rust_book",
+                event_name: "menu:rust-book",
+                remove_event_name: "menu:remove-rust-book",
+                source_tag: "rust_book",
+                url: "https://doc.rust-lang.org/book/",
+            }),
+            Lang::Native => Some(BookInfo {
+                book_name: "The K&&R C Book",
+                menu_id: "seed_knr_book",
+                remove_menu_id: "remove_knr_book",
+                event_name: "menu:knr-book",
+                remove_event_name: "menu:remove-knr-book",
+                source_tag: "knr_book",
+                url: "https://en.wikipedia.org/wiki/The_C_Programming_Language",
+            }),
+            Lang::Zig => None,
+            Lang::Swift => Some(BookInfo {
+                book_name: "The Swift Book",
+                menu_id: "seed_swift_book",
+                remove_menu_id: "remove_swift_book",
+                event_name: "menu:swift-book",
+                remove_event_name: "menu:remove-swift-book",
+                source_tag: "swift_book",
+                url: "https://docs.swift.org/swift-book/",
+            }),
+        }
+    }
+
+    /// Seed companion book chapters into the projects directory.
+    /// Returns the list of newly created project names.
+    pub fn seed_book(&self, projects_dir: &Path) -> Result<Vec<String>, String> {
+        match self {
+            Lang::Rust => rust_book::seed_book(projects_dir),
+            Lang::Native => knr_book::seed_book(projects_dir),
+            Lang::Swift => swift_book::seed_book(projects_dir),
+            Lang::Zig => Err("Zig has no companion book".to_string()),
         }
     }
 
@@ -43,14 +119,17 @@ impl Lang {
         match self {
             Lang::Rust => &["rs"],
             Lang::Native => &["c", "cpp"],
+            Lang::Zig => &["zig"],
+            Lang::Swift => &["swift"],
         }
     }
 
     /// Where source files live relative to project root.
+    #[allow(dead_code)]
     pub fn src_dir(&self) -> &'static str {
         match self {
             Lang::Rust => "src/bin",
-            Lang::Native => ".",
+            Lang::Native | Lang::Zig | Lang::Swift => ".",
         }
     }
 
@@ -58,7 +137,7 @@ impl Lang {
     pub fn supports_live_check(&self) -> bool {
         match self {
             Lang::Rust => true,
-            Lang::Native => false,
+            Lang::Native | Lang::Zig | Lang::Swift => false,
         }
     }
 
@@ -66,17 +145,17 @@ impl Lang {
     pub fn list_playgrounds(&self, src_dir: &Path) -> Vec<String> {
         match self {
             Lang::Rust => rust::list_playgrounds(src_dir),
-            Lang::Native => file_list_playgrounds(src_dir, self.extensions()),
+            Lang::Native | Lang::Zig | Lang::Swift => {
+                file_list_playgrounds(src_dir, self.extensions())
+            }
         }
     }
 
     /// Validate a playground name. Returns (stem, extension).
-    /// For Rust: stem = name, extension = "rs".
-    /// For file-based languages: parsed from "name.ext".
     pub fn validate_name(&self, name: &str) -> Result<(String, String), String> {
         match self {
             Lang::Rust => rust::validate_name(name),
-            Lang::Native => file_validate_name(name, self.extensions()),
+            Lang::Native | Lang::Zig | Lang::Swift => file_validate_name(name, self.extensions()),
         }
     }
 
@@ -84,7 +163,9 @@ impl Lang {
     pub fn playground_path(&self, name: &str, src_dir: &Path) -> Result<PathBuf, String> {
         match self {
             Lang::Rust => rust::playground_path(name, src_dir),
-            Lang::Native => file_playground_path(name, src_dir, self.extensions()),
+            Lang::Native | Lang::Zig | Lang::Swift => {
+                file_playground_path(name, src_dir, self.extensions())
+            }
         }
     }
 
@@ -92,21 +173,9 @@ impl Lang {
     pub fn scaffold_project(&self, project_path: &Path, project_name: &str) -> Result<(), String> {
         match self {
             Lang::Rust => rust::scaffold_project(project_path, project_name),
-            Lang::Native => {
-                // Inline for now — will move to native.rs in Phase 2
-                std::fs::create_dir_all(project_path)
-                    .map_err(|e| format!("Failed to create project: {}", e))?;
-                std::fs::create_dir_all(project_path.join("content"))
-                    .map_err(|e| format!("Failed to create content dir: {}", e))?;
-                let manifest = crate::rustic_manifest::new_native_manifest();
-                crate::rustic_manifest::write_manifest(project_path, &manifest)?;
-                std::fs::write(
-                    project_path.join("hello.c"),
-                    native_starter_template("hello", "c"),
-                )
-                .map_err(|e| format!("Failed to seed hello.c: {}", e))?;
-                Ok(())
-            }
+            Lang::Native => native::scaffold_project(project_path),
+            Lang::Zig => zig::scaffold_project(project_path),
+            Lang::Swift => swift::scaffold_project(project_path),
         }
     }
 
@@ -114,7 +183,9 @@ impl Lang {
     pub fn starter_template(&self, name: &str, ext: &str) -> String {
         match self {
             Lang::Rust => rust::starter_template(name),
-            Lang::Native => native_starter_template(name, ext),
+            Lang::Native => native::starter_template(name, ext),
+            Lang::Zig => zig::starter_template(name),
+            Lang::Swift => swift::starter_template(name),
         }
     }
 
@@ -123,6 +194,8 @@ impl Lang {
         match self {
             Lang::Rust => crate::rustic_manifest::new_rust_manifest(),
             Lang::Native => crate::rustic_manifest::new_native_manifest(),
+            Lang::Zig => crate::rustic_manifest::new_zig_manifest(),
+            Lang::Swift => crate::rustic_manifest::new_swift_manifest(),
         }
     }
 
@@ -136,7 +209,9 @@ impl Lang {
     ) -> Result<RunConfig, String> {
         match self {
             Lang::Rust => rust::build_run_command(name, workspace),
-            Lang::Native => native_build_run_command(name, source_path, workspace, manifest),
+            Lang::Native => native::build_run_command(name, source_path, workspace, manifest),
+            Lang::Zig => zig::build_run_command(name, source_path, workspace, manifest),
+            Lang::Swift => swift::build_run_command(name, source_path, workspace, manifest),
         }
     }
 }
@@ -166,6 +241,7 @@ pub enum RunConfig {
 // ── ToolInfo ─────────────────────────────────────────────────────────────────
 
 /// Result of detecting a single tool (cargo, clang, zig, swiftc, etc.)
+#[allow(dead_code)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ToolInfo {
     pub name: String,
@@ -175,8 +251,8 @@ pub struct ToolInfo {
 }
 
 // ── Shared FileLanguage helpers ──────────────────────────────────────────────
-// Used by Native, and later Zig and Swift — flat-directory languages where
-// playground files live at the project root with their extension in the name.
+// Used by Native, Zig, and Swift — flat-directory languages where playground
+// files live at the project root with their extension in the name.
 
 /// List playground files by scanning a directory for files with matching extensions.
 pub fn file_list_playgrounds(dir: &Path, extensions: &[&str]) -> Vec<String> {
@@ -245,96 +321,4 @@ pub fn file_playground_path(
         }
     }
     Ok(path)
-}
-
-// ── Native-specific helpers (will move to native.rs in Phase 2) ──��──────────
-
-/// Starter template for native project files, based on language extension.
-pub fn native_starter_template(name: &str, ext: &str) -> String {
-    match ext {
-        "c" => format!(
-            "#include <stdio.h>\n\nint main() {{\n    printf(\"Hello from {}!\\n\");\n    return 0;\n}}\n",
-            name
-        ),
-        "cpp" => format!(
-            "#include <iostream>\n\nint main() {{\n    std::cout << \"Hello from {}!\" << std::endl;\n    return 0;\n}}\n",
-            name
-        ),
-        _ => format!("// Hello from {}!\n", name),
-    }
-}
-
-/// Resolve the clang compiler path via xcrun, falling back to /usr/bin/clang.
-fn resolve_clang() -> String {
-    std::process::Command::new("xcrun")
-        .args(["--find", "clang"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "/usr/bin/clang".to_string())
-}
-
-/// Resolve the macOS SDK path via `xcrun --show-sdk-path`.
-fn resolve_sdk_path() -> Option<String> {
-    std::process::Command::new("xcrun")
-        .args(["--show-sdk-path"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-}
-
-/// Build a RunConfig for a native (C/C++) playground.
-fn native_build_run_command(
-    name: &str,
-    source_path: &Path,
-    workspace: &Path,
-    manifest: &RusticManifest,
-) -> Result<RunConfig, String> {
-    let (stem, ext) = file_validate_name(name, &["c", "cpp"])?;
-    let runs_dir = workspace.join("target").join("runs");
-    let binary_path = runs_dir.join(&stem);
-
-    let (compiler, user_flags): (String, &[String]) = match ext.as_str() {
-        "c" => (resolve_clang(), &manifest.build.cflags),
-        "cpp" => {
-            let clang = resolve_clang();
-            let clangpp = clang.replace("clang", "clang++");
-            (clangpp, &manifest.build.cxxflags)
-        }
-        _ => return Err(format!("Unsupported extension: {}", ext)),
-    };
-
-    let mut compile_args: Vec<String> = vec![
-        source_path.to_str().unwrap().to_string(),
-        "-o".to_string(),
-        binary_path.to_str().unwrap().to_string(),
-    ];
-    if let Some(sdk) = resolve_sdk_path() {
-        compile_args.push("-isysroot".to_string());
-        compile_args.push(sdk);
-    }
-    compile_args.extend(user_flags.iter().cloned());
-
-    let content_path = workspace.join(
-        crate::rustic_manifest::read_manifest(workspace)
-            .map(|m| m.paths.content)
-            .unwrap_or_else(|| "content".to_string()),
-    );
-
-    Ok(RunConfig::CompileThenRun {
-        compiler,
-        compile_args,
-        binary_path,
-        env: vec![(
-            "PLAYGROUND_CONTENT".to_string(),
-            content_path.to_string_lossy().to_string(),
-        )],
-        cwd: workspace.to_path_buf(),
-    })
 }

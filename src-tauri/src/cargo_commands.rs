@@ -298,6 +298,42 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
 
+    // Check zig
+    let zig_output = std::process::Command::new("zig")
+        .arg("version")
+        .output()
+        .ok();
+    let zig_installed = zig_output
+        .as_ref()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let zig_version = zig_output
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string());
+    let zig_path = if zig_installed {
+        std::process::Command::new("which")
+            .arg("zig")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+    } else {
+        None
+    };
+
+    // Check swiftc (ships with Xcode CLI tools, same install as clang)
+    let swiftc_output = std::process::Command::new("swiftc")
+        .arg("--version")
+        .output()
+        .ok();
+    let swiftc_installed = swiftc_output
+        .as_ref()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let swiftc_version = swiftc_output
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
+
     let all_good = cargo_installed && rustc_installed;
 
     serde_json::json!({
@@ -326,6 +362,24 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
             "installed": clang_installed,
             "path": clang_path,
             "version": clang_version,
+        },
+        "zig": {
+            "installed": zig_installed,
+            "path": zig_path,
+            "version": zig_version,
+        },
+        "swiftc": {
+            "installed": swiftc_installed,
+            "path": if swiftc_installed {
+                std::process::Command::new("xcrun")
+                    .args(["--find", "swiftc"])
+                    .output()
+                    .ok()
+                    .and_then(|o| String::from_utf8(o.stdout).ok())
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default()
+            } else { String::new() },
+            "version": swiftc_version,
         }
     })
 }

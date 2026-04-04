@@ -84,14 +84,18 @@ All runtime data lives under:
 | `src-tauri/src/content_commands.rs` | Content file CRUD commands (~120 lines) |
 | `src-tauri/src/export.rs` | Project export: Rust (CLI runner) and native (shell runner + Makefile) (~400 lines) |
 | `src-tauri/src/menu.rs` | macOS menu bar builder + rebuild_menu command (~150 lines) |
-| `src-tauri/src/book_chapters.rs` | `seed_rust_book` command — all 20 Rust Book chapter data (~2,700 lines) |
-| `src-tauri/src/knr_chapters.rs` | `seed_knr_book` command — 8 K&R C Book chapter projects (~1,200 lines) |
+| `src-tauri/src/languages/rust_book.rs` | Rust Book chapter data — 20 chapters (~2,700 lines) |
+| `src-tauri/src/languages/knr_book.rs` | K&R C Book chapter data — 8 chapters (~1,200 lines) |
+| `src-tauri/src/languages/swift_book.rs` | Swift Book chapter data — 8 chapters (~400 lines) |
 | `src-tauri/tauri.conf.json` | App config: identifier, window defaults, bundle settings |
 | `src-tauri/capabilities/default.json` | Tauri 2 IPC permissions — every API call needs an entry here |
 | `ui/src/App.svelte` | Root layout, all global state, menu event listeners, window state persistence |
+| `ui/src/lib/languages.ts` | Language registry: LanguageConfig, BookConfig, LANGUAGES map (v0.3) |
 | `ui/src/lib/Sidebar.svelte` | Project/playground/file tree, drag-drop, context menus |
 | `ui/src/lib/Editor.svelte` | Monaco wrapper, theme sync, diagnostics markers |
 | `ui/src/lib/Output.svelte` | Console panel, run blocks, streaming output |
+| `ui/src/lib/ProjectSwitcher.svelte` | Project dropdown with search, book flyout submenus, CRUD actions |
+| `ui/src/lib/CopyToProjectModal.svelte` | Copy book playground to user project modal |
 | `ui/src/lib/SettingsModal.svelte` | Settings panel (editor, appearance, toolchain) |
 | `ui/src/lib/NewPlaygroundModal.svelte` | New playground dialog with template picker |
 | `ui/src/lib/templates.ts` | 11 starter templates with auto-deps |
@@ -109,13 +113,15 @@ All runtime data lives under:
 
 ## Current Version Status
 
-**v0.3** — in progress (language module architecture: Lang enum dispatch, per-language modules, shared FileLanguage helpers. Adding Zig and Swift project types. Frontend language registry replacing if/else branching).
+**v0.3.1** — in progress (read-only book projects, per-playground locking, "Copy to Project" action, "Learn" menu, grouped project list with search filter and flyout submenus, empty-state book loading, project source metadata).
+
+**v0.3** — shipped (language module architecture: Lang enum dispatch, per-language modules, shared FileLanguage helpers. Zig and Swift project types. Frontend language registry. Book system modularization with Swift Book examples).
 
 **v0.2** — shipped (native C/C++ projects: rustic.toml manifest, C/C++ templates, native export with POSIX shell runner + Makefile, K&R C Book examples, sea green theme, tabbed toolchain wizard, compiler flags UI, project-type badges, settings clang display).
 
 **v0.1.9** — shipped (renamed from playground-rs to rustic-playground, cleaned up src/bin).
 
-After v0.3: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
+After v0.3.1: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
 
 ---
 

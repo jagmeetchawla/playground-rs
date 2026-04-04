@@ -1,6 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import { TEMPLATES, C_TEMPLATES, CPP_TEMPLATES, type Template } from './templates'
+  import { ZIG_TEMPLATES } from './zig_templates'
+  import { SWIFT_TEMPLATES } from './swift_templates'
+  import { getLang, type ProjectType } from './languages'
 
   let {
     existingNames,
@@ -9,26 +12,48 @@
     oncreate,
   }: {
     existingNames: string[]
-    projectType?: 'rust' | 'native'
+    projectType?: ProjectType
     onclose: () => void
     oncreate: (name: string, template: Template) => void
   } = $props()
 
-  let isNative = $derived(projectType === 'native')
+  let lang = $derived(getLang(projectType))
 
   let selectedId = $state('blank')
   let nativeSelectedId = $state('c_blank')
+  let zigSelectedId = $state('zig_blank')
+  let swiftSelectedId = $state('swift_blank')
   let name = $state('')
   let nameError = $state('')
   let nameInput = $state<HTMLInputElement | null>(null)
   let nativeLang: 'c' | 'cpp' = $state('c')
 
   let nativeTemplates = $derived(nativeLang === 'cpp' ? CPP_TEMPLATES : C_TEMPLATES)
-  let selected = $derived(
-    isNative
-      ? (nativeTemplates.find(t => t.id === nativeSelectedId) ?? nativeTemplates[0])
-      : (TEMPLATES.find(t => t.id === selectedId) ?? TEMPLATES[0])
+
+  let activeTemplates = $derived(
+    projectType === 'native' ? nativeTemplates
+    : projectType === 'zig' ? ZIG_TEMPLATES
+    : projectType === 'swift' ? SWIFT_TEMPLATES
+    : TEMPLATES
   )
+
+  let activeSelectedId = $derived(
+    projectType === 'native' ? nativeSelectedId
+    : projectType === 'zig' ? zigSelectedId
+    : projectType === 'swift' ? swiftSelectedId
+    : selectedId
+  )
+
+  let selected = $derived(
+    activeTemplates.find(t => t.id === activeSelectedId) ?? activeTemplates[0]
+  )
+
+  function setSelectedId(id: string) {
+    if (projectType === 'native') nativeSelectedId = id
+    else if (projectType === 'zig') zigSelectedId = id
+    else if (projectType === 'swift') swiftSelectedId = id
+    else selectedId = id
+  }
 
   // Reset native template selection when switching language
   $effect(() => {
@@ -45,6 +70,14 @@
     if (e.key === 'Escape') onclose()
   }
 
+  /** Get the file extension to append for file-based languages. */
+  function getExtension(): string {
+    if (projectType === 'native') return nativeLang === 'cpp' ? '.cpp' : '.c'
+    if (projectType === 'zig') return '.zig'
+    if (projectType === 'swift') return '.swift'
+    return ''
+  }
+
   function validateAndCreate() {
     const trimmed = name.trim()
     if (!trimmed) { nameError = 'Name is required'; return }
@@ -54,9 +87,8 @@
     }
     if (trimmed.length > 64) { nameError = 'Max 64 characters'; return }
 
-    if (isNative) {
-      // Native: append extension, check for collision with full filename
-      const ext = nativeLang === 'cpp' ? '.cpp' : '.c'
+    if (lang.needsExtension) {
+      const ext = getExtension()
       const fullName = `${trimmed}${ext}`
       if (existingNames.includes(fullName)) { nameError = 'Already exists'; return }
       nameError = ''
@@ -76,11 +108,7 @@
 <div class="modal" role="dialog" aria-modal="true" aria-label="New Playground">
   <div class="modal-header">
     <div class="header-left">
-      {#if isNative}
-        <span class="native-badge">&#63743;</span>
-      {:else}
-        <span class="rs-badge">RS</span>
-      {/if}
+      <span class="lang-badge" class:badge-rust={projectType === 'rust'} class:badge-native={projectType === 'native'} class:badge-zig={projectType === 'zig'} class:badge-swift={projectType === 'swift'}>{lang.badge}</span>
       <span class="modal-title">New Playground</span>
     </div>
     <button class="close-btn" onclick={onclose} aria-label="Close">
@@ -91,15 +119,14 @@
   </div>
 
   <div class="modal-body">
-    {#if isNative}
-      <!-- Language tabs -->
+    {#if lang.subLanguages}
+      <!-- Sub-language tabs (e.g. C / C++) -->
       <div class="lang-tabs">
-        <button class="lang-tab" class:active={nativeLang === 'c'} onclick={() => nativeLang = 'c'}>
-          <span class="lang-tab-badge">C</span> C
-        </button>
-        <button class="lang-tab" class:active={nativeLang === 'cpp'} onclick={() => nativeLang = 'cpp'}>
-          <span class="lang-tab-badge">C++</span> C++
-        </button>
+        {#each lang.subLanguages as sub (sub.id)}
+          <button class="lang-tab" class:active={nativeLang === sub.id} onclick={() => nativeLang = sub.id as any}>
+            <span class="lang-tab-badge">{sub.label}</span> {sub.label}
+          </button>
+        {/each}
       </div>
     {/if}
 
@@ -117,8 +144,8 @@
           autocomplete="off"
           onkeydown={(e) => { if (e.key === 'Enter') validateAndCreate() }}
         />
-        {#if isNative}
-          <span class="ext-suffix">.{nativeLang}</span>
+        {#if lang.needsExtension}
+          <span class="ext-suffix">{getExtension()}</span>
         {/if}
       </div>
       {#if nameError}
@@ -126,58 +153,33 @@
       {/if}
     </div>
 
-    {#if isNative}
-      <!-- Template grid for native -->
-      <div class="template-section">
-        <label>Template</label>
-        <div class="template-grid">
-          {#each nativeTemplates as tmpl (tmpl.id)}
-            <button
-              class="template-card"
-              class:selected={nativeSelectedId === tmpl.id}
-              onclick={() => nativeSelectedId = tmpl.id}
-            >
-              <span class="tmpl-name">{tmpl.name}</span>
-              <span class="tmpl-desc">{tmpl.description}</span>
-            </button>
-          {/each}
-        </div>
+    <!-- Template grid -->
+    <div class="template-section">
+      <label>Template</label>
+      <div class="template-grid">
+        {#each activeTemplates as tmpl (tmpl.id)}
+          <button
+            class="template-card"
+            class:selected={activeSelectedId === tmpl.id}
+            onclick={() => setSelectedId(tmpl.id)}
+          >
+            <span class="tmpl-name">{tmpl.name}</span>
+            <span class="tmpl-desc">{tmpl.description}</span>
+            {#if tmpl.deps?.length}
+              <span class="tmpl-deps">
+                {tmpl.deps.map(d => d.name).join(', ')}
+              </span>
+            {/if}
+          </button>
+        {/each}
       </div>
+    </div>
 
-      <!-- Preview -->
-      <div class="preview-section">
-        <label>Preview</label>
-        <pre class="preview-code">{selected.code.slice(0, 300)}{selected.code.length > 300 ? '...' : ''}</pre>
-      </div>
-    {:else}
-      <!-- Template grid for Rust projects -->
-      <div class="template-section">
-        <label>Template</label>
-        <div class="template-grid">
-          {#each TEMPLATES as tmpl (tmpl.id)}
-            <button
-              class="template-card"
-              class:selected={selectedId === tmpl.id}
-              onclick={() => selectedId = tmpl.id}
-            >
-              <span class="tmpl-name">{tmpl.name}</span>
-              <span class="tmpl-desc">{tmpl.description}</span>
-              {#if tmpl.deps?.length}
-                <span class="tmpl-deps">
-                  {tmpl.deps.map(d => d.name).join(', ')}
-                </span>
-              {/if}
-            </button>
-          {/each}
-        </div>
-      </div>
-
-      <!-- Preview -->
-      <div class="preview-section">
-        <label>Preview</label>
-        <pre class="preview-code">{selected.code.slice(0, 300)}{selected.code.length > 300 ? '...' : ''}</pre>
-      </div>
-    {/if}
+    <!-- Preview -->
+    <div class="preview-section">
+      <label>Preview</label>
+      <pre class="preview-code">{selected.code.slice(0, 300)}{selected.code.length > 300 ? '...' : ''}</pre>
+    </div>
   </div>
 
   <div class="modal-footer">
@@ -215,16 +217,14 @@
     flex-shrink: 0;
   }
   .header-left { display: flex; align-items: center; gap: 8px; }
-  .rs-badge {
+  .lang-badge {
     font-size: 8px; font-weight: 800; letter-spacing: 0.04em;
-    background: var(--rust-orange); color: #fff;
-    border-radius: 3px; padding: 2px 4px; line-height: 1.3;
+    color: #fff; border-radius: 3px; padding: 2px 4px; line-height: 1.3;
   }
-  .native-badge {
-    font-size: 11px; font-weight: 400;
-    background: #4a9; color: #fff;
-    border-radius: 3px; padding: 0 4px; line-height: 1.3;
-  }
+  .lang-badge.badge-rust { background: var(--rust-orange); }
+  .lang-badge.badge-native { background: #4a9; font-size: 11px; font-weight: 400; padding: 0 4px; }
+  .lang-badge.badge-zig { background: #f7a41d; font-size: 7px; }
+  .lang-badge.badge-swift { background: #f05138; font-size: 7.5px; }
   .modal-title { font-size: 14px; font-weight: 700; color: var(--text); }
   .close-btn {
     width: 24px; height: 24px;

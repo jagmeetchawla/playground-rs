@@ -14,9 +14,11 @@
   import SettingsModal from './lib/SettingsModal.svelte'
   import NewPlaygroundModal from './lib/NewPlaygroundModal.svelte'
   import ToolchainWizard from './lib/ToolchainWizard.svelte'
+  import CopyToProjectModal from './lib/CopyToProjectModal.svelte'
   import type { Settings } from './lib/SettingsModal.svelte'
   import type { Template } from './lib/templates'
   import type { RunBlock } from './lib/Output.svelte'
+  import { getLang, allLanguages, type ProjectType } from './lib/languages'
 
   // ── Constants ────────────────────────────────────────────────────────────────
   const CARGO_TAB = 'Cargo.toml'
@@ -30,10 +32,16 @@
   // ── Projects ─────────────────────────────────────────────────────────────────
   let projects:            string[]                                    = $state([])
   let activeProject:       string                                      = $state('')
-  let projectType:         'rust' | 'native'                           = $state('rust')
-  let projectTypes:        Record<string, 'rust' | 'native'>           = $state({})
+  let projectType:         ProjectType                                 = $state('rust')
+  let projectTypes:        Record<string, ProjectType>                 = $state({})
+  let projectSources:      Record<string, string>                     = $state({})
+  let projectReadonly:     Record<string, boolean>                    = $state({})
+  let lockedPlaygrounds:   string[]                                   = $state([])
   let switcherPendingMode: 'new' | 'rename' | 'delete-confirm' | null = $state(null)
-  let isNative             = $derived(projectType === 'native')
+  let lang                 = $derived(getLang(projectType))
+  let isBookProject        = $derived(!!projectSources[activeProject])
+  let isPlaygroundLocked   = $derived(activeTab ? lockedPlaygrounds.includes(activeTab) : false)
+  let isReadOnly           = $derived(isBookProject || isPlaygroundLocked)
 
   // ── Playground list ──────────────────────────────────────────────────────────
   let playgrounds: string[] = $state([])
@@ -62,10 +70,10 @@
       const meta = tabMeta[id]
       if (meta?.type === 'content') return [id, 'content' as const]
       if (id === CARGO_TAB) return [id, 'cargo' as const]
-      // For native projects, derive type from extension
-      if (isNative) {
+      // For non-Rust projects, derive type from extension
+      if (lang.needsExtension) {
         const ext = id.split('.').pop()?.toLowerCase() ?? ''
-        const extMap: Record<string, string> = { c: 'c', cpp: 'cpp', zig: 'zig', rs: 'rs' }
+        const extMap: Record<string, string> = { c: 'c', cpp: 'cpp', zig: 'zig', swift: 'swift', rs: 'rs' }
         return [id, (extMap[ext] ?? 'rs') as any]
       }
       return [id, 'rs' as const]
@@ -101,13 +109,20 @@
   let cargoToml:     string                             = $state('')
   let toolchainInfo: { path: string; version: string } = $state({ path: '', version: '' })
   let clangInfo:     { path: string; version: string } = $state({ path: '', version: '' })
-  let activeToolchain = $derived(isNative ? clangInfo : toolchainInfo)
+  let zigInfo:       { path: string; version: string } = $state({ path: '', version: '' })
+  let swiftInfo:     { version: string }               = $state({ version: '' })
+  let activeToolchain = $derived(
+    projectType === 'native' ? clangInfo
+    : projectType === 'zig' ? zigInfo
+    : projectType === 'swift' ? swiftInfo as any
+    : toolchainInfo
+  )
   let toolchainLabel = $derived(
     activeToolchain.version
       ? (activeToolchain.version.match(/\d+\.\d+\.\d+/)?.[0] ?? activeToolchain.version)
       : '…'
   )
-  let toolchainName = $derived(isNative ? 'clang' : 'cargo')
+  let toolchainName = $derived(lang.toolchainName)
 
   // ── New playground binding ────────────────────────────────────────────────────
   let creatingNew: boolean = $state(false)
@@ -118,6 +133,8 @@
   let showSettings:    boolean       = $state(false)
   let showWizard:      boolean       = $state(false)
   let showExportMenu:  boolean       = $state(false)
+  let showCopyToProject: boolean     = $state(false)
+  let copyToProjectPlayground: string | null = $state(null)
 
   // ── Settings ──────────────────────────────────────────────────────────────────
   let settings: Settings = $state({
@@ -297,9 +314,10 @@
         listen('menu:save',      () => save()),
         listen('menu:run',       () => run()),
         listen('menu:stop',      () => stop()),
-        listen('menu:new',       () => requestNewPlayground()),
+        listen('menu:new',       () => { if (!isReadOnly) requestNewPlayground() }),
         listen('menu:close-tab', () => closeTab(activeTab)),
         listen('menu:new-project',    () => { switcherPendingMode = 'new' }),
+        listen('menu:duplicate-project', () => onDuplicateProject(activeProject)),
         listen('menu:rename-project', () => { switcherPendingMode = 'rename' }),
         listen('menu:delete-project', () => { switcherPendingMode = 'delete-confirm' }),
         listen<string>('menu:switch-project', (e) => switchProject(e.payload)),
@@ -308,10 +326,12 @@
         listen('menu:settings',          () => { showSettings = true }),
         listen('menu:help',              () => { showHelp  = true }),
         listen('menu:about',             () => { showAbout = true }),
-        listen('menu:rust-book',         () => seedRustBook()),
-        listen('menu:knr-book',          () => seedKnrBook()),
-        listen('menu:rename-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground') renameTarget = activeTab }),
-        listen('menu:delete-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground') deletePending = activeTab }),
+        ...allLanguages().filter(l => l.book).map(l => listen(l.book!.menuEvent, () => seedBook())),
+        ...allLanguages().filter(l => l.book).map(l => listen(l.book!.removeMenuEvent, () => removeBook(l.book!.sourceTag, l.book!.commandLabel))),
+        listen('menu:edit-cut',          () => { document.execCommand('cut') }),
+        listen('menu:edit-paste',        () => { navigator.clipboard.readText().then(t => document.execCommand('insertText', false, t)).catch(() => {}) }),
+        listen('menu:rename-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground' && !isReadOnly) renameTarget = activeTab }),
+        listen('menu:delete-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground' && !isReadOnly) deletePending = activeTab }),
       ])
     } catch (e) {
       console.error('onMount error:', e)
@@ -346,6 +366,8 @@
       playgroundCount: playgrounds.length,
       hasActivePlayground,
       projectType,
+      isBookProject: isReadOnly,
+      projectSources,
     }).catch(console.error)
   })
 
@@ -366,8 +388,9 @@
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
   async function loadProjectData() {
-    projectType = await invoke<'rust' | 'native'>('get_project_type', { name: activeProject }).catch(() => 'rust' as const)
+    projectType = await invoke<ProjectType>('get_project_type', { name: activeProject }).catch(() => 'rust' as ProjectType)
     playgrounds = await invoke<string[]>('list_playgrounds')
+    lockedPlaygrounds = await invoke<string[]>('get_locked_playgrounds').catch(() => [])
     cargoToml   = projectType === 'rust'
       ? await invoke<string>('get_cargo_toml').catch(() => '')
       : ''
@@ -375,15 +398,24 @@
   }
 
   async function refreshProjectTypes() {
-    const types: Record<string, 'rust' | 'native'> = {}
-    await Promise.all(projects.map(async (name) => {
-      types[name] = await invoke<'rust' | 'native'>('get_project_type', { name }).catch(() => 'rust' as const)
-    }))
+    const [types, sources, rdonly] = await Promise.all([
+      (async () => {
+        const t: Record<string, ProjectType> = {}
+        await Promise.all(projects.map(async (name) => {
+          t[name] = await invoke<ProjectType>('get_project_type', { name }).catch(() => 'rust' as ProjectType)
+        }))
+        return t
+      })(),
+      invoke<Record<string, string>>('get_project_sources').catch(() => ({})),
+      invoke<Record<string, boolean>>('get_project_readonly_map').catch(() => ({})),
+    ])
     projectTypes = types
+    projectSources = sources
+    projectReadonly = rdonly
   }
 
   function syncMenuProjects() {
-    invoke('rebuild_menu', { projects, active: activeProject, playgroundCount: playgrounds.length, hasActivePlayground, projectType }).catch(console.error)
+    invoke('rebuild_menu', { projects, active: activeProject, playgroundCount: playgrounds.length, hasActivePlayground, projectType, isBookProject: isReadOnly, projectSources }).catch(console.error)
   }
 
   async function switchProject(name: string) {
@@ -400,36 +432,49 @@
     syncMenuProjects()
   }
 
-  async function seedRustBook() {
+  async function seedBook(forType?: ProjectType) {
+    const ptype = forType ?? projectType
+    const bookConfig = getLang(ptype).book
+    if (!bookConfig) return
     try {
-      const created = await invoke<string[]>('seed_rust_book')
+      const created = await invoke<string[]>('seed_book', { projectType: ptype })
       projects = await invoke<string[]>('list_projects')
+      await refreshProjectTypes()
       if (created.length > 0) {
-        // Switch to the first chapter so the user lands somewhere useful
-        await switchProject(created[0])
-        showToast(`✅ Loaded ${created.length} Rust Book chapter${created.length > 1 ? 's' : ''}. Starting with ${created[0]}.`)
+        await switchProject(created[0])  // also rebuilds menu
+        showToast(`Loaded ${created.length} ${bookConfig.toastEntity}${created.length > 1 ? 's' : ''}. Starting with ${created[0]}.`)
       } else {
-        showToast('ℹ️ Rust Book chapters are already loaded.')
+        showToast(bookConfig.toastAlreadyLoaded)
       }
     } catch (e) {
-      console.error('seedRustBook failed:', e)
-      showToast('❌ Failed to load Rust Book examples.')
+      console.error('seedBook failed:', e)
+      showToast(`Failed to load ${bookConfig.commandLabel} examples.`)
     }
   }
 
-  async function seedKnrBook() {
+  async function removeBook(sourceTag: string, label: string) {
     try {
-      const created = await invoke<string[]>('seed_knr_book')
-      projects = await invoke<string[]>('list_projects')
-      if (created.length > 0) {
-        await switchProject(created[0])
-        showToast(`Loaded ${created.length} K&R chapter${created.length > 1 ? 's' : ''}. Starting with ${created[0]}.`)
-      } else {
-        showToast('K&R chapters are already loaded.')
+      const removed = await invoke<string[]>('remove_book', { sourceTag })
+      if (removed.length === 0) {
+        showToast(`No ${label} chapters found.`)
+        return
       }
+      // If the active project was removed, switch to the first remaining project
+      if (removed.includes(activeProject)) {
+        projects = await invoke<string[]>('list_projects')
+        await refreshProjectTypes()
+        if (projects.length > 0) {
+          await switchProject(projects[0])
+        }
+      } else {
+        projects = await invoke<string[]>('list_projects')
+        await refreshProjectTypes()
+        syncMenuProjects()
+      }
+      showToast(`Removed ${removed.length} ${label} chapter${removed.length > 1 ? 's' : ''}.`)
     } catch (e) {
-      console.error('seedKnrBook failed:', e)
-      showToast('Failed to load K&R examples.')
+      console.error('removeBook failed:', e)
+      showToast(`Failed to remove ${label} examples.`)
     }
   }
 
@@ -439,15 +484,15 @@
     if (!id) return 'rust'
     if (id === CARGO_TAB) return 'ini'
     if (meta.type === 'content') return languageFromFilename(meta.filename)
-    // For native projects, playground names include extension
-    if (isNative) return languageFromFilename(id)
+    // For file-based languages, playground names include extension
+    if (lang.needsExtension) return languageFromFilename(id)
     return 'rust'
   }
 
   function languageFromFilename(filename: string): string {
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
     const map: Record<string, string> = {
-      rs: 'rust', c: 'c', cpp: 'cpp', zig: 'zig',
+      rs: 'rust', c: 'c', cpp: 'cpp', zig: 'zig', swift: 'swift',
       json: 'json', toml: 'ini', md: 'markdown',
       yaml: 'yaml', yml: 'yaml', html: 'html', xml: 'xml',
       js: 'javascript', ts: 'typescript', css: 'css',
@@ -456,20 +501,9 @@
     return map[ext] ?? 'plaintext'
   }
 
-  /** Build a display command string for native project runs */
-  function nativeRunCommand(filename: string): string {
-    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
-    const stem = filename.replace(/\.[^.]+$/, '')
-    const map: Record<string, string> = {
-      c: `clang ${filename} && ./${stem}`,
-      cpp: `clang++ ${filename} && ./${stem}`,
-    }
-    return map[ext] ?? filename
-  }
-
   // ── Keyboard shortcuts ───────────────────────────────────────────────────────
   function handleKey(e: KeyboardEvent) {
-    if (e.metaKey && e.key === 'n') { e.preventDefault(); requestNewPlayground() }
+    if (e.metaKey && e.key === 'n') { e.preventDefault(); if (!isReadOnly) requestNewPlayground() }
     if (e.metaKey && e.key === 'r') { e.preventDefault(); run() }
     if (e.metaKey && e.key === 's') { e.preventDefault(); save() }
     if (e.metaKey && e.key === '.') { e.preventDefault(); stop() }
@@ -518,10 +552,25 @@
     saveWindowState()
   }
 
+  // ── Lock toggle ─────────────────────────────────────────────────────────────
+
+  async function toggleReadOnly() {
+    if (isBookProject || !activeTab) return
+    const newVal = !isPlaygroundLocked
+    try {
+      await invoke('set_playground_locked', { playground: activeTab, locked: newVal })
+      lockedPlaygrounds = newVal
+        ? [...lockedPlaygrounds, activeTab]
+        : lockedPlaygrounds.filter(n => n !== activeTab)
+    } catch (e) {
+      console.error('toggleReadOnly failed:', e)
+    }
+  }
+
   // ── File operations ──────────────────────────────────────────────────────────
 
   async function save() {
-    if (!activeTab) return
+    if (!activeTab || isReadOnly) return
     const meta = tabMeta[activeTab] ?? { type: 'playground' }
 
     if (meta.type === 'content') {
@@ -541,7 +590,7 @@
   }
 
   function onCodeChange(newCode: string) {
-    if (!activeTab) return
+    if (!activeTab || isReadOnly) return
     tabCode = { ...tabCode, [activeTab]: newCode }
     if (!dirtyTabs.includes(activeTab)) {
       dirtyTabs = [...dirtyTabs, activeTab]
@@ -562,7 +611,7 @@
   function scheduleCheck(name: string, code: string) {
     const meta = tabMeta[name]
     if (meta?.type !== 'playground') return
-    if (isNative) return // no live checking for native projects
+    if (!lang.supportsLiveCheck) return
     if (_checkTimer) clearTimeout(_checkTimer)
     if (_checkRunning) {
       // A check is already in flight — queue this edit and it will fire
@@ -645,9 +694,7 @@
     })
 
     // Build display command based on project type
-    const command = isNative
-      ? nativeRunCommand(name)
-      : `cargo run --bin ${name}`
+    const command = lang.runCommandDisplay(name)
 
     const newBlock: RunBlock = {
       runNum, command, startedAt,
@@ -671,34 +718,22 @@
         }))
       } else if (msg.stream === 'stderr') {
         const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any)
-        if (isNative) {
-          const isBinaryStart = /^\s*Running\s+`/.test(msg.line)
-          updateLastRun(name, r => {
-            if (isBinaryStart) {
-              return { ...r, programStarted: true, status: 'running' as const }
-            }
-            if (r.programStarted) {
-              return { ...r, programLines: [...r.programLines, { stream: 'stderr', line: msg.line, ts }] }
-            }
-            return { ...r, compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line, ts }] }
-          })
-        } else {
-          // Cargo prints "     Running `target/...`" on stderr when the binary starts.
-          // Use this to transition from 'compiling' → 'running' so the stdin input appears.
-          const isBinaryStart = /^\s*Running\s+`/.test(msg.line)
-          updateLastRun(name, r => {
-            const nowRunning = r.programStarted || isBinaryStart
-            if (isBinaryStart) {
-              return { ...r, programStarted: true, status: 'running' as const }
-            }
-            return {
-              ...r,
-              ...(nowRunning
-                ? { programLines: [...r.programLines, { stream: 'stderr', line: msg.line, ts }] }
-                : { compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line, ts }] }),
-            }
-          })
-        }
+        // Cargo/zig print "     Running `target/...`" on stderr when the binary starts.
+        // CompileThenRun languages (native, swift) use the same pattern from the backend.
+        // Use this to transition from 'compiling' → 'running' so the stdin input appears.
+        const isBinaryStart = /^\s*Running\s+`/.test(msg.line)
+        updateLastRun(name, r => {
+          const nowRunning = r.programStarted || isBinaryStart
+          if (isBinaryStart) {
+            return { ...r, programStarted: true, status: 'running' as const }
+          }
+          return {
+            ...r,
+            ...(nowRunning
+              ? { programLines: [...r.programLines, { stream: 'stderr', line: msg.line, ts }] }
+              : { compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line, ts }] }),
+          }
+        })
       }
     }
 
@@ -761,30 +796,25 @@
 
   async function onNewPlayground(name: string, template: Template) {
     try {
-      if (isNative) {
-        // Native: name already includes extension, no template deps
-        await invoke('new_playground', { name, content: template.code || null })
-      } else {
-        await invoke('new_playground', { name, content: template.code })
+      await invoke('new_playground', { name, content: template.code || null })
 
-        // Auto-add dependencies if the template requires them
-        if (template.deps?.length) {
-          let cargoContent = await invoke<string>('get_cargo_toml')
-          for (const dep of template.deps) {
-            try {
-              cargoContent = await invoke<string>('add_dependency', {
-                content: cargoContent,
-                name: dep.name,
-                version: dep.version,
-              })
-            } catch {
-              // Dep may already exist — that's fine
-            }
+      // Auto-add dependencies if the template requires them (Rust only)
+      if (lang.hasCargoToml && template.deps?.length) {
+        let cargoContent = await invoke<string>('get_cargo_toml')
+        for (const dep of template.deps) {
+          try {
+            cargoContent = await invoke<string>('add_dependency', {
+              content: cargoContent,
+              name: dep.name,
+              version: dep.version,
+            })
+          } catch {
+            // Dep may already exist — that's fine
           }
-          // Update the editor if Cargo.toml tab is open
-          tabCode = { ...tabCode, [CARGO_TAB]: cargoContent }
-          cargoToml = cargoContent
         }
+        // Update the editor if Cargo.toml tab is open
+        tabCode = { ...tabCode, [CARGO_TAB]: cargoContent }
+        cargoToml = cargoContent
       }
 
       playgrounds = await invoke<string[]>('list_playgrounds')
@@ -844,7 +874,7 @@
 
   // ── Project management ───────────────────────────────────────────────────────
 
-  async function onNewProject(name: string, ptype: 'rust' | 'native' = 'rust') {
+  async function onNewProject(name: string, ptype: ProjectType = 'rust') {
     await invoke('new_project', { name, projectType: ptype })
     projects = await invoke<string[]>('list_projects')
     await switchProject(name)
@@ -856,6 +886,12 @@
     activeProject = newName
     await refreshProjectTypes()
     syncMenuProjects()
+  }
+
+  async function onDuplicateProject(name: string) {
+    const newName = await invoke<string>('duplicate_project', { name })
+    projects = await invoke<string[]>('list_projects')
+    await switchProject(newName)
   }
 
   async function onDeleteProject(name: string) {
@@ -976,10 +1012,14 @@
         active={activeProject}
         {projectType}
         {projectTypes}
+        {projectSources}
+        {projectReadonly}
         onswitch={switchProject}
         onnew={onNewProject}
         onrename={onRenameProject}
         ondelete={onDeleteProject}
+        onduplicate={onDuplicateProject}
+        onloadbook={(ptype) => seedBook(ptype)}
         bind:pendingMode={switcherPendingMode}
       />
     </div>
@@ -990,14 +1030,26 @@
         title="Settings (⌘,)"
         onclick={() => showSettings = true}
       >&#9881;&#65038;</button>
-      <button class="toolchain-pill" title="{activeToolchain.path} — Click for toolchain details" onclick={() => showWizard = true}>
-        {#if isNative}
+      <button class="toolchain-pill" title="{activeToolchain.path ?? ''} — Click for toolchain details" onclick={() => showWizard = true}>
+        {#if projectType === 'native'}
           <!-- C bracket icon for clang -->
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M5 2C3.5 2 2 3 2 5L2 9C2 11 3.5 12 5 12"
                   stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
             <path d="M9 2C10.5 2 12 3 12 5L12 9C12 11 10.5 12 9 12"
                   stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+          </svg>
+        {:else if projectType === 'zig'}
+          <!-- Zig lightning bolt -->
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M8 1L3 8h4l-1 5 5-7H7l1-5z"
+                  stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/>
+          </svg>
+        {:else if projectType === 'swift'}
+          <!-- Swift bird-like swoosh -->
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M11 3C8.5 5 5 7 3 8c2-0.5 4-0.5 6 0.5-1.5 2-4 3-7 3 4 0 7.5-1.5 9-4.5 0.5-1 0.5-2.5 0-4z"
+                  stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" fill="none"/>
           </svg>
         {:else}
           <!-- Isometric crate — crates.io style -->
@@ -1011,6 +1063,7 @@
           </svg>
         {/if}
         {toolchainName} {toolchainLabel}
+        {#if lang.experimental} · experimental{/if}
       </button>
     </div>
 
@@ -1024,12 +1077,31 @@
         <span class="status-label error">Build failed</span>
       {/if}
 
+      <button
+        class="lock-btn {isReadOnly ? 'lock-btn-locked' : 'lock-btn-unlocked'}"
+        onclick={toggleReadOnly}
+        disabled={isBookProject || !activeTab}
+        title={isBookProject ? 'Book project — always read-only' : !activeTab ? 'No playground open' : isReadOnly ? 'Unlock this playground' : 'Lock this playground'}
+      >
+        {#if isReadOnly}
+          <svg width="12" height="13" viewBox="0 0 12 13" fill="none">
+            <rect x="1.5" y="6" width="9" height="6" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
+            <path d="M3.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+          </svg>
+        {:else}
+          <svg width="12" height="13" viewBox="0 0 12 13" fill="none">
+            <rect x="1.5" y="6" width="9" height="6" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
+            <path d="M8.5 6V4.5a2.5 2.5 0 0 0-5 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+          </svg>
+        {/if}
+      </button>
+
       {#if activeTab}
         <button
           class="btn btn-save"
           onclick={save}
-          disabled={!dirtyTabs.includes(activeTab)}
-          title="Save (⌘S)"
+          disabled={isReadOnly || !dirtyTabs.includes(activeTab)}
+          title={isReadOnly ? 'Save disabled — project is read-only' : 'Save (⌘S)'}
         >
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
             <path d="M2 1h7l2 2v8H2V1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" fill="none"/>
@@ -1046,12 +1118,16 @@
             <path d="M6 1v7M3 3.5 6 1l3 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M2 7v3.5h8V7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
+          Share
         </button>
         {#if showExportMenu}
           <div class="export-dropdown" role="menu">
             <button class="export-item" onclick={() => { showExportMenu = false; exportProject() }}>Export Project…</button>
             {#if activeTab && tabMeta[activeTab]?.type === 'playground'}
               <button class="export-item" onclick={() => { showExportMenu = false; copyCodeToClipboard() }}>Copy Code to Clipboard</button>
+              {#if isReadOnly}
+                <button class="export-item" onclick={() => { showExportMenu = false; copyToProjectPlayground = activeTab; showCopyToProject = true }}>Copy to Project…</button>
+              {/if}
             {/if}
           </div>
           <div class="export-backdrop" onclick={() => showExportMenu = false} aria-hidden="true"></div>
@@ -1106,12 +1182,14 @@
           {dirtyTabs}
           {cargoToml}
           {projectType}
+          readOnly={isReadOnly}
           onNewPlayground={requestNewPlayground}
           bind:renameTarget
           on:select={(e) => openTab(e.detail, { type: 'playground' })}
           on:rename={onRename}
           on:delete={onDelete}
           on:duplicate={onDuplicate}
+          on:copyToProject={(e) => { copyToProjectPlayground = e.detail; showCopyToProject = true }}
           on:editcargo={onEditCargo}
           on:opencontentfile={onOpenContentFile}
         />
@@ -1178,10 +1256,11 @@
               tabSize={settings.tab_size}
               theme={monacoTheme}
               diagnostics={currentMarkers}
+              readOnly={isReadOnly}
               onSave={save}
               onRun={run}
               onNew={requestNewPlayground}
-              on:change={(e) => onCodeChange(e.detail)}
+              onChange={onCodeChange}
             />
           {:else}
             <div class="empty-state">
@@ -1193,15 +1272,34 @@
                 </svg>
               </div>
               <p class="empty-title">No playground open</p>
-              <p class="empty-hint">
-                Select one from the sidebar or
-                <button class="link-btn" onclick={requestNewPlayground}>create a new one</button>
-              </p>
-              <div class="shortcut-grid">
-                <span class="shortcut-key">⌘N</span><span class="shortcut-desc">New playground</span>
-                <span class="shortcut-key">⌘R</span><span class="shortcut-desc">Run</span>
-                <span class="shortcut-key">⌘S</span><span class="shortcut-desc">Save</span>
-              </div>
+              {#if isReadOnly}
+                <p class="empty-hint">Select a playground from the sidebar to view it</p>
+              {:else}
+                <p class="empty-hint">
+                  Select one from the sidebar or
+                  <button class="link-btn" onclick={requestNewPlayground}>create a new one</button>
+                </p>
+                <div class="shortcut-grid">
+                  <span class="shortcut-key">⌘N</span><span class="shortcut-desc">New playground</span>
+                  <span class="shortcut-key">⌘R</span><span class="shortcut-desc">Run</span>
+                  <span class="shortcut-key">⌘S</span><span class="shortcut-desc">Save</span>
+                </div>
+              {/if}
+              {#each [allLanguages().filter(l => l.book && !Object.values(projectSources).includes(l.book!.sourceTag))] as unloadedBooks}
+                {#if unloadedBooks.length > 0}
+                  <div class="empty-books">
+                    <p class="empty-books-label">Learn from examples</p>
+                    <div class="empty-books-list">
+                      {#each unloadedBooks as l (l.type)}
+                        <button class="empty-book-btn" onclick={() => seedBook(l.type)}>
+                          <span class="empty-book-icon">📖</span>
+                          {l.book?.commandLabel}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+              {/each}
             </div>
           {/if}
         </div>
@@ -1263,6 +1361,24 @@
     {projectType}
     onclose={() => creatingNew = false}
     oncreate={onNewPlayground}
+  />
+{/if}
+
+{#if showCopyToProject && copyToProjectPlayground}
+  <CopyToProjectModal
+    playgroundName={copyToProjectPlayground}
+    code={tabCode[copyToProjectPlayground] ?? ''}
+    {projects}
+    {projectTypes}
+    {projectSources}
+    {projectType}
+    currentProject={activeProject}
+    onclose={() => { showCopyToProject = false; copyToProjectPlayground = null }}
+    oncopy={(targetProject, newName) => {
+      showCopyToProject = false
+      copyToProjectPlayground = null
+      showToast(`Copied to ${targetProject} / ${newName}`)
+    }}
   />
 {/if}
 
@@ -1357,6 +1473,36 @@
   .status-label { font-size: 11px; color: var(--text-tertiary); letter-spacing: 0.02em; }
   .status-label.running { color: var(--green); }
   .status-label.error   { color: var(--red); }
+  .lock-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .lock-btn-locked {
+    background: transparent;
+    color: #d44;
+  }
+  .lock-btn-locked:hover:not(:disabled) {
+    background: rgba(220, 60, 60, 0.12);
+  }
+  .lock-btn-unlocked {
+    background: transparent;
+    color: #2ea043;
+  }
+  .lock-btn-unlocked:hover:not(:disabled) {
+    background: rgba(45, 160, 65, 0.12);
+  }
+  .lock-btn:disabled {
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: default;
+  }
 
   .btn {
     display: flex; align-items: center; gap: 5px;
@@ -1367,12 +1513,9 @@
     flex-shrink: 0;
   }
 
-  .btn-save {
-    background: rgba(255,255,255,0.08); color: var(--text);
-    border: 1px solid var(--border-strong);
-  }
-  .btn-save:hover:not(:disabled) { background: rgba(255,255,255,0.14); }
-  .btn-save:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn-save { background: #2ea043; color: #fff; }
+  .btn-save:hover:not(:disabled) { background: #3bb54f; }
+  .btn-save:disabled { opacity: 0.35; cursor: not-allowed; }
 
   .btn-run  { background: var(--accent); color: #fff; }
   .btn-run:hover:not(:disabled) { background: var(--accent-hover); }
@@ -1381,11 +1524,8 @@
   .btn-stop { background: var(--red); color: #fff; }
   .btn-stop:hover { opacity: 0.85; }
 
-  .btn-export {
-    background: var(--bg-input); color: var(--text-secondary);
-    border: 1px solid var(--border);
-  }
-  .btn-export:hover { background: var(--bg-hover); color: var(--text); }
+  .btn-export { background: #c89b18; color: #fff; }
+  .btn-export:hover { background: #daad2a; }
 
   .export-wrap { position: relative; }
   .export-backdrop {
@@ -1574,8 +1714,28 @@
     gap: 4px 16px; margin-top: 16px; align-items: center;
   }
 
+  .empty-books {
+    margin-top: 24px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .empty-books-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-tertiary);
+  }
+  .empty-books-list { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .empty-book-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 6px 12px;
+    font-size: 12px; font-weight: 500; color: var(--text-secondary);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    transition: background 0.1s, border-color 0.1s, color 0.1s;
+  }
+  .empty-book-btn:hover { background: var(--bg-hover); border-color: var(--border-strong); color: var(--text); }
+  .empty-book-icon { font-size: 13px; }
+
   .shortcut-key {
-    font-family: var(--font-mono); font-size: 11px;
+    font-family: var(--font-ui); font-size: 11px;
     background: var(--bg-elevated); border: 1px solid var(--border-strong);
     border-radius: var(--radius-xs); padding: 2px 7px;
     color: var(--text-secondary); text-align: center; justify-self: end;

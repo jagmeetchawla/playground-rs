@@ -1,7 +1,14 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
+  import { getVersion } from '@tauri-apps/api/app'
   import appIcon from './app-icon.png'
 
   let { onclose }: { onclose: () => void } = $props()
+  let version = $state('')
+
+  onMount(async () => {
+    version = await getVersion()
+  })
 
   function handleKey(e: KeyboardEvent) {
     if (e.key === 'Escape') onclose()
@@ -28,7 +35,7 @@
 
   <div class="about-body">
     <h1 class="app-name">Rustic Playground</h1>
-    <p class="app-version">Version 0.1.0</p>
+    <p class="app-version">Version {version}</p>
 
     <p class="app-desc">
       A macOS desktop app for Rust experiments,<br/>

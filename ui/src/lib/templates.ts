@@ -3,7 +3,7 @@ export type Template = {
   name: string
   description: string
   code: string
-  lang?: 'c' | 'cpp'
+  lang?: string
   deps?: { name: string; version: string }[]
 }
 

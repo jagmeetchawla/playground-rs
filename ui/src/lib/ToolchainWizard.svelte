@@ -18,12 +18,14 @@
     installed_toolchains: string[]
     components: { rustfmt: boolean; clippy: boolean }
     clang: { installed: boolean; path: string; version: string | null }
+    zig: { installed: boolean; path: string; version: string | null }
+    swiftc: { installed: boolean; path: string; version: string | null }
   }
 
   let status = $state<ToolchainStatus | null>(null)
   let checking = $state(true)
   let error = $state<string | null>(null)
-  let activeTab: 'rust' | 'native' = $state('rust')
+  let activeTab: 'rust' | 'native' | 'zig' | 'swift' = $state('rust')
 
   async function runCheck() {
     checking = true
@@ -80,6 +82,27 @@
       C/C++
       {#if status}
         <span class="tab-dot" class:ok={status.clang.installed} class:missing={!status.clang.installed}></span>
+      {/if}
+    </button>
+    <button
+      class="tab" class:active={activeTab === 'zig'}
+      onclick={() => activeTab = 'zig'}
+    >
+      <span class="tab-badge zig">ZIG</span>
+      Zig
+      <span class="exp-tag">exp</span>
+      {#if status}
+        <span class="tab-dot" class:ok={status.zig?.installed} class:missing={!status.zig?.installed}></span>
+      {/if}
+    </button>
+    <button
+      class="tab" class:active={activeTab === 'swift'}
+      onclick={() => activeTab = 'swift'}
+    >
+      <span class="tab-badge swift">SW</span>
+      Swift
+      {#if status}
+        <span class="tab-dot" class:ok={status.swiftc?.installed} class:missing={!status.swiftc?.installed}></span>
       {/if}
     </button>
   </div>
@@ -197,7 +220,7 @@
         {/if}
 
       <!-- ═══════════ C/C++ tab ═══════════ -->
-      {:else}
+      {:else if activeTab === 'native'}
         {#if status.clang.installed}
           <div class="status-banner good">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -235,7 +258,96 @@
         {:else}
           <div class="install-section">
             <p class="install-text">C/C++ support uses the system clang compiler from Xcode Command Line Tools. No additional setup needed.</p>
-            <p class="install-hint">Compiler flags for each project can be configured in the sidebar when a native project is active.</p>
+            <p class="install-hint">Build flags for each project can be configured in the sidebar.</p>
+          </div>
+        {/if}
+
+      <!-- ═══════════ Zig tab ═══════════ -->
+      {:else if activeTab === 'zig'}
+        {@const zigOk = status.zig?.installed ?? false}
+        {#if zigOk}
+          <div class="status-banner good">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+            <span>Zig toolchain ready</span>
+          </div>
+        {:else}
+          <div class="status-banner warn">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M10 2L18.66 17H1.34L10 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+              <path d="M10 8v4M10 14v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <span>Zig toolchain not found</span>
+          </div>
+        {/if}
+
+        <div class="detail-grid">
+          <div class="detail-row">
+            <span class="detail-icon" class:ok={zigOk} class:missing={!zigOk}>
+              {zigOk ? '●' : '○'}
+            </span>
+            <span class="detail-label">zig</span>
+            <span class="detail-value">{zigOk ? (status.zig?.version ?? 'installed') : 'not found'}</span>
+          </div>
+        </div>
+
+        {#if !zigOk}
+          <div class="install-section">
+            <p class="install-text">Install Zig using Homebrew:</p>
+            <code class="install-cmd">brew install zig</code>
+            <p class="install-hint">Or download from <button class="link-btn" onclick={() => shellOpen('https://ziglang.org/download/')}>ziglang.org</button>.</p>
+          </div>
+        {:else}
+          <div class="install-section">
+            <p class="install-text">Zig is installed and ready. Playgrounds run via <code>zig run</code>.</p>
+            <p class="install-hint">Build flags can be configured in the sidebar when a Zig project is active.</p>
+            <p class="install-hint exp-note">Zig support is experimental. Zig's stdlib API changes frequently between versions and templates may need updating.</p>
+          </div>
+        {/if}
+
+      <!-- ═══════════ Swift tab ═══════════ -->
+      {:else if activeTab === 'swift'}
+        {@const swiftOk = status.swiftc?.installed ?? false}
+        {#if swiftOk}
+          <div class="status-banner good">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+            <span>Swift toolchain ready</span>
+          </div>
+        {:else}
+          <div class="status-banner warn">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M10 2L18.66 17H1.34L10 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+              <path d="M10 8v4M10 14v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <span>Swift toolchain not found</span>
+          </div>
+        {/if}
+
+        <div class="detail-grid">
+          <div class="detail-row">
+            <span class="detail-icon" class:ok={swiftOk} class:missing={!swiftOk}>
+              {swiftOk ? '●' : '○'}
+            </span>
+            <span class="detail-label">swiftc</span>
+            <span class="detail-value">{swiftOk ? (status.swiftc?.version ?? 'installed') : 'not found'}</span>
+          </div>
+        </div>
+
+        {#if !swiftOk}
+          <div class="install-section">
+            <p class="install-text">Install Xcode Command Line Tools:</p>
+            <code class="install-cmd">xcode-select --install</code>
+            <p class="install-hint">This provides swiftc for Swift compilation. Same as the C/C++ tools.</p>
+          </div>
+        {:else}
+          <div class="install-section">
+            <p class="install-text">Swift compiler is installed via Xcode Command Line Tools.</p>
+            <p class="install-hint">Build flags can be configured in the sidebar when a Swift project is active.</p>
           </div>
         {/if}
       {/if}
@@ -244,7 +356,7 @@
 
   <div class="modal-footer">
     {#if !checking}
-      {#if !status?.all_good || (activeTab === 'native' && !status?.clang.installed)}
+      {#if !status?.all_good || (activeTab === 'native' && !status?.clang.installed) || (activeTab === 'zig' && !status?.zig?.installed) || (activeTab === 'swift' && !status?.swiftc?.installed)}
         <button class="btn btn-secondary" onclick={runCheck}>Re-check</button>
       {/if}
       <button class="btn btn-primary" onclick={finish}>
@@ -321,11 +433,24 @@
   }
   .tab-badge.rs { background: var(--rust-orange); }
   .tab-badge.native { background: #4a9; }
+  .tab-badge.zig { background: #f7a41d; font-size: 6px; }
+  .tab-badge.swift { background: #f05138; }
   .tab-dot {
     width: 6px; height: 6px; border-radius: 50%;
   }
   .tab-dot.ok { background: var(--green); }
   .tab-dot.missing { background: var(--text-tertiary); }
+  .exp-tag {
+    font-size: 7px; font-weight: 700; letter-spacing: 0.03em;
+    text-transform: uppercase;
+    background: rgba(247, 164, 29, 0.15);
+    color: #f7a41d;
+    border: 1px solid rgba(247, 164, 29, 0.3);
+    border-radius: 3px;
+    padding: 0.5px 3px;
+    line-height: 1.3;
+  }
+  .exp-note { color: #f7a41d !important; }
 
   .modal-body {
     flex: 1; overflow-y: auto;

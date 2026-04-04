@@ -1,19 +1,31 @@
+use std::collections::HashMap;
 use tauri::menu::{
     CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder,
 };
 use tauri::AppHandle;
 
+use crate::languages::Lang;
+
+/// Book source tags → submenu labels (same order as frontend BOOK_LABELS).
+const BOOK_LABELS: &[(&str, &str)] = &[
+    ("rust_book", "The Rust Book"),
+    ("knr_book", "The K&&R C Book"),
+    ("swift_book", "The Swift Book"),
+];
+
 /// Builds the full macOS menu bar.  Called once on startup and again via
 /// `rebuild_menu` whenever the project list or active project changes.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_menu<R: tauri::Runtime>(
     handle: &impl tauri::Manager<R>,
     projects: &[String],
     active: &str,
     _playground_count: usize,
     has_active_playground: bool,
-    project_type: &str,
+    _project_type: &str,
+    is_book_project: bool,
+    project_sources: &HashMap<String, String>,
 ) -> tauri::Result<tauri::menu::Menu<R>> {
-    let is_rust = project_type == "rust";
     let app_submenu = SubmenuBuilder::new(handle, "Rustic Playground")
         .item(
             &MenuItemBuilder::with_id("show_settings", "Settings…")
@@ -28,33 +40,70 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .item(&PredefinedMenuItem::quit(handle, None)?)
         .build()?;
 
-    // Build the dynamic per-project check items first so they outlive the builder.
-    let check_items: Vec<tauri::menu::CheckMenuItem<R>> = projects
-        .iter()
-        .map(|name| {
-            CheckMenuItemBuilder::with_id(format!("switch_project::{}", name), name.as_str())
-                .checked(name.as_str() == active)
-                .build(handle)
-        })
-        .collect::<tauri::Result<Vec<_>>>()?;
+    // Separate user projects from book projects
+    let mut user_projects: Vec<&String> = Vec::new();
+    let mut book_groups: HashMap<&str, Vec<&String>> = HashMap::new();
+    for name in projects {
+        if let Some(source) = project_sources.get(name) {
+            book_groups.entry(source.as_str()).or_default().push(name);
+        } else {
+            user_projects.push(name);
+        }
+    }
 
     let new_project_item = MenuItemBuilder::with_id("new_project", "New Project…")
         .accelerator("CmdOrCtrl+Shift+N")
         .build(handle)?;
-    let rename_project_item =
-        MenuItemBuilder::with_id("rename_project", "Rename Project…").build(handle)?;
+    let rename_project_item = MenuItemBuilder::with_id("rename_project", "Rename Project…")
+        .enabled(!is_book_project)
+        .build(handle)?;
     let delete_project_item = MenuItemBuilder::with_id("delete_project", "Delete Project…")
-        .enabled(projects.len() > 1)
+        .enabled(projects.len() > 1 && !is_book_project)
         .build(handle)?;
 
     let mut proj_builder = SubmenuBuilder::new(handle, "Project")
         .item(&new_project_item)
         .separator();
-    for item in &check_items {
-        proj_builder = proj_builder.item(item);
+
+    // User projects as flat check items
+    for name in &user_projects {
+        proj_builder = proj_builder.item(
+            &CheckMenuItemBuilder::with_id(format!("switch_project::{}", name), name.as_str())
+                .checked(name.as_str() == active)
+                .build(handle)?,
+        );
     }
+
+    // Book projects grouped into submenus
+    let has_books = BOOK_LABELS
+        .iter()
+        .any(|(key, _)| book_groups.contains_key(key));
+    if has_books {
+        proj_builder = proj_builder.separator();
+        for &(key, label) in BOOK_LABELS {
+            if let Some(book_projects) = book_groups.get(key) {
+                let mut sub = SubmenuBuilder::new(handle, label);
+                for name in book_projects {
+                    sub = sub.item(
+                        &CheckMenuItemBuilder::with_id(
+                            format!("switch_project::{}", name),
+                            name.as_str(),
+                        )
+                        .checked(name.as_str() == active)
+                        .build(handle)?,
+                    );
+                }
+                proj_builder = proj_builder.item(&sub.build()?);
+            }
+        }
+    }
+
+    let duplicate_project_item =
+        MenuItemBuilder::with_id("duplicate_project", "Duplicate Project").build(handle)?;
+
     let project_menu = proj_builder
         .separator()
+        .item(&duplicate_project_item)
         .item(&rename_project_item)
         .item(&delete_project_item)
         .separator()
@@ -75,6 +124,7 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .item(
             &MenuItemBuilder::with_id("save", "Save")
                 .accelerator("CmdOrCtrl+S")
+                .enabled(!is_book_project)
                 .build(handle)?,
         )
         .separator()
@@ -93,12 +143,12 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .separator()
         .item(
             &MenuItemBuilder::with_id("menu_rename_playground", "Rename Playground…")
-                .enabled(has_active_playground)
+                .enabled(has_active_playground && !is_book_project)
                 .build(handle)?,
         )
         .item(
             &MenuItemBuilder::with_id("menu_delete_playground", "Delete Playground…")
-                .enabled(has_active_playground)
+                .enabled(has_active_playground && !is_book_project)
                 .build(handle)?,
         )
         .build()?;
@@ -117,31 +167,60 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .build()?;
 
     let edit_menu = SubmenuBuilder::new(handle, "Edit")
-        .undo()
-        .redo()
+        .item(&PredefinedMenuItem::undo(handle, None)?)
+        .item(&PredefinedMenuItem::redo(handle, None)?)
         .separator()
-        .cut()
-        .copy()
-        .paste()
+        .item(
+            &MenuItemBuilder::with_id("edit_cut", "Cut")
+                .accelerator("CmdOrCtrl+X")
+                .enabled(!is_book_project)
+                .build(handle)?,
+        )
+        .item(&PredefinedMenuItem::copy(handle, None)?)
+        .item(
+            &MenuItemBuilder::with_id("edit_paste", "Paste")
+                .accelerator("CmdOrCtrl+V")
+                .enabled(!is_book_project)
+                .build(handle)?,
+        )
         .separator()
         .select_all()
         .build()?;
+
+    // ── Learn menu — book examples for each language ──
+    let mut learn_builder = SubmenuBuilder::new(handle, "Learn");
+    for lang_variant in Lang::all() {
+        if let Some(book) = lang_variant.book_info() {
+            let already_loaded = project_sources.values().any(|s| s == book.source_tag);
+            let book_submenu = SubmenuBuilder::new(handle, book.book_name)
+                .item(
+                    &MenuItemBuilder::with_id(book.menu_id, "Load Examples…")
+                        .enabled(!already_loaded)
+                        .build(handle)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id(book.remove_menu_id, "Remove Examples")
+                        .enabled(already_loaded)
+                        .build(handle)?,
+                )
+                .separator()
+                .item(
+                    &MenuItemBuilder::with_id(
+                        format!("open_book_{}", book.source_tag),
+                        "Read Online…",
+                    )
+                    .build(handle)?,
+                )
+                .build()?;
+            learn_builder = learn_builder.item(&book_submenu);
+        }
+    }
+    let learn_menu = learn_builder.build()?;
 
     let help_menu = SubmenuBuilder::new(handle, "Help")
         .item(
             &MenuItemBuilder::with_id("show_help", "Playground Help…")
                 .accelerator("CmdOrCtrl+Shift+/")
-                .build(handle)?,
-        )
-        .separator()
-        .item(
-            &MenuItemBuilder::with_id("seed_rust_book", "Load Rust Book Examples…")
-                .enabled(is_rust)
-                .build(handle)?,
-        )
-        .item(
-            &MenuItemBuilder::with_id("seed_knr_book", "Load K&R C Book Examples…")
-                .enabled(!is_rust)
                 .build(handle)?,
         )
         .separator()
@@ -154,10 +233,12 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .item(&playground_menu)
         .item(&run_menu)
         .item(&edit_menu)
+        .item(&learn_menu)
         .item(&help_menu)
         .build()
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn rebuild_menu(
     projects: Vec<String>,
@@ -165,6 +246,8 @@ pub fn rebuild_menu(
     playground_count: usize,
     has_active_playground: bool,
     project_type: String,
+    is_book_project: bool,
+    project_sources: HashMap<String, String>,
     app: AppHandle,
 ) -> Result<(), String> {
     let menu = build_menu(
@@ -174,6 +257,8 @@ pub fn rebuild_menu(
         playground_count,
         has_active_playground,
         &project_type,
+        is_book_project,
+        &project_sources,
     )
     .map_err(|e| e.to_string())?;
     app.set_menu(menu).map_err(|e| e.to_string())?;

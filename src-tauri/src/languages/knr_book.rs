@@ -1,8 +1,8 @@
-use tauri::AppHandle;
+use std::path::Path;
 
-#[tauri::command]
-pub fn seed_knr_book(app: AppHandle) -> Result<Vec<String>, String> {
-    let pdir = crate::projects_dir(&app);
+/// Seed K&R C Book chapter projects into the given projects directory.
+/// Returns the list of newly created project names.
+pub fn seed_book(pdir: &Path) -> Result<Vec<String>, String> {
     let mut created: Vec<String> = Vec::new();
 
     const ATTRIBUTION_MD: &str = "\
@@ -1092,11 +1092,12 @@ int main() {
             continue;
         } // idempotent — skip if already there
 
-        std::fs::create_dir_all(&project_path)
-            .map_err(|e| format!("seed {chapter}: {e}"))?;
+        std::fs::create_dir_all(&project_path).map_err(|e| format!("seed {chapter}: {e}"))?;
 
-        // Write native manifest
-        let manifest = crate::rustic_manifest::new_native_manifest();
+        // Write native manifest with source tag
+        let mut manifest = crate::rustic_manifest::new_native_manifest();
+        manifest.project.source = "knr_book".to_string();
+        manifest.project.readonly = true;
         crate::rustic_manifest::write_manifest(&project_path, &manifest)?;
 
         // Content directory + attribution

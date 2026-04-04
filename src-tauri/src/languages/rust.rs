@@ -9,8 +9,7 @@ use super::RunConfig;
 /// Create a new Rust project: Cargo.toml + src/bin/hello.rs + content/ + rustic.toml.
 pub fn scaffold_project(project_path: &Path, project_name: &str) -> Result<(), String> {
     let bin = project_path.join("src").join("bin");
-    std::fs::create_dir_all(&bin)
-        .map_err(|e| format!("Failed to create project: {}", e))?;
+    std::fs::create_dir_all(&bin).map_err(|e| format!("Failed to create project: {}", e))?;
     std::fs::write(
         project_path.join("Cargo.toml"),
         crate::project_cargo_toml(project_name),
