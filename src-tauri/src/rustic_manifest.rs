@@ -52,7 +52,7 @@ impl Default for PathsInfo {
 }
 
 /// Compiler/build flags per language.
-/// Native: cflags/cxxflags. Zig: zigflags. Swift: swiftflags (Phase 4).
+/// Clang: cflags/cxxflags. Zig: zigflags. Swift: swiftflags (Phase 4).
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BuildInfo {
     #[serde(default = "default_cflags")]
@@ -103,7 +103,7 @@ pub struct ToolchainInfo {
 const MANIFEST_FILENAME: &str = "rustic.toml";
 const APP_VERSION: &str = "0.2";
 
-// ── Supported native extensions ──────────────────────────────────────────────
+// ── Supported clang extensions ───────────────────────────────────────────────
 
 #[allow(dead_code)] // used by tests and future language expansion
 pub const NATIVE_EXTENSIONS: &[&str] = &["c", "cpp"];
@@ -152,8 +152,8 @@ pub fn detect_project_type(project_dir: &Path) -> String {
             }
         }
     }
-    // Default: native
-    "native".to_string()
+    // Default: clang
+    "clang".to_string()
 }
 
 // ── Manifest generation ──────────────────────────────────────────────────────
@@ -182,11 +182,11 @@ pub fn new_rust_manifest() -> RusticManifest {
     }
 }
 
-/// Create a manifest for a new native project.
-pub fn new_native_manifest() -> RusticManifest {
+/// Create a manifest for a new clang project.
+pub fn new_clang_manifest() -> RusticManifest {
     RusticManifest {
         project: ProjectInfo {
-            project_type: "native".to_string(),
+            project_type: "clang".to_string(),
             created_with: APP_VERSION.to_string(),
             source: String::new(),
             readonly: false,
@@ -196,7 +196,7 @@ pub fn new_native_manifest() -> RusticManifest {
             content: "content".to_string(),
         },
         build: BuildInfo::default(),
-        toolchain: detect_native_toolchain(),
+        toolchain: detect_clang_toolchain(),
         locked: vec![],
     }
 }
@@ -275,7 +275,7 @@ pub fn generate_legacy_manifest(project_dir: &Path) -> RusticManifest {
     } else {
         RusticManifest {
             project: ProjectInfo {
-                project_type: "native".to_string(),
+                project_type: "clang".to_string(),
                 created_with: String::new(),
                 source: String::new(),
                 readonly: false,
@@ -285,7 +285,7 @@ pub fn generate_legacy_manifest(project_dir: &Path) -> RusticManifest {
                 content: "content".to_string(),
             },
             build: BuildInfo::default(),
-            toolchain: detect_native_toolchain(),
+            toolchain: detect_clang_toolchain(),
             locked: vec![],
         }
     }
@@ -325,7 +325,7 @@ fn detect_rust_toolchain() -> ToolchainInfo {
     }
 }
 
-fn detect_native_toolchain() -> ToolchainInfo {
+fn detect_clang_toolchain() -> ToolchainInfo {
     ToolchainInfo {
         rustc: None,
         cargo: None,
@@ -557,9 +557,9 @@ mod tests {
     }
 
     #[test]
-    fn new_native_manifest_has_correct_defaults() {
-        let m = new_native_manifest();
-        assert_eq!(m.project.project_type, "native");
+    fn new_clang_manifest_has_correct_defaults() {
+        let m = new_clang_manifest();
+        assert_eq!(m.project.project_type, "clang");
         assert_eq!(m.project.created_with, "0.2");
         assert_eq!(m.paths.src, ".");
         assert_eq!(m.paths.content, "content");
@@ -579,10 +579,10 @@ mod tests {
     fn manifest_deserialize_minimal() {
         let toml_str = r#"
 [project]
-type = "native"
+type = "clang"
 "#;
         let m: RusticManifest = toml::from_str(toml_str).unwrap();
-        assert_eq!(m.project.project_type, "native");
+        assert_eq!(m.project.project_type, "clang");
         assert_eq!(m.project.created_with, "");
         // Defaults kick in for paths
         assert_eq!(m.paths.src, "src/bin");
@@ -600,17 +600,17 @@ type = "native"
     fn detect_type_without_cargo_toml() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("hello.c"), "int main() {}").unwrap();
-        assert_eq!(detect_project_type(dir.path()), "native");
+        assert_eq!(detect_project_type(dir.path()), "clang");
     }
 
     #[test]
     fn detect_type_prefers_manifest() {
         let dir = tempfile::tempdir().unwrap();
-        // Has both Cargo.toml and rustic.toml saying "native"
+        // Has both Cargo.toml and rustic.toml saying "clang"
         std::fs::write(dir.path().join("Cargo.toml"), "[package]").unwrap();
         let m = RusticManifest {
             project: ProjectInfo {
-                project_type: "native".to_string(),
+                project_type: "clang".to_string(),
                 created_with: "0.2".to_string(),
                 source: String::new(),
                 readonly: false,
@@ -621,16 +621,16 @@ type = "native"
             locked: vec![],
         };
         write_manifest(dir.path(), &m).unwrap();
-        assert_eq!(detect_project_type(dir.path()), "native");
+        assert_eq!(detect_project_type(dir.path()), "clang");
     }
 
     #[test]
     fn write_and_read_manifest() {
         let dir = tempfile::tempdir().unwrap();
-        let m = new_native_manifest();
+        let m = new_clang_manifest();
         write_manifest(dir.path(), &m).unwrap();
         let m2 = read_manifest(dir.path()).unwrap();
-        assert_eq!(m2.project.project_type, "native");
+        assert_eq!(m2.project.project_type, "clang");
         assert_eq!(m2.paths.src, ".");
     }
 
@@ -645,17 +645,17 @@ type = "native"
     }
 
     #[test]
-    fn ensure_manifest_creates_for_legacy_native() {
+    fn ensure_manifest_creates_for_legacy_clang() {
         let dir = tempfile::tempdir().unwrap();
         let m = ensure_manifest(dir.path()).unwrap();
-        assert_eq!(m.project.project_type, "native");
+        assert_eq!(m.project.project_type, "clang");
         assert!(dir.path().join("rustic.toml").exists());
     }
 
     #[test]
     fn ensure_manifest_preserves_existing() {
         let dir = tempfile::tempdir().unwrap();
-        let m = new_native_manifest();
+        let m = new_clang_manifest();
         write_manifest(dir.path(), &m).unwrap();
         let m2 = ensure_manifest(dir.path()).unwrap();
         assert_eq!(m2.project.created_with, "0.2");

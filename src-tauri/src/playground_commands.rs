@@ -229,7 +229,7 @@ pub fn duplicate_playground(name: String, app: AppHandle) -> Result<String, Stri
     // Build new name: Rust uses stem only, file-based langs include extension
     let new_name = match lang {
         Lang::Rust => format!("{}_copy", stem),
-        Lang::Native | Lang::Zig | Lang::Swift => format!("{}_copy.{}", stem, ext),
+        Lang::Clang | Lang::Zig | Lang::Swift => format!("{}_copy.{}", stem, ext),
     };
     let dst_path = lang.playground_path(&new_name, &dir)?;
     std::fs::copy(&src_path, &dst_path).map_err(|e| e.to_string())?;
@@ -310,6 +310,15 @@ async fn run_direct(
         .process_group(0)
         .spawn()
         .map_err(|e| format!("Failed to start {}: {}", program, e))?;
+
+    // For non-cargo direct runners (e.g. zig run), send a synthetic "Running"
+    // marker so the frontend transitions from compiling → running and shows
+    // the stdin input field.  Cargo already emits this line itself.
+    if !program.contains("cargo") {
+        on_output
+            .send(serde_json::json!({ "stream": "stderr", "line": format!("     Running `{}`", program) }))
+            .ok();
+    }
 
     stream_child_output(&mut child, &on_output, &app).await
 }
@@ -400,8 +409,6 @@ async fn stream_child_output(
     on_output: &Channel<serde_json::Value>,
     app: &AppHandle,
 ) -> Result<(), String> {
-    use tokio::io::{AsyncBufReadExt, BufReader};
-
     if let Some(pid) = child.id() {
         *app.state::<RunningProcess>().0.lock().unwrap() = Some(pid);
     }
@@ -412,22 +419,12 @@ async fn stream_child_output(
 
     let ch_out = on_output.clone();
     let stdout_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            ch_out
-                .send(serde_json::json!({ "stream": "stdout", "line": line }))
-                .ok();
-        }
+        stream_pipe(stdout, "stdout", ch_out).await;
     });
 
     let ch_err = on_output.clone();
     let stderr_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            ch_err
-                .send(serde_json::json!({ "stream": "stderr", "line": line }))
-                .ok();
-        }
+        stream_pipe(stderr, "stderr", ch_err).await;
     });
 
     let status = child.wait().await.map_err(|e| e.to_string())?;
@@ -444,6 +441,56 @@ async fn stream_child_output(
         .ok();
 
     Ok(())
+}
+
+/// Read bytes from a pipe, split on newlines, and send each chunk immediately.
+/// Unlike BufReader::lines(), this also flushes partial lines (prompts without
+/// a trailing newline) so that `print!("name? ")` appears before stdin blocks.
+async fn stream_pipe<R: tokio::io::AsyncRead + Unpin>(
+    mut reader: R,
+    stream: &str,
+    channel: Channel<serde_json::Value>,
+) {
+    use tokio::io::AsyncReadExt;
+    let mut buf = [0u8; 4096];
+    let mut leftover = String::new();
+
+    loop {
+        match reader.read(&mut buf).await {
+            Ok(0) => break, // EOF
+            Ok(n) => {
+                // Append new data to any leftover from the previous read
+                leftover.push_str(&String::from_utf8_lossy(&buf[..n]));
+
+                // Emit all complete lines
+                while let Some(pos) = leftover.find('\n') {
+                    let line = leftover[..pos].to_string();
+                    // Strip \r\n → \n
+                    let line = line.strip_suffix('\r').unwrap_or(&line);
+                    channel
+                        .send(serde_json::json!({ "stream": stream, "line": line }))
+                        .ok();
+                    leftover = leftover[pos + 1..].to_string();
+                }
+
+                // Flush any remaining partial line (e.g. a prompt like "name? ")
+                if !leftover.is_empty() {
+                    channel
+                        .send(serde_json::json!({ "stream": stream, "line": &leftover }))
+                        .ok();
+                    leftover.clear();
+                }
+            }
+            Err(_) => break,
+        }
+    }
+
+    // Flush any final leftover (shouldn't happen after the loop, but just in case)
+    if !leftover.is_empty() {
+        channel
+            .send(serde_json::json!({ "stream": stream, "line": &leftover }))
+            .ok();
+    }
 }
 
 /// Kill the currently running cargo process (and its spawned binary) by sending

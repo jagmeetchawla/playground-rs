@@ -31,9 +31,9 @@
       {:else if tabType === 'cargo'}
         <span class="file-badge file-badge--cargo">CT</span>
       {:else if tabType === 'c'}
-        <span class="file-badge file-badge--native">C</span>
+        <span class="file-badge file-badge--clang">C</span>
       {:else if tabType === 'cpp'}
-        <span class="file-badge file-badge--native">C++</span>
+        <span class="file-badge file-badge--clang">C++</span>
       {:else if tabType === 'zig'}
         <span class="file-badge file-badge--zig">ZIG</span>
       {:else if tabType === 'swift'}
@@ -136,7 +136,7 @@
     background: #5a4a3a;
     letter-spacing: 0;
   }
-  .file-badge--native {
+  .file-badge--clang {
     background: #4a9;
     letter-spacing: 0;
   }

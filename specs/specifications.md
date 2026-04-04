@@ -14,12 +14,12 @@ What
 
   Refactor the backend and frontend into per-language modules so each language
   is self-contained and higher-level code dispatches via enum match. Then add
-  Zig and Swift as new project types alongside Rust and Native (C/C++).
+  Zig and Swift as new project types alongside Rust and Clang (C/C++).
 
   Rust remains the first-class citizen — no compromise on the Rust experience.
 
 Why
-  v0.2 added Native C/C++ with ~61 hardcoded if/else branch points. Adding
+  v0.2 added Clang C/C++ with ~61 hardcoded if/else branch points. Adding
   more languages would be unmaintainable. A proper module architecture makes
   each language isolated (can't break another) and adding a new language is
   mechanical — implement the module, add an enum arm, compiler tells you
@@ -32,7 +32,7 @@ Design Principle
   Language modules. Each language is a Rust module that implements all
   language-specific behavior. A central Lang enum dispatches to the right
   module. Shared helpers (flat-directory listing, shell export) serve
-  file-based languages (native, zig, swift). Rust is the outlier with its
+  file-based languages (clang, zig, swift). Rust is the outlier with its
   Cargo workspace structure.
 
 ---
@@ -43,7 +43,7 @@ Lang enum (`src-tauri/src/languages/mod.rs`)
   Enum with exhaustive match dispatch — compiler forces every arm to be
   handled when a new language is added.
 
-  enum Lang { Rust, Native, Zig, Swift }
+  enum Lang { Rust, Clang, Zig, Swift }
 
   Each variant dispatches to its module's functions:
   - project_type() → &str
@@ -69,7 +69,7 @@ RunConfig enum
   output streaming (stream_child_output).
 
 Shared FileLanguage helpers
-  Native, Zig, and Swift share flat-directory pattern. Helpers avoid
+  Clang, Zig, and Swift share flat-directory pattern. Helpers avoid
   code duplication:
   - file_list_playgrounds(dir, extensions)
   - file_validate_name(name, extensions)
@@ -82,7 +82,7 @@ Module structure
   src-tauri/src/languages/
   ├── mod.rs       — Lang enum, RunConfig, ToolInfo, shared helpers
   ├── rust.rs      — Cargo workspace, cargo run, live check, clap export
-  ├── native.rs    — C/C++ with clang, compile+run, Makefile export
+  ├── clang.rs     — C/C++ with clang, compile+run, Makefile export
   ├── zig.rs       — zig run (direct), zig flags
   └── swift.rs     — swiftc compile+run, swift flags
 
@@ -94,7 +94,7 @@ Language registry (`ui/src/lib/languages.ts`)
   TypeScript config objects per language. Components read capabilities
   instead of checking project type strings.
 
-  type ProjectType = 'rust' | 'native' | 'zig' | 'swift'
+  type ProjectType = 'rust' | 'clang' | 'zig' | 'swift'
 
   interface LanguageConfig {
     type, label, badge, badgeClass, color, extensions,
@@ -119,8 +119,8 @@ Rust (unchanged from v0.2)
   - Manifest: [build] cflags/cxxflags empty (unused)
   - Toolchain: cargo, rustc via ~/.cargo/bin/
 
-Native C/C++ (unchanged from v0.2)
-  - Project type: "native"
+Clang C/C++ (unchanged from v0.2)
+  - Project type: "clang"
   - Extensions: [".c", ".cpp"]
   - Source dir: . (project root)
   - Run: clang/clang++ compile → run binary
@@ -167,7 +167,7 @@ Manifest Evolution (rustic.toml)
   Empty arrays/None values are harmless.
 
   detect_project_type heuristic fallback chain:
-    rustic.toml → Cargo.toml → .zig files → .swift files → "native"
+    rustic.toml → Cargo.toml → .zig files → .swift files → "clang"
 
 ---
 
@@ -178,8 +178,8 @@ Phase 1 — Extract Rust module (no behavior change)
   Extract Rust logic into languages/rust.rs.
   Checkpoint: all tests pass, app works identically.
 
-Phase 2 — Extract Native module (no behavior change)
-  Extract C/C++ logic into languages/native.rs.
+Phase 2 — Extract Clang module (no behavior change)
+  Extract C/C++ logic into languages/clang.rs.
   Replace all if/else in dispatchers with Lang::from_str() match.
   Extract generic run_direct / run_compile_then_execute.
   Checkpoint: all tests pass, app works identically.
@@ -204,7 +204,7 @@ Phase 5 — Frontend registry + Zig/Swift UI
 
 Scope Boundaries — What v0.3 Does NOT Include
 
-  - No live error checking for Zig/Swift/Native (future)
+  - No live error checking for Zig/Swift/Clang (future)
   - No LSP / autocomplete for any non-Rust language
   - No package managers (Swift PM, Zig build.zig.zon)
   - No multi-file compilation

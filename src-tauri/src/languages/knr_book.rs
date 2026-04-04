@@ -1094,8 +1094,8 @@ int main() {
 
         std::fs::create_dir_all(&project_path).map_err(|e| format!("seed {chapter}: {e}"))?;
 
-        // Write native manifest with source tag
-        let mut manifest = crate::rustic_manifest::new_native_manifest();
+        // Write clang manifest with source tag
+        let mut manifest = crate::rustic_manifest::new_clang_manifest();
         manifest.project.source = "knr_book".to_string();
         manifest.project.readonly = true;
         crate::rustic_manifest::write_manifest(&project_path, &manifest)?;

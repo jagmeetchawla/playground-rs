@@ -117,6 +117,31 @@ print("User: \\(display)")
 `,
   },
   {
+    id: 'swift_input',
+    name: 'CLI Input',
+    description: 'Read from stdin, parse input',
+    lang: 'swift' as any,
+    code: `import Foundation
+
+print("What is your name? ", terminator: "")
+fflush(stdout)
+
+guard let name = readLine(), !name.isEmpty else {
+    print("No input received.")
+    exit(1)
+}
+
+print("How old are you? ", terminator: "")
+fflush(stdout)
+
+if let ageStr = readLine(), let age = Int(ageStr) {
+    print("Hello \\(name), you will be \\(age + 1) next year!")
+} else {
+    print("That's not a valid number, \\(name)!")
+}
+`,
+  },
+  {
     id: 'swift_collections',
     name: 'Collections',
     description: 'Arrays, dictionaries, and sets',

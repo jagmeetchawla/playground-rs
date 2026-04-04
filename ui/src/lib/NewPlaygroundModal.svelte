@@ -20,25 +20,25 @@
   let lang = $derived(getLang(projectType))
 
   let selectedId = $state('blank')
-  let nativeSelectedId = $state('c_blank')
+  let clangSelectedId = $state('c_blank')
   let zigSelectedId = $state('zig_blank')
   let swiftSelectedId = $state('swift_blank')
   let name = $state('')
   let nameError = $state('')
   let nameInput = $state<HTMLInputElement | null>(null)
-  let nativeLang: 'c' | 'cpp' = $state('c')
+  let clangLang: 'c' | 'cpp' = $state('c')
 
-  let nativeTemplates = $derived(nativeLang === 'cpp' ? CPP_TEMPLATES : C_TEMPLATES)
+  let clangTemplates = $derived(clangLang === 'cpp' ? CPP_TEMPLATES : C_TEMPLATES)
 
   let activeTemplates = $derived(
-    projectType === 'native' ? nativeTemplates
+    projectType === 'clang' ? clangTemplates
     : projectType === 'zig' ? ZIG_TEMPLATES
     : projectType === 'swift' ? SWIFT_TEMPLATES
     : TEMPLATES
   )
 
   let activeSelectedId = $derived(
-    projectType === 'native' ? nativeSelectedId
+    projectType === 'clang' ? clangSelectedId
     : projectType === 'zig' ? zigSelectedId
     : projectType === 'swift' ? swiftSelectedId
     : selectedId
@@ -49,15 +49,15 @@
   )
 
   function setSelectedId(id: string) {
-    if (projectType === 'native') nativeSelectedId = id
+    if (projectType === 'clang') clangSelectedId = id
     else if (projectType === 'zig') zigSelectedId = id
     else if (projectType === 'swift') swiftSelectedId = id
     else selectedId = id
   }
 
-  // Reset native template selection when switching language
+  // Reset clang template selection when switching language
   $effect(() => {
-    nativeSelectedId = nativeLang === 'cpp' ? 'cpp_blank' : 'c_blank'
+    clangSelectedId = clangLang === 'cpp' ? 'cpp_blank' : 'c_blank'
   })
 
   $effect(() => {
@@ -72,7 +72,7 @@
 
   /** Get the file extension to append for file-based languages. */
   function getExtension(): string {
-    if (projectType === 'native') return nativeLang === 'cpp' ? '.cpp' : '.c'
+    if (projectType === 'clang') return clangLang === 'cpp' ? '.cpp' : '.c'
     if (projectType === 'zig') return '.zig'
     if (projectType === 'swift') return '.swift'
     return ''
@@ -108,7 +108,7 @@
 <div class="modal" role="dialog" aria-modal="true" aria-label="New Playground">
   <div class="modal-header">
     <div class="header-left">
-      <span class="lang-badge" class:badge-rust={projectType === 'rust'} class:badge-native={projectType === 'native'} class:badge-zig={projectType === 'zig'} class:badge-swift={projectType === 'swift'}>{lang.badge}</span>
+      <span class="lang-badge" class:badge-rust={projectType === 'rust'} class:badge-clang={projectType === 'clang'} class:badge-zig={projectType === 'zig'} class:badge-swift={projectType === 'swift'}>{lang.badge}</span>
       <span class="modal-title">New Playground</span>
     </div>
     <button class="close-btn" onclick={onclose} aria-label="Close">
@@ -123,7 +123,7 @@
       <!-- Sub-language tabs (e.g. C / C++) -->
       <div class="lang-tabs">
         {#each lang.subLanguages as sub (sub.id)}
-          <button class="lang-tab" class:active={nativeLang === sub.id} onclick={() => nativeLang = sub.id as any}>
+          <button class="lang-tab" class:active={clangLang === sub.id} onclick={() => clangLang = sub.id as any}>
             <span class="lang-tab-badge">{sub.label}</span> {sub.label}
           </button>
         {/each}
@@ -222,10 +222,10 @@
     color: #fff; border-radius: 3px; padding: 2px 4px; line-height: 1.3;
   }
   .lang-badge.badge-rust { background: var(--rust-orange); }
-  .lang-badge.badge-native { background: #4a9; font-size: 11px; font-weight: 400; padding: 0 4px; }
+  .lang-badge.badge-clang { background: #4a9; font-size: 7px; }
   .lang-badge.badge-zig { background: #f7a41d; font-size: 7px; }
   .lang-badge.badge-swift { background: #f05138; font-size: 7.5px; }
-  .modal-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .modal-title { font-size: 14px; font-weight: 600; color: var(--text); }
   .close-btn {
     width: 24px; height: 24px;
     display: flex; align-items: center; justify-content: center;
@@ -271,7 +271,7 @@
   }
   .name-error { font-size: 11px; color: var(--red); margin-top: 4px; display: block; }
 
-  /* Language tabs for native projects */
+  /* Language tabs for clang projects */
   .lang-tabs {
     display: flex; gap: 0;
     border: 1px solid var(--border); border-radius: 6px;

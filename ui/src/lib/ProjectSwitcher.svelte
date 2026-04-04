@@ -10,6 +10,7 @@
     projectTypes = {},
     projectSources = {},
     projectReadonly = {},
+    enabledLanguages = ['rust'],
     onswitch,
     onnew,
     onrename,
@@ -24,6 +25,7 @@
     projectTypes?: Record<string, ProjectType>
     projectSources?: Record<string, string>
     projectReadonly?: Record<string, boolean>
+    enabledLanguages?: string[]
     onswitch: (name: string) => Promise<void>
     onnew:    (name: string, ptype: ProjectType) => Promise<void>
     onrename: (oldName: string, newName: string) => Promise<void>
@@ -56,11 +58,12 @@
   // Collapsible book sections — collapsed by default
   let expandedSections: Record<string, boolean> = $state({})
 
-  // All books in stable display order (always shown, loaded or not)
-  const ALL_BOOKS: { key: string; label: string; langType: ProjectType }[] =
+  // All books in stable display order, filtered by enabled languages
+  let ALL_BOOKS = $derived(
     allLanguages()
-      .filter(l => l.book)
+      .filter(l => enabledLanguages.includes(l.type) && l.book)
       .map(l => ({ key: l.book!.sourceTag, label: l.book!.commandLabel, langType: l.type }))
+  )
 
   // Group projects: user projects + book sections
   const grouped = $derived.by(() => {
@@ -178,7 +181,7 @@
 
 <div class="project-switcher">
   <button class="pill" onclick={toggle} class:open>
-    <span class="pill-badge" class:native={projectType === 'native'} class:zig={projectType === 'zig'} class:swift={projectType === 'swift'}>{activeLang.badge}</span>
+    <span class="pill-badge" class:clang={projectType === 'clang'} class:zig={projectType === 'zig'} class:swift={projectType === 'swift'}>{activeLang.badge}</span>
     <span class="pill-name">{active}</span>
     {#if activeLang.experimental}<span class="exp-tag">exp</span>{/if}
     <svg class="pill-caret" width="10" height="6" viewBox="0 0 10 6">
@@ -217,7 +220,7 @@
                 onclick={() => selectProject(name)}
                 disabled={busy}
               >
-                <span class="item-badge" class:native={itemPtype === 'native'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
+                <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
                 <span class="project-name">{name}</span>
                 {#if itemLang.experimental}<span class="exp-tag">exp</span>{/if}
                 {#if name === active}
@@ -245,71 +248,61 @@
           >Delete Project…</button>
         {/if}
 
-        <!-- Books section — always visible, at the end -->
-        <div class="divider"></div>
-        <div class="books-header">Books</div>
-        <ul class="project-list books-list">
-          {#each grouped.bookSections as section (section.key)}
-            {#if section.loaded}
-              <li class="submenu-parent">
-                <button class="project-item submenu-trigger">
-                  <span class="section-book-icon">📖</span>
-                  <span class="project-name">{section.label}</span>
-                  <span class="section-count">{section.projects.length}</span>
-                  <svg class="submenu-arrow" width="6" height="10" viewBox="0 0 6 10">
-                    <path d="M1 1l4 4-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
-                  </svg>
-                </button>
-                <div class="submenu">
-                  <ul class="project-list">
-                    {#each section.projects as name (name)}
-                      {@const itemPtype = projectTypes[name] ?? 'rust'}
-                      {@const itemLang = getLang(itemPtype)}
-                      <li>
-                        <button
-                          class="project-item"
-                          class:active-project={name === active}
-                          onclick={() => selectProject(name)}
-                          disabled={busy}
-                        >
-                          <span class="item-badge" class:native={itemPtype === 'native'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
-                          <span class="project-name">{name}</span>
-                          {#if name === active}
-                            <svg class="active-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
-                              <path d="M1 4l3 3 5-6" stroke="currentColor" stroke-width="1.6"
-                                    stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                          {/if}
-                        </button>
-                      </li>
-                    {/each}
-                  </ul>
-                </div>
-              </li>
-            {:else}
-              <li>
-                <button
-                  class="project-item load-book-item"
-                  onclick={() => { close(); onloadbook(section.langType) }}
-                  disabled={busy}
-                >
-                  <span class="section-book-icon">📖</span>
-                  <span class="project-name">{section.label}</span>
-                  <span class="load-tag">Load</span>
-                </button>
-              </li>
-            {/if}
-          {/each}
-        </ul>
+        <!-- Books section — only shown if at least one book is loaded -->
+        {#if grouped.bookSections.some(s => s.loaded)}
+          <div class="divider"></div>
+          <div class="books-header">Books</div>
+          <ul class="project-list books-list">
+            {#each grouped.bookSections as section (section.key)}
+              {#if section.loaded}
+                <li class="submenu-parent">
+                  <button class="project-item submenu-trigger">
+                    <span class="section-book-icon">📖</span>
+                    <span class="project-name">{section.label}</span>
+                    <span class="section-count">{section.projects.length}</span>
+                    <svg class="submenu-arrow" width="6" height="10" viewBox="0 0 6 10">
+                      <path d="M1 1l4 4-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+                    </svg>
+                  </button>
+                  <div class="submenu">
+                    <ul class="project-list">
+                      {#each section.projects as name (name)}
+                        {@const itemPtype = projectTypes[name] ?? 'rust'}
+                        {@const itemLang = getLang(itemPtype)}
+                        <li>
+                          <button
+                            class="project-item"
+                            class:active-project={name === active}
+                            onclick={() => selectProject(name)}
+                            disabled={busy}
+                          >
+                            <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
+                            <span class="project-name">{name}</span>
+                            {#if name === active}
+                              <svg class="active-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                                <path d="M1 4l3 3 5-6" stroke="currentColor" stroke-width="1.6"
+                                      stroke-linecap="round" stroke-linejoin="round"/>
+                              </svg>
+                            {/if}
+                          </button>
+                        </li>
+                      {/each}
+                    </ul>
+                  </div>
+                </li>
+              {/if}
+            {/each}
+          </ul>
+        {/if}
 
       {:else if mode === 'new'}
         <div class="inline-input-section">
           <p class="inline-label">
-            <span class="form-badge" class:native={newProjectType === 'native'} class:zig={newProjectType === 'zig'} class:swift={newProjectType === 'swift'}>{newLang.badge}</span>
+            <span class="form-badge" class:clang={newProjectType === 'clang'} class:zig={newProjectType === 'zig'} class:swift={newProjectType === 'swift'}>{newLang.badge}</span>
             New Project
           </p>
           <div class="type-toggle">
-            {#each allLanguages() as l (l.type)}
+            {#each allLanguages().filter(l => enabledLanguages.includes(l.type)) as l (l.type)}
               <button
                 class="type-btn" class:active={newProjectType === l.type}
                 onclick={() => newProjectType = l.type}
@@ -318,7 +311,7 @@
           </div>
           <span class="type-hint">
             {newProjectType === 'rust' ? 'Cargo workspace with deps and live checking'
-              : newProjectType === 'native' ? 'C/C++ with clang — compiler flags in rustic.toml'
+              : newProjectType === 'clang' ? 'C/C++ with clang — compiler flags in rustic.toml'
               : newProjectType === 'zig' ? 'Zig playground (experimental) — zig run with flags in rustic.toml'
               : 'Swift playground — swiftc compile & run'}
           </span>
@@ -346,7 +339,7 @@
       {:else if mode === 'rename'}
         <div class="inline-input-section">
           <p class="inline-label">
-            <span class="form-badge" class:native={projectType === 'native'} class:zig={projectType === 'zig'} class:swift={projectType === 'swift'}>{activeLang.badge}</span>
+            <span class="form-badge" class:clang={projectType === 'clang'} class:zig={projectType === 'zig'} class:swift={projectType === 'swift'}>{activeLang.badge}</span>
             Rename "{active}"
           </p>
           <input
@@ -406,7 +399,7 @@
     border-radius: var(--radius-sm);
     font-size: 13px; font-weight: 600; color: var(--text);
     transition: background 0.1s, border-color 0.1s;
-    max-width: 180px;
+    min-width: 240px; max-width: 320px;
   }
   .pill:hover, .pill.open { background: var(--bg-hover); border-color: var(--border-strong); }
   .pill-badge {
@@ -415,9 +408,8 @@
     border-radius: 3px; padding: 2px 4px;
     line-height: 1.3; flex-shrink: 0;
   }
-  .pill-badge.native {
-    background: #3478f6; font-size: 11px; font-weight: 400;
-    padding: 0 3px; line-height: 1.2;
+  .pill-badge.clang {
+    background: #4a9; font-size: 7px;
   }
   .pill-badge.zig {
     background: #f7a41d; font-size: 6.5px;
@@ -425,7 +417,7 @@
   .pill-badge.swift {
     background: #f05138; font-size: 7px;
   }
-  .pill-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+  .pill-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .exp-tag {
     font-size: 7px; font-weight: 700; letter-spacing: 0.03em;
     text-transform: uppercase;
@@ -486,9 +478,8 @@
     line-height: 1.3; flex-shrink: 0;
     min-width: 16px; text-align: center;
   }
-  .item-badge.native {
-    background: #3478f6; font-size: 10px; font-weight: 400;
-    padding: 1px 2px; line-height: 1.2;
+  .item-badge.clang {
+    background: #4a9; font-size: 6px;
   }
   .item-badge.zig {
     background: #f7a41d; font-size: 6px;
@@ -497,7 +488,7 @@
     background: #f05138; font-size: 6.5px;
   }
   .active-project .item-badge { background: var(--rust-orange); }
-  .active-project .item-badge.native { background: #3478f6; }
+  .active-project .item-badge.clang { background: #4a9; }
   .active-project .item-badge.zig { background: #f7a41d; }
   .active-project .item-badge.swift { background: #f05138; }
 
@@ -563,7 +554,7 @@
   /* Active checkmark */
   .active-check { flex-shrink: 0; color: var(--accent); }
 
-  /* RS / Native badge in form label rows */
+  /* RS / Clang badge in form label rows */
   .form-badge {
     display: inline-block;
     font-size: 7px; font-weight: 800; letter-spacing: 0.04em;
@@ -573,9 +564,8 @@
     vertical-align: middle;
     margin-right: 2px;
   }
-  .form-badge.native {
-    background: #3478f6; font-size: 10px; font-weight: 400;
-    padding: 1px 3px; line-height: 1.2;
+  .form-badge.clang {
+    background: #4a9; font-size: 6px;
   }
   .form-badge.zig {
     background: #f7a41d; font-size: 6px;

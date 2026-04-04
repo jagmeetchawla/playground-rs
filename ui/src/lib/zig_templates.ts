@@ -119,6 +119,43 @@ pub fn main() void {
 `,
   },
   {
+    id: 'zig_input',
+    name: 'CLI Input',
+    description: 'Read from stdin, parse input',
+    lang: 'zig' as any,
+    code: `const std = @import("std");
+
+fn readLine(stdin: std.fs.File, buf: []u8) !?[]u8 {
+    const n = try stdin.read(buf);
+    if (n == 0) return null;
+    var line = buf[0..n];
+    if (line.len > 0 and line[line.len - 1] == '\\n') line = line[0 .. line.len - 1];
+    if (line.len > 0 and line[line.len - 1] == '\\r') line = line[0 .. line.len - 1];
+    return line;
+}
+
+pub fn main() !void {
+    const stdin = std.fs.File.stdin();
+
+    std.debug.print("What is your name? ", .{});
+
+    var buf: [64]u8 = undefined;
+    const name = try readLine(stdin, &buf) orelse return;
+
+    std.debug.print("How old are you? ", .{});
+
+    var age_buf: [16]u8 = undefined;
+    const age_str = try readLine(stdin, &age_buf) orelse return;
+
+    const age = std.fmt.parseInt(u32, age_str, 10) catch {
+        std.debug.print("That's not a valid number, {s}!\\n", .{name});
+        return;
+    };
+    std.debug.print("Hello {s}, you will be {d} next year!\\n", .{ name, age + 1 });
+}
+`,
+  },
+  {
     id: 'zig_allocator',
     name: 'Allocators',
     description: 'Dynamic memory with allocators',

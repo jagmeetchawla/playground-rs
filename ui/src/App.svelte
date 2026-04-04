@@ -11,7 +11,7 @@
   import ProjectSwitcher from './lib/ProjectSwitcher.svelte'
   import HelpModal from './lib/HelpModal.svelte'
   import AboutModal from './lib/AboutModal.svelte'
-  import SettingsModal from './lib/SettingsModal.svelte'
+  // SettingsModal.svelte is now type-only; ToolchainWizard handles settings UI
   import NewPlaygroundModal from './lib/NewPlaygroundModal.svelte'
   import ToolchainWizard from './lib/ToolchainWizard.svelte'
   import CopyToProjectModal from './lib/CopyToProjectModal.svelte'
@@ -38,6 +38,7 @@
   let projectReadonly:     Record<string, boolean>                    = $state({})
   let lockedPlaygrounds:   string[]                                   = $state([])
   let switcherPendingMode: 'new' | 'rename' | 'delete-confirm' | null = $state(null)
+  let enabledLangs:        string[]                                  = $state(['rust'])
   let lang                 = $derived(getLang(projectType))
   let isBookProject        = $derived(!!projectSources[activeProject])
   let isPlaygroundLocked   = $derived(activeTab ? lockedPlaygrounds.includes(activeTab) : false)
@@ -109,10 +110,10 @@
   let cargoToml:     string                             = $state('')
   let toolchainInfo: { path: string; version: string } = $state({ path: '', version: '' })
   let clangInfo:     { path: string; version: string } = $state({ path: '', version: '' })
-  let zigInfo:       { path: string; version: string } = $state({ path: '', version: '' })
+  let zigInfo:       { path: string; version: string; version_ok: boolean } = $state({ path: '', version: '', version_ok: false })
   let swiftInfo:     { version: string }               = $state({ version: '' })
   let activeToolchain = $derived(
-    projectType === 'native' ? clangInfo
+    projectType === 'clang' ? clangInfo
     : projectType === 'zig' ? zigInfo
     : projectType === 'swift' ? swiftInfo as any
     : toolchainInfo
@@ -123,6 +124,22 @@
       : '…'
   )
   let toolchainName = $derived(lang.toolchainName)
+  let langEnabled = $derived(enabledLangs.includes(projectType))
+  let pillStatus: 'not-enabled' | 'missing' | 'partial' | 'ok' = $derived.by(() => {
+    if (!langEnabled) return 'not-enabled'
+    if (!activeToolchain.version) return 'missing'
+    // Partial: Rust needs cargo+rustc+rustfmt+clippy; others just need version
+    if (projectType === 'rust' && toolchainLabel === '…') return 'missing'
+    // Zig: warn if installed but not the supported 0.15.x version
+    if (projectType === 'zig' && zigInfo && !zigInfo.version_ok) return 'partial'
+    return 'ok'
+  })
+  let pillText = $derived.by(() => {
+    if (pillStatus === 'not-enabled') return `${lang.label} support not enabled`
+    if (pillStatus === 'missing') return `${toolchainName} not found`
+    if (pillStatus === 'partial' && projectType === 'zig') return `${toolchainName} ${toolchainLabel} · requires 0.15.x`
+    return `${toolchainName} ${toolchainLabel}${lang.experimental ? ' · experimental' : ''}`
+  })
 
   // ── New playground binding ────────────────────────────────────────────────────
   let creatingNew: boolean = $state(false)
@@ -130,8 +147,8 @@
   // ── Modal state ───────────────────────────────────────────────────────────────
   let showHelp:        boolean       = $state(false)
   let showAbout:       boolean       = $state(false)
-  let showSettings:    boolean       = $state(false)
   let showWizard:      boolean       = $state(false)
+  let wizardMode:      'wizard' | 'settings' = $state('wizard')
   let showExportMenu:  boolean       = $state(false)
   let showCopyToProject: boolean     = $state(false)
   let copyToProjectPlayground: string | null = $state(null)
@@ -150,7 +167,7 @@
 
   // Map project type → language theme
   const autoThemeMap: Record<string, string> = {
-    rust: 'rust', native: 'seagreen', zig: 'zig', swift: 'swift',
+    rust: 'rust', clang: 'seagreen', zig: 'zig', swift: 'swift',
   }
 
   // Resolved theme based on setting + OS preference + project type
@@ -176,13 +193,13 @@
   let depName:         string        = $state('')
   let depVersion:      string        = $state('')
   let depError:        string | null = $state(null)
-  let toastMessage:    string | null = $state(null)
-  let _toastTimer:     ReturnType<typeof setTimeout> | null = null
+  let toasts: { id: number; msg: string }[] = $state([])
+  let _toastId = 0
 
   function showToast(msg: string, durationMs = 4000) {
-    toastMessage = msg
-    if (_toastTimer) clearTimeout(_toastTimer)
-    _toastTimer = setTimeout(() => { toastMessage = null }, durationMs)
+    const id = ++_toastId
+    toasts = [...toasts, { id, msg }]
+    setTimeout(() => { toasts = toasts.filter(t => t.id !== id) }, durationMs)
   }
 
   // ── Layout & panel sizing ─────────────────────────────────────────────────────
@@ -277,14 +294,22 @@
       await loadProjectData()
       toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
       settings = await invoke<Settings>('get_settings')
+      enabledLangs = await invoke<string[]>('get_enabled_languages')
 
       // Show wizard on first launch or if toolchain is missing
       const tc = await invoke<any>('check_toolchain')
-      if (!tc.wizard_completed || !tc.all_good) {
+      if (!tc.wizard_completed) {
+        wizardMode = 'wizard'
         showWizard = true
       }
       if (tc.clang) {
         clangInfo = { path: tc.clang.path ?? '', version: tc.clang.version ?? '' }
+      }
+      if (tc.zig) {
+        zigInfo = { path: tc.zig.path ?? '', version: tc.zig.version ?? '', version_ok: tc.zig.version_ok ?? false }
+      }
+      if (tc.swiftc) {
+        swiftInfo = { version: tc.swiftc.version ?? '' }
       }
 
       // ── Restore window state ────────────────────────────────────────────────
@@ -332,7 +357,7 @@
         listen<string>('menu:switch-project', (e) => switchProject(e.payload)),
         listen('menu:copy-code',         () => copyCodeToClipboard()),
         listen('menu:export-project',    () => exportProject()),
-        listen('menu:settings',          () => { showSettings = true }),
+        listen('menu:settings',          () => { wizardMode = 'settings'; showWizard = true }),
         listen('menu:help',              () => { showHelp  = true }),
         listen('menu:about',             () => { showAbout = true }),
         ...allLanguages().filter(l => l.book).map(l => listen(l.book!.menuEvent, () => seedBook(l.type))),
@@ -377,6 +402,7 @@
       projectType,
       isBookProject: isReadOnly,
       projectSources,
+      enabledLanguages: enabledLangs,
     }).catch(console.error)
   })
 
@@ -424,7 +450,7 @@
   }
 
   function syncMenuProjects() {
-    invoke('rebuild_menu', { projects, active: activeProject, playgroundCount: playgrounds.length, hasActivePlayground, projectType, isBookProject: isReadOnly, projectSources }).catch(console.error)
+    invoke('rebuild_menu', { projects, active: activeProject, playgroundCount: playgrounds.length, hasActivePlayground, projectType, isBookProject: isReadOnly, projectSources, enabledLanguages: enabledLangs }).catch(console.error)
   }
 
   async function switchProject(name: string) {
@@ -906,8 +932,11 @@
     const remaining = projects.filter(p => p !== name)
     let switchTo = remaining[0]
     if (!switchTo) {
-      await invoke('new_project', { name: 'default' })
-      switchTo = 'default'
+      const helloNames: Record<string, string> = { rust: 'hello_rust', clang: 'hello_c', zig: 'hello_zig', swift: 'hello_swift' }
+      const firstLang = enabledLangs[0] ?? 'rust'
+      const fallbackName = helloNames[firstLang] ?? `hello_${firstLang}`
+      await invoke('new_project', { name: fallbackName, projectType: firstLang })
+      switchTo = fallbackName
     }
     await switchProject(switchTo)
     await invoke('delete_project', { name })
@@ -1022,6 +1051,7 @@
         {projectTypes}
         {projectSources}
         {projectReadonly}
+        enabledLanguages={enabledLangs}
         onswitch={switchProject}
         onnew={onNewProject}
         onrename={onRenameProject}
@@ -1036,7 +1066,7 @@
       <button
         class="settings-btn"
         title="Settings (⌘,)"
-        onclick={() => showSettings = true}
+        onclick={() => { wizardMode = 'settings'; showWizard = true }}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path d="M6.8 1.5h2.4l.3 1.7.8.3 1.4-1 1.7 1.7-1 1.4.3.8 1.7.3v2.4l-1.7.3-.3.8 1 1.4-1.7 1.7-1.4-1-.8.3-.3 1.7H6.8l-.3-1.7-.8-.3-1.4 1-1.7-1.7 1-1.4-.3-.8-1.7-.3V6.8l1.7-.3.3-.8-1-1.4 1.7-1.7 1.4 1 .8-.3.3-1.7z"
@@ -1044,9 +1074,8 @@
           <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.1" fill="none"/>
         </svg>
       </button>
-      <button class="toolchain-pill" title="{activeToolchain.path ?? ''} — Click for toolchain details" onclick={() => showWizard = true}>
-        {#if projectType === 'native'}
-          <!-- C bracket icon for clang -->
+      <span class="toolchain-pill" class:pill-red={pillStatus === 'not-enabled' || pillStatus === 'missing'} class:pill-yellow={pillStatus === 'partial'} title="{pillStatus === 'not-enabled' ? 'Language support not enabled in Settings' : activeToolchain.path ?? ''}">
+        {#if projectType === 'clang'}
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M5 2C3.5 2 2 3 2 5L2 9C2 11 3.5 12 5 12"
                   stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
@@ -1054,19 +1083,16 @@
                   stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
           </svg>
         {:else if projectType === 'zig'}
-          <!-- Zig lightning bolt -->
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M8 1L3 8h4l-1 5 5-7H7l1-5z"
                   stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/>
           </svg>
         {:else if projectType === 'swift'}
-          <!-- Swift bird-like swoosh -->
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M11 3C8.5 5 5 7 3 8c2-0.5 4-0.5 6 0.5-1.5 2-4 3-7 3 4 0 7.5-1.5 9-4.5 0.5-1 0.5-2.5 0-4z"
                   stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" fill="none"/>
           </svg>
         {:else}
-          <!-- Isometric crate — crates.io style -->
           <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
             <path d="M7 1L13 4L7 7L1 4Z"
                   stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
@@ -1076,9 +1102,8 @@
                   stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
           </svg>
         {/if}
-        {toolchainName} {toolchainLabel}
-        {#if lang.experimental} · experimental{/if}
-      </button>
+        {pillText}
+      </span>
     </div>
 
     <div class="toolbar-right">
@@ -1110,6 +1135,27 @@
         {/if}
       </button>
 
+      <div class="export-wrap">
+        <button class="btn btn-export" onclick={() => showExportMenu = !showExportMenu} title="Export / Share">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M6 1v7M3 3.5 6 1l3 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 7v3.5h8V7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        {#if showExportMenu}
+          <div class="export-dropdown" role="menu">
+            <button class="export-item" onclick={() => { showExportMenu = false; exportProject() }}>Export Project…</button>
+            {#if activeTab && tabMeta[activeTab]?.type === 'playground'}
+              <button class="export-item" onclick={() => { showExportMenu = false; copyCodeToClipboard() }}>Copy Code to Clipboard</button>
+              {#if isReadOnly}
+                <button class="export-item" onclick={() => { showExportMenu = false; copyToProjectPlayground = activeTab; showCopyToProject = true }}>Copy to Project…</button>
+              {/if}
+            {/if}
+          </div>
+          <div class="export-backdrop" onclick={() => showExportMenu = false} aria-hidden="true"></div>
+        {/if}
+      </div>
+
       {#if activeTab}
         <button
           class="btn btn-save"
@@ -1125,28 +1171,6 @@
           Save
         </button>
       {/if}
-
-      <div class="export-wrap">
-        <button class="btn btn-export" onclick={() => showExportMenu = !showExportMenu} title="Export / Share">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M6 1v7M3 3.5 6 1l3 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M2 7v3.5h8V7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Share
-        </button>
-        {#if showExportMenu}
-          <div class="export-dropdown" role="menu">
-            <button class="export-item" onclick={() => { showExportMenu = false; exportProject() }}>Export Project…</button>
-            {#if activeTab && tabMeta[activeTab]?.type === 'playground'}
-              <button class="export-item" onclick={() => { showExportMenu = false; copyCodeToClipboard() }}>Copy Code to Clipboard</button>
-              {#if isReadOnly}
-                <button class="export-item" onclick={() => { showExportMenu = false; copyToProjectPlayground = activeTab; showCopyToProject = true }}>Copy to Project…</button>
-              {/if}
-            {/if}
-          </div>
-          <div class="export-backdrop" onclick={() => showExportMenu = false} aria-hidden="true"></div>
-        {/if}
-      </div>
 
       {#if isRunning}
         <button class="btn btn-stop" onclick={stop}>
@@ -1299,7 +1323,7 @@
                   <span class="shortcut-key">⌘S</span><span class="shortcut-desc">Save</span>
                 </div>
               {/if}
-              {#each [allLanguages().filter(l => l.book && !Object.values(projectSources).includes(l.book!.sourceTag))] as unloadedBooks}
+              {#each [allLanguages().filter(l => enabledLangs.includes(l.type) && l.book && !Object.values(projectSources).includes(l.book!.sourceTag))] as unloadedBooks}
                 {#if unloadedBooks.length > 0}
                   <div class="empty-books">
                     <p class="empty-books-label">Learn from examples</p>
@@ -1356,17 +1380,60 @@
   <AboutModal onclose={() => showAbout = false} />
 {/if}
 
-{#if showSettings}
-  <SettingsModal
-    bind:settings
-    onclose={() => showSettings = false}
-    onsave={(s) => { settings = s }}
-    onthemechange={(t) => { settings = { ...settings, theme: t } }}
-  />
-{/if}
-
 {#if showWizard}
-  <ToolchainWizard onclose={() => { showWizard = false }} />
+  <ToolchainWizard
+    mode={wizardMode}
+    enabledLanguages={enabledLangs}
+    {settings}
+    {projectSources}
+    onthemechange={(t) => { settings = { ...settings, theme: t } }}
+    onapply={async (result) => {
+      enabledLangs = result.enabledLanguages
+      await invoke('set_enabled_languages', { languages: result.enabledLanguages })
+      settings = result.settings
+      await invoke('save_settings', { settings: result.settings })
+      for (const ptype of result.booksToRemove) {
+        const book = getLang(ptype as ProjectType).book
+        if (book) await removeBook(book.sourceTag, book.commandLabel)
+      }
+      for (const ptype of result.booksToLoad) {
+        await seedBook(ptype)
+      }
+      syncMenuProjects()
+    }}
+    onclose={async (result) => {
+      enabledLangs = result.enabledLanguages
+      await invoke('set_enabled_languages', { languages: result.enabledLanguages })
+      if (result.settings) {
+        settings = result.settings
+        await invoke('save_settings', { settings: result.settings })
+      }
+      // Create hello projects for each selected language (wizard mode only)
+      if (wizardMode === 'wizard') {
+        const helloNames: Record<string, string> = { rust: 'hello_rust', clang: 'hello_c', zig: 'hello_zig', swift: 'hello_swift' }
+        let firstProject = ''
+        for (const ptype of result.enabledLanguages) {
+          const name = helloNames[ptype] ?? `hello_${ptype}`
+          try {
+            await invoke('new_project', { name, projectType: ptype })
+            if (!firstProject) firstProject = name
+          } catch { /* project may already exist */ }
+        }
+        if (firstProject) {
+          await switchProject(firstProject)
+        }
+      }
+      for (const ptype of result.booksToRemove) {
+        const book = getLang(ptype as ProjectType).book
+        if (book) await removeBook(book.sourceTag, book.commandLabel)
+      }
+      for (const ptype of result.booksToLoad) {
+        await seedBook(ptype)
+      }
+      showWizard = false
+      syncMenuProjects()
+    }}
+  />
 {/if}
 
 {#if creatingNew}
@@ -1396,8 +1463,12 @@
   />
 {/if}
 
-{#if toastMessage}
-  <div class="toast" role="status" aria-live="polite">{toastMessage}</div>
+{#if toasts.length > 0}
+  <div class="toast-stack" role="status" aria-live="polite">
+    {#each toasts as toast (toast.id)}
+      <div class="toast">{toast.msg}</div>
+    {/each}
+  </div>
 {/if}
 
 {#if deletePending}
@@ -1521,25 +1592,37 @@
   .btn {
     display: flex; align-items: center; gap: 5px;
     height: 28px; box-sizing: border-box;
-    padding: 0 12px; font-size: 12px; font-weight: 600;
-    border-radius: var(--radius-sm);
-    transition: background 0.12s, opacity 0.12s;
+    padding: 0 10px; font-size: 12px; font-weight: 500;
+    border-radius: 6px;
+    background: transparent; color: var(--text-secondary);
+    transition: background 0.12s, color 0.12s, opacity 0.12s;
     flex-shrink: 0;
   }
+  .btn:hover:not(:disabled) {
+    background: var(--bg-hover); color: var(--text);
+  }
 
-  .btn-save { background: #2ea043; color: #fff; }
-  .btn-save:hover:not(:disabled) { background: #3bb54f; }
-  .btn-save:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-save { color: var(--text-secondary); }
+  .btn-save:hover:not(:disabled) { color: var(--text); }
+  .btn-save:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  .btn-run  { background: var(--accent); color: #fff; }
-  .btn-run:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-run {
+    background: rgba(var(--accent-rgb, 229, 115, 0), 0.15);
+    color: var(--accent);
+  }
+  .btn-run:hover:not(:disabled) {
+    background: rgba(var(--accent-rgb, 229, 115, 0), 0.25);
+  }
   .btn-run:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  .btn-stop { background: var(--red); color: #fff; }
-  .btn-stop:hover { opacity: 0.85; }
+  .btn-stop {
+    background: rgba(220, 60, 60, 0.15);
+    color: var(--red);
+  }
+  .btn-stop:hover { background: rgba(220, 60, 60, 0.25); }
 
-  .btn-export { background: #c89b18; color: #fff; }
-  .btn-export:hover { background: #daad2a; }
+  .btn-export { color: var(--text-secondary); }
+  .btn-export:hover { color: var(--text); }
 
   .export-wrap { position: relative; }
   .export-backdrop {
@@ -1584,14 +1667,16 @@
     color: var(--text-tertiary);
     background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.11);
     border-radius: 8px; padding: 0 8px;
-    cursor: pointer; white-space: nowrap;
+    white-space: nowrap;
     transition: background 0.12s, border-color 0.12s, color 0.12s;
   }
-
-  .toolchain-pill:hover {
-    background: rgba(255,255,255,0.13);
-    border-color: rgba(255,255,255,0.18);
-    color: var(--text);
+  .toolchain-pill.pill-red {
+    color: #f44; border-color: rgba(255, 68, 68, 0.4);
+    background: rgba(255, 68, 68, 0.1);
+  }
+  .toolchain-pill.pill-yellow {
+    color: #e8a820; border-color: rgba(232, 168, 32, 0.4);
+    background: rgba(232, 168, 32, 0.1);
   }
 
   /* ── Main layout ── */
@@ -1757,12 +1842,19 @@
   .shortcut-desc { font-size: 12px; color: var(--text-tertiary); }
 
   /* ── Toast notification ── */
-  .toast {
+  .toast-stack {
     position: fixed;
     bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 400;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 6px;
+    align-items: center;
+    pointer-events: none;
+  }
+  .toast {
     background: rgba(30, 32, 40, 0.94);
     color: #e8e8e8;
     border: 1px solid rgba(255,255,255,0.12);
@@ -1772,13 +1864,12 @@
     line-height: 1.4;
     backdrop-filter: blur(8px);
     box-shadow: 0 4px 20px rgba(0,0,0,0.45);
-    pointer-events: none;
     white-space: nowrap;
     animation: toast-in 0.18s ease;
   }
   @keyframes toast-in {
-    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-    to   { opacity: 1; transform: translateX(-50%) translateY(0);   }
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0);   }
   }
 
   /* ── Delete confirm dialog ── */

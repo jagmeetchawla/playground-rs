@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use super::native::resolve_sdk_path;
+use super::clang::resolve_sdk_path;
 use super::RunConfig;
 use crate::rustic_manifest::RusticManifest;
 

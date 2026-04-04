@@ -57,7 +57,7 @@ cd ui && pnpm build        # production bundle
 All runtime data lives under:
 ```
 ~/Library/Application Support/com.rustic-playground.app/
-├── config.json              ← active_project, cargo_path, wizard_completed
+├── config.json              ← active_project, cargo_path, wizard_completed, enabled_languages
 ├── window-state.json        ← window geometry, panel sizes, open tabs
 └── projects/
     └── <project-name>/
@@ -76,13 +76,13 @@ All runtime data lives under:
 | `src-tauri/src/lib.rs` | App state, paths, validation, config/settings, window state, run() entry (~550 lines) |
 | `src-tauri/src/languages/mod.rs` | Lang enum, RunConfig enum, shared FileLanguage helpers (v0.3) |
 | `src-tauri/src/languages/rust.rs` | Rust: Cargo scaffold, cargo run, live check, clap export (v0.3) |
-| `src-tauri/src/languages/native.rs` | C/C++: clang scaffold, compile+run, Makefile export (v0.3) |
+| `src-tauri/src/languages/clang.rs` | C/C++: clang scaffold, compile+run, Makefile export (v0.3) |
 | `src-tauri/src/languages/zig.rs` | Zig: scaffold, zig run, shell export (v0.3) |
 | `src-tauri/src/languages/swift.rs` | Swift: scaffold, swiftc compile+run, shell export (v0.3) |
 | `src-tauri/src/playground_commands.rs` | Thin dispatchers: CRUD + run/kill/check via Lang enum (~450 lines) |
 | `src-tauri/src/cargo_commands.rs` | Cargo.toml management, toolchain checks, setup wizard (~300 lines) |
 | `src-tauri/src/content_commands.rs` | Content file CRUD commands (~120 lines) |
-| `src-tauri/src/export.rs` | Project export: Rust (CLI runner) and native (shell runner + Makefile) (~400 lines) |
+| `src-tauri/src/export.rs` | Project export: Rust (CLI runner) and Clang (shell runner + Makefile) (~400 lines) |
 | `src-tauri/src/menu.rs` | macOS menu bar builder + rebuild_menu command (~150 lines) |
 | `src-tauri/src/languages/rust_book.rs` | Rust Book chapter data — 20 chapters (~2,700 lines) |
 | `src-tauri/src/languages/knr_book.rs` | K&R C Book chapter data — 8 chapters (~1,200 lines) |
@@ -96,10 +96,11 @@ All runtime data lives under:
 | `ui/src/lib/Output.svelte` | Console panel, run blocks, streaming output |
 | `ui/src/lib/ProjectSwitcher.svelte` | Project dropdown with search, book flyout submenus, CRUD actions |
 | `ui/src/lib/CopyToProjectModal.svelte` | Copy book playground to user project modal |
-| `ui/src/lib/SettingsModal.svelte` | Settings panel (editor, appearance, toolchain) |
+| `ui/src/lib/SettingsModal.svelte` | Settings panel (editor, appearance) |
+| `ui/src/lib/ToolchainWizard.svelte` | Dual-mode: 5-step Welcome Wizard (first launch) + Settings panel (⌘,) |
 | `ui/src/lib/NewPlaygroundModal.svelte` | New playground dialog with template picker |
 | `ui/src/lib/templates.ts` | 11 starter templates with auto-deps |
-| `ui/src/lib/HelpModal.svelte` | Help overlay (⌘⇧/) |
+| `ui/src/lib/HelpModal.svelte` | Apple-style user guide with sidebar navigation (⌘⇧/) — source of truth for website/wiki |
 | `ui/src/lib/AboutModal.svelte` | About dialog |
 | `ui/src/app.css` | Global CSS variables (dark/light theme definitions) |
 | `specs/specifications.md` | Active spec — read before any feature work |
@@ -113,15 +114,17 @@ All runtime data lives under:
 
 ## Current Version Status
 
-**v0.3.1** — in progress (read-only book projects, per-playground locking, "Copy to Project" action, "Learn" menu, grouped project list with flyout submenus, empty-state book loading, Zig/Swift themes, auto theme matching, theme dropdown).
+**v0.3.2** — in progress (Welcome Wizard + Language Gating: 5-step first-launch wizard, language enable/disable, per-language hello projects, book management via explicit checkboxes, toolchain pill status, dual-mode ToolchainWizard/Settings component, native→clang rename, Apple HIG styling).
+
+**v0.3.1** — shipped (read-only book projects, per-playground locking, "Copy to Project" action, "Learn" menu, grouped project list with flyout submenus, empty-state book loading, Zig/Swift themes, auto theme matching, theme dropdown).
 
 **v0.3** — shipped (language module architecture: Lang enum dispatch, per-language modules, shared FileLanguage helpers. Zig and Swift project types. Frontend language registry. Book system modularization with Swift Book examples).
 
-**v0.2** — shipped (native C/C++ projects: rustic.toml manifest, C/C++ templates, native export with POSIX shell runner + Makefile, K&R C Book examples, sea green theme, tabbed toolchain wizard, compiler flags UI, project-type badges, settings clang display).
+**v0.2** — shipped (Clang C/C++ projects: rustic.toml manifest, C/C++ templates, Clang export with POSIX shell runner + Makefile, K&R C Book examples, sea green theme, compiler flags UI, project-type badges).
 
 **v0.1.9** — shipped (renamed from playground-rs to rustic-playground, cleaned up src/bin).
 
-After v0.3.1: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
+After v0.3.2: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
 
 ---
 

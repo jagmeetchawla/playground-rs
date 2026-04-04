@@ -405,7 +405,7 @@
   }
 
   .line {
-    font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65;
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.65;
     white-space: pre-wrap; word-break: break-all;
     padding: 0 8px; border-radius: var(--radius-xs);
   }
@@ -442,7 +442,7 @@
     color: var(--accent); flex-shrink: 0; opacity: 0.7;
   }
   .stdin-input {
-    flex: 1; font-family: var(--font-mono); font-size: 11.5px;
+    flex: 1; font-family: var(--font-mono); font-size: 12px;
     background: rgba(0, 0, 0, 0.2); color: var(--text);
     border: 1px solid var(--border); border-radius: var(--radius-xs);
     padding: 3px 6px; outline: none;

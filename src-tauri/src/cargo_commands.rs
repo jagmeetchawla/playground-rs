@@ -367,6 +367,7 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
             "installed": zig_installed,
             "path": zig_path,
             "version": zig_version,
+            "version_ok": zig_version.as_ref().map(|v| v.starts_with("0.15")).unwrap_or(false),
         },
         "swiftc": {
             "installed": swiftc_installed,
@@ -515,13 +516,17 @@ mod tests {
     }
 }
 
-/// Mark the toolchain wizard as completed so it doesn't show again.
+/// Mark the toolchain wizard as completed and persist enabled languages.
 #[tauri::command]
-pub fn complete_wizard(app: AppHandle) -> Result<(), String> {
+pub fn complete_wizard(
+    enabled_languages: Vec<String>,
+    app: AppHandle,
+) -> Result<(), String> {
     let existing = load_config(&app);
     let config = Config {
         active_project: existing.active_project,
         wizard_completed: true,
+        enabled_languages,
     };
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialise config: {}", e))?;

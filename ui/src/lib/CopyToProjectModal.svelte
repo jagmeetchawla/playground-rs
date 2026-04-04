@@ -96,7 +96,7 @@
           class:selected={selectedProject === name}
           onclick={() => selectedProject = name}
         >
-          <span class="option-badge" class:native={ptype === 'native'} class:zig={ptype === 'zig'} class:swift={ptype === 'swift'}>{pLang.badge}</span>
+          <span class="option-badge" class:clang={ptype === 'clang'} class:zig={ptype === 'zig'} class:swift={ptype === 'swift'}>{pLang.badge}</span>
           <span class="option-name">{name}</span>
           {#if selectedProject === name}
             <svg class="option-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -200,7 +200,7 @@
     letter-spacing: 0.04em;
     flex-shrink: 0;
   }
-  .option-badge.native { background: #4a9; }
+  .option-badge.clang { background: #4a9; }
   .option-badge.zig    { background: #f7a41d; color: #000; }
   .option-badge.swift  { background: #f05138; }
   .option-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

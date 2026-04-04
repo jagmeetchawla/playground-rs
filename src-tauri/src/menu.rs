@@ -25,6 +25,7 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     _project_type: &str,
     is_book_project: bool,
     project_sources: &HashMap<String, String>,
+    enabled_languages: &[String],
 ) -> tauri::Result<tauri::menu::Menu<R>> {
     let app_submenu = SubmenuBuilder::new(handle, "Rustic Playground")
         .item(
@@ -187,9 +188,12 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .select_all()
         .build()?;
 
-    // ── Learn menu — book examples for each language ──
+    // ── Learn menu — book examples for each enabled language ──
     let mut learn_builder = SubmenuBuilder::new(handle, "Learn");
     for lang_variant in Lang::all() {
+        if !enabled_languages.iter().any(|l| l == lang_variant.project_type()) {
+            continue;
+        }
         if let Some(book) = lang_variant.book_info() {
             let already_loaded = project_sources.values().any(|s| s == book.source_tag);
             let book_submenu = SubmenuBuilder::new(handle, book.book_name)
@@ -248,6 +252,7 @@ pub fn rebuild_menu(
     project_type: String,
     is_book_project: bool,
     project_sources: HashMap<String, String>,
+    enabled_languages: Vec<String>,
     app: AppHandle,
 ) -> Result<(), String> {
     let menu = build_menu(
@@ -259,6 +264,7 @@ pub fn rebuild_menu(
         &project_type,
         is_book_project,
         &project_sources,
+        &enabled_languages,
     )
     .map_err(|e| e.to_string())?;
     app.set_menu(menu).map_err(|e| e.to_string())?;

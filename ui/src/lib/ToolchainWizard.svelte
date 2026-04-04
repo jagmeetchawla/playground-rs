@@ -1,11 +1,25 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { open as shellOpen } from '@tauri-apps/plugin-shell'
+  import { allLanguages, getLang, type ProjectType } from './languages'
+  import type { Settings } from './SettingsModal.svelte'
 
   let {
     onclose,
+    onapply,
+    enabledLanguages = ['rust'],
+    settings,
+    projectSources = {},
+    onthemechange,
+    mode = 'wizard',
   }: {
-    onclose: () => void
+    onclose: (result: { enabledLanguages: string[]; booksToLoad: string[]; booksToRemove: string[]; settings?: Settings }) => void
+    onapply?: (result: { enabledLanguages: string[]; booksToLoad: string[]; booksToRemove: string[]; settings: Settings }) => void
+    enabledLanguages: string[]
+    settings: Settings
+    projectSources?: Record<string, string>
+    onthemechange?: (theme: string) => void
+    mode?: 'wizard' | 'settings'
   } = $props()
 
   type ToolchainStatus = {
@@ -18,350 +32,548 @@
     installed_toolchains: string[]
     components: { rustfmt: boolean; clippy: boolean }
     clang: { installed: boolean; path: string; version: string | null }
-    zig: { installed: boolean; path: string; version: string | null }
+    zig: { installed: boolean; path: string; version: string | null; version_ok: boolean }
     swiftc: { installed: boolean; path: string; version: string | null }
   }
 
+  // ── State ──────────────────────────────────────────────────────────────
+  let step = $state(1)
+  let activeTab: 'languages' | 'toolchains' | 'appearance' | 'books' = $state('languages')
+  let selectedLangs: string[] = $state([...new Set(enabledLanguages)])
   let status = $state<ToolchainStatus | null>(null)
-  let checking = $state(true)
-  let error = $state<string | null>(null)
-  let activeTab: 'rust' | 'native' | 'zig' | 'swift' = $state('rust')
+  let checking = $state(false)
+  let draftSettings: Settings = $state({ ...settings })
+  const originalTheme = settings.theme
+  let applied = $state(false)
+  const loadedSourceTags = new Set(Object.values(projectSources))
+  let booksChecked: string[] = $state(
+    allLanguages()
+      .filter(l => l.book && loadedSourceTags.has(l.book.sourceTag))
+      .map(l => l.type)
+  )
 
+  const wizardSteps = ['Languages', 'Toolchains', 'Appearance', 'Books', 'Finish']
+  const settingsTabs: { id: typeof activeTab; label: string }[] = [
+    { id: 'languages', label: 'Languages' },
+    { id: 'toolchains', label: 'Toolchains' },
+    { id: 'appearance', label: 'Appearance' },
+    { id: 'books', label: 'Books' },
+  ]
+
+  // Current panel (unified for both modes)
+  let currentPanel = $derived(
+    mode === 'wizard'
+      ? (['languages', 'toolchains', 'appearance', 'books', 'finish'] as const)[step - 1]
+      : activeTab
+  )
+
+  // Auto-run toolchain check when entering toolchains panel
+  $effect(() => {
+    if (currentPanel === 'toolchains' && !status && !checking) {
+      runCheck()
+    }
+  })
+
+  // ── Language toggle ───────────────────────────────────────────────────��
+  function toggleLang(type: string) {
+    if (selectedLangs.includes(type)) {
+      selectedLangs = selectedLangs.filter(l => l !== type)
+      booksChecked = booksChecked.filter(b => b !== type)
+    } else {
+      selectedLangs = [...selectedLangs, type]
+    }
+  }
+  let hasSelection = $derived(selectedLangs.length > 0)
+  let selectionLabel = $derived(
+    hasSelection
+      ? 'Selected: ' + selectedLangs.map(t => getLang(t as ProjectType).label).join(', ')
+      : 'You must select at least one language'
+  )
+
+  // ── Toolchain check ───────────────────────────────────────────────────
   async function runCheck() {
     checking = true
-    error = null
     try {
       status = await invoke<ToolchainStatus>('check_toolchain')
-    } catch (e) {
-      error = String(e)
-    } finally {
-      checking = false
+    } catch (_) { /* ignore */ }
+    finally { checking = false }
+  }
+
+  function toolchainOk(type: string): boolean | null {
+    if (!status) return null
+    switch (type) {
+      case 'rust': return status.all_good
+      case 'clang': return status.clang.installed
+      case 'zig': return (status.zig?.installed && status.zig?.version_ok) ?? false
+      case 'swift': return status.swiftc?.installed ?? false
+      default: return false
     }
   }
 
-  async function finish() {
-    await invoke('complete_wizard')
-    onclose()
+  // ── Theme ──────────────────────────────────────────────────────────────
+  function setTheme(theme: string) {
+    draftSettings.theme = theme
+    onthemechange?.(theme)
   }
 
-  // Run check on mount
-  runCheck()
+  // ── Book toggle ────────────────────────────────────────────────────────
+  function toggleBook(type: string) {
+    if (booksChecked.includes(type)) {
+      booksChecked = booksChecked.filter(b => b !== type)
+    } else {
+      booksChecked = [...booksChecked, type]
+    }
+  }
+
+  let availableBooks = $derived(
+    allLanguages().filter(l => selectedLangs.includes(l.type) && l.book)
+  )
+
+  // ── Navigation (wizard mode) ──────────────────────────────────────────
+  function next() {
+    if (step < 5) step += 1 as any
+  }
+  function back() {
+    if (step > 1) step -= 1 as any
+  }
+
+  // ── Book diff: what to load vs remove based on checkbox changes ──────
+  function bookDiff() {
+    const wasLoaded = allLanguages()
+      .filter(l => l.book && loadedSourceTags.has(l.book.sourceTag))
+      .map(l => l.type)
+    const toLoad = booksChecked.filter(b => !wasLoaded.includes(b))
+    const toRemove = wasLoaded.filter(b => !booksChecked.includes(b))
+    return { toLoad, toRemove }
+  }
+
+  // ── Cancel ─────────────────────────────────────────────────────────────
+  function cancel() {
+    if (!applied) onthemechange?.(originalTheme)
+    onclose({ enabledLanguages: applied ? selectedLangs : enabledLanguages, booksToLoad: [], booksToRemove: [], settings: applied ? draftSettings : undefined })
+  }
+
+  // ── Apply (settings mode — persist without closing) ───────────────────
+  function apply() {
+    applied = true
+    const { toLoad, toRemove } = bookDiff()
+    // Update baseline so subsequent Apply calls don't re-trigger
+    for (const t of toLoad) loadedSourceTags.add(getLang(t as ProjectType).book!.sourceTag)
+    for (const t of toRemove) loadedSourceTags.delete(getLang(t as ProjectType).book!.sourceTag)
+    onapply?.({
+      enabledLanguages: selectedLangs,
+      booksToLoad: toLoad,
+      booksToRemove: toRemove,
+      settings: draftSettings,
+    })
+  }
+
+  // ── Save / Finish ─────────────────────────────────────────────────────
+  async function finish() {
+    if (mode === 'wizard') {
+      const { toLoad, toRemove } = bookDiff()
+      await invoke('complete_wizard', { enabledLanguages: selectedLangs })
+      onclose({
+        enabledLanguages: selectedLangs,
+        booksToLoad: toLoad,
+        booksToRemove: toRemove,
+        settings: draftSettings,
+      })
+    } else {
+      if (!applied) apply()
+      onclose({ enabledLanguages: selectedLangs, booksToLoad: [], booksToRemove: [], settings: draftSettings })
+    }
+  }
+
+  function handleKey(e: KeyboardEvent) {
+    if (e.key === 'Escape' && mode === 'settings') cancel()
+  }
+
+  const fontFamilies = [
+    'Menlo', 'Monaco', 'SF Mono', 'Courier New',
+    'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'IBM Plex Mono',
+  ]
 </script>
 
-<div class="backdrop" onclick={onclose} aria-hidden="true"></div>
+<svelte:window onkeydown={handleKey} />
 
-<div class="modal" role="dialog" aria-modal="true" aria-label="Toolchain Setup">
+<div class="backdrop" onclick={() => mode === 'settings' && cancel()} aria-hidden="true"></div>
+
+<div class="modal" role="dialog" aria-modal="true" aria-label={mode === 'wizard' ? 'Welcome' : 'Settings'}>
   <div class="modal-header">
     <div class="header-left">
-      <span class="modal-title">Toolchain Setup</span>
+      <span class="rs-badge">RS</span>
+      <span class="modal-title">{mode === 'wizard' ? 'Welcome to Rustic Playground' : 'Settings'}</span>
     </div>
-    <button class="close-btn" onclick={onclose} aria-label="Close">
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-        <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-      </svg>
-    </button>
-  </div>
-
-  <!-- Tabs -->
-  <div class="tab-bar">
-    <button
-      class="tab" class:active={activeTab === 'rust'}
-      onclick={() => activeTab = 'rust'}
-    >
-      <span class="tab-badge rs">RS</span>
-      Rust
-      {#if status}
-        <span class="tab-dot" class:ok={status.all_good} class:missing={!status.all_good}></span>
-      {/if}
-    </button>
-    <button
-      class="tab" class:active={activeTab === 'native'}
-      onclick={() => activeTab = 'native'}
-    >
-      <span class="tab-badge native">C</span>
-      C/C++
-      {#if status}
-        <span class="tab-dot" class:ok={status.clang.installed} class:missing={!status.clang.installed}></span>
-      {/if}
-    </button>
-    <button
-      class="tab" class:active={activeTab === 'zig'}
-      onclick={() => activeTab = 'zig'}
-    >
-      <span class="tab-badge zig">ZIG</span>
-      Zig
-      <span class="exp-tag">exp</span>
-      {#if status}
-        <span class="tab-dot" class:ok={status.zig?.installed} class:missing={!status.zig?.installed}></span>
-      {/if}
-    </button>
-    <button
-      class="tab" class:active={activeTab === 'swift'}
-      onclick={() => activeTab = 'swift'}
-    >
-      <span class="tab-badge swift">SW</span>
-      Swift
-      {#if status}
-        <span class="tab-dot" class:ok={status.swiftc?.installed} class:missing={!status.swiftc?.installed}></span>
-      {/if}
-    </button>
-  </div>
-
-  <div class="modal-body">
-    {#if checking}
-      <div class="checking">
-        <div class="spinner"></div>
-        <span>Detecting toolchains...</span>
-      </div>
-    {:else if error}
-      <div class="error-box">
-        <p>Failed to check toolchain: {error}</p>
-        <button class="btn btn-primary" onclick={runCheck}>Retry</button>
-      </div>
-    {:else if status}
-
-      <!-- ═══════════ Rust tab ═══════════ -->
-      {#if activeTab === 'rust'}
-        {#if status.all_good}
-          <div class="status-banner good">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            </svg>
-            <span>Rust toolchain ready</span>
-          </div>
-        {:else}
-          {@const nothingFound = !status.rustup.installed && !status.cargo.installed && !status.rustc.installed}
-          <div class="status-banner warn">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2L18.66 17H1.34L10 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-              <path d="M10 8v4M10 14v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-            <span>{nothingFound ? 'Rust toolchain not found' : 'Rust toolchain incomplete'}</span>
-          </div>
-        {/if}
-
-        <div class="detail-grid">
-          <div class="detail-row">
-            <span class="detail-icon" class:ok={status.rustup.installed} class:missing={!status.rustup.installed}>
-              {status.rustup.installed ? '●' : '○'}
-            </span>
-            <span class="detail-label">rustup</span>
-            <span class="detail-value">{status.rustup.installed ? (status.rustup.version ?? 'installed') : 'not found'}</span>
-          </div>
-
-          <div class="detail-row">
-            <span class="detail-icon" class:ok={status.cargo.installed} class:missing={!status.cargo.installed}>
-              {status.cargo.installed ? '●' : '○'}
-            </span>
-            <span class="detail-label">cargo</span>
-            <span class="detail-value">{status.cargo.installed ? (status.cargo.version ?? 'installed') : 'not found'}</span>
-          </div>
-
-          <div class="detail-row">
-            <span class="detail-icon" class:ok={status.rustc.installed} class:missing={!status.rustc.installed}>
-              {status.rustc.installed ? '●' : '○'}
-            </span>
-            <span class="detail-label">rustc</span>
-            <span class="detail-value">{status.rustc.installed ? (status.rustc.version ?? 'installed') : 'not found'}</span>
-          </div>
-
-          {#if status.active_toolchain}
-            <div class="detail-row">
-              <span class="detail-icon ok">●</span>
-              <span class="detail-label">toolchain</span>
-              <span class="detail-value">{status.active_toolchain}</span>
-            </div>
-          {/if}
-
-          <div class="detail-row">
-            <span class="detail-icon" class:ok={status.components.rustfmt} class:missing={!status.components.rustfmt}>
-              {status.components.rustfmt ? '●' : '○'}
-            </span>
-            <span class="detail-label">rustfmt</span>
-            <span class="detail-value">{status.components.rustfmt ? 'installed' : 'not found'}</span>
-          </div>
-
-          <div class="detail-row">
-            <span class="detail-icon" class:ok={status.components.clippy} class:missing={!status.components.clippy}>
-              {status.components.clippy ? '●' : '○'}
-            </span>
-            <span class="detail-label">clippy</span>
-            <span class="detail-value">{status.components.clippy ? 'installed' : 'not found'}</span>
-          </div>
-        </div>
-
-        {#if status.cargo.installed && status.cargo.path}
-          <div class="path-row">
-            <span class="path-label">cargo path</span>
-            <code class="path-value">{status.cargo.path}</code>
-          </div>
-        {/if}
-
-        {#if !status.all_good}
-          <div class="install-section">
-            <p class="install-text">Install Rust using the official installer:</p>
-            <code class="install-cmd">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code>
-            <p class="install-hint">Run this in Terminal, then click "Re-check" below.</p>
-            <p class="install-hint">Or visit <button class="link-btn" onclick={() => shellOpen('https://rustup.rs')}>rustup.rs</button> for more options.</p>
-          </div>
-        {/if}
-
-        {#if !status.components.rustfmt || !status.components.clippy}
-          <div class="install-section">
-            <p class="install-text">Install missing components:</p>
-            {#if !status.components.rustfmt}
-              <code class="install-cmd">rustup component add rustfmt</code>
-            {/if}
-            {#if !status.components.clippy}
-              <code class="install-cmd">rustup component add clippy</code>
-            {/if}
-          </div>
-        {/if}
-
-      <!-- ═══════════ C/C++ tab ═══════════ -->
-      {:else if activeTab === 'native'}
-        {#if status.clang.installed}
-          <div class="status-banner good">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            </svg>
-            <span>C/C++ toolchain ready</span>
-          </div>
-        {:else}
-          <div class="status-banner warn">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2L18.66 17H1.34L10 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-              <path d="M10 8v4M10 14v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-            <span>C/C++ toolchain not found</span>
-          </div>
-        {/if}
-
-        <div class="detail-grid">
-          <div class="detail-row">
-            <span class="detail-icon" class:ok={status.clang.installed} class:missing={!status.clang.installed}>
-              {status.clang.installed ? '●' : '○'}
-            </span>
-            <span class="detail-label">clang</span>
-            <span class="detail-value">{status.clang.installed ? (status.clang.version ?? 'installed') : 'not found'}</span>
-          </div>
-        </div>
-
-        {#if !status.clang.installed}
-          <div class="install-section">
-            <p class="install-text">Install Xcode Command Line Tools:</p>
-            <code class="install-cmd">xcode-select --install</code>
-            <p class="install-hint">This provides clang and clang++ for C/C++ compilation.</p>
-          </div>
-        {:else}
-          <div class="install-section">
-            <p class="install-text">C/C++ support uses the system clang compiler from Xcode Command Line Tools. No additional setup needed.</p>
-            <p class="install-hint">Build flags for each project can be configured in the sidebar.</p>
-          </div>
-        {/if}
-
-      <!-- ═══════════ Zig tab ═══════════ -->
-      {:else if activeTab === 'zig'}
-        {@const zigOk = status.zig?.installed ?? false}
-        {#if zigOk}
-          <div class="status-banner good">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            </svg>
-            <span>Zig toolchain ready</span>
-          </div>
-        {:else}
-          <div class="status-banner warn">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2L18.66 17H1.34L10 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-              <path d="M10 8v4M10 14v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-            <span>Zig toolchain not found</span>
-          </div>
-        {/if}
-
-        <div class="detail-grid">
-          <div class="detail-row">
-            <span class="detail-icon" class:ok={zigOk} class:missing={!zigOk}>
-              {zigOk ? '●' : '○'}
-            </span>
-            <span class="detail-label">zig</span>
-            <span class="detail-value">{zigOk ? (status.zig?.version ?? 'installed') : 'not found'}</span>
-          </div>
-        </div>
-
-        {#if !zigOk}
-          <div class="install-section">
-            <p class="install-text">Install Zig using Homebrew:</p>
-            <code class="install-cmd">brew install zig</code>
-            <p class="install-hint">Or download from <button class="link-btn" onclick={() => shellOpen('https://ziglang.org/download/')}>ziglang.org</button>.</p>
-          </div>
-        {:else}
-          <div class="install-section">
-            <p class="install-text">Zig is installed and ready. Playgrounds run via <code>zig run</code>.</p>
-            <p class="install-hint">Build flags can be configured in the sidebar when a Zig project is active.</p>
-            <p class="install-hint exp-note">Zig support is experimental. Zig's stdlib API changes frequently between versions and templates may need updating.</p>
-          </div>
-        {/if}
-
-      <!-- ═══════════ Swift tab ═══════════ -->
-      {:else if activeTab === 'swift'}
-        {@const swiftOk = status.swiftc?.installed ?? false}
-        {#if swiftOk}
-          <div class="status-banner good">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M6 10l3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            </svg>
-            <span>Swift toolchain ready</span>
-          </div>
-        {:else}
-          <div class="status-banner warn">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2L18.66 17H1.34L10 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-              <path d="M10 8v4M10 14v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-            <span>Swift toolchain not found</span>
-          </div>
-        {/if}
-
-        <div class="detail-grid">
-          <div class="detail-row">
-            <span class="detail-icon" class:ok={swiftOk} class:missing={!swiftOk}>
-              {swiftOk ? '●' : '○'}
-            </span>
-            <span class="detail-label">swiftc</span>
-            <span class="detail-value">{swiftOk ? (status.swiftc?.version ?? 'installed') : 'not found'}</span>
-          </div>
-        </div>
-
-        {#if !swiftOk}
-          <div class="install-section">
-            <p class="install-text">Install Xcode Command Line Tools:</p>
-            <code class="install-cmd">xcode-select --install</code>
-            <p class="install-hint">This provides swiftc for Swift compilation. Same as the C/C++ tools.</p>
-          </div>
-        {:else}
-          <div class="install-section">
-            <p class="install-text">Swift compiler is installed via Xcode Command Line Tools.</p>
-            <p class="install-hint">Build flags can be configured in the sidebar when a Swift project is active.</p>
-          </div>
-        {/if}
-      {/if}
+    {#if mode === 'settings'}
+      <button class="close-btn" onclick={cancel} aria-label="Close">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </button>
     {/if}
   </div>
 
+  <!-- Wizard: step indicator / Settings: tab bar -->
+  {#if mode === 'wizard'}
+    <div class="step-bar">
+      {#each wizardSteps as label, i}
+        <button
+          class="step-dot"
+          class:active={step === i + 1}
+          class:done={step > i + 1}
+          onclick={() => { if (i + 1 < step) step = (i + 1) as any }}
+          disabled={i + 1 > step}
+        >
+          <span class="dot">{step > i + 1 ? '✓' : i + 1}</span>
+          <span class="step-label">{label}</span>
+        </button>
+        {#if i < wizardSteps.length - 1}
+          <div class="step-line" class:done={step > i + 1}></div>
+        {/if}
+      {/each}
+    </div>
+  {:else}
+    <div class="tab-bar">
+      {#each settingsTabs as tab}
+        <button
+          class="tab" class:active={activeTab === tab.id}
+          onclick={() => activeTab = tab.id}
+        >{tab.label}</button>
+      {/each}
+    </div>
+  {/if}
+
+  <div class="modal-body">
+
+    <!-- ═══════════ Panel: Languages ═══════════ -->
+    {#if currentPanel === 'languages'}
+      <div class="step-content">
+        <h2 class="step-heading">Choose Your Languages</h2>
+        <p class="step-desc">Select which programming languages you'd like to use.</p>
+
+        <div class="lang-grid">
+          {#each allLanguages() as lang}
+            <button
+              class="lang-card"
+              class:selected={selectedLangs.includes(lang.type)}
+              onclick={() => toggleLang(lang.type)}
+            >
+              <span class="lang-badge {lang.badgeClass}">{lang.badge}</span>
+              <span class="lang-name">{lang.label}</span>
+              {#if lang.experimental}
+                <span class="exp-tag">exp</span>
+              {/if}
+              <div class="check-mark">
+                {#if selectedLangs.includes(lang.type)}
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="7" fill="var(--accent)" stroke="var(--accent)" stroke-width="1"/>
+                    <path d="M4.5 8l2.5 2.5 4.5-5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                  </svg>
+                {:else}
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="7" stroke="var(--border-strong)" stroke-width="1"/>
+                  </svg>
+                {/if}
+              </div>
+            </button>
+          {/each}
+        </div>
+        <p class="selection-label" class:error={!hasSelection}>{selectionLabel}</p>
+      </div>
+
+    <!-- ═══════════ Panel: Toolchains ═══════════ -->
+    {:else if currentPanel === 'toolchains'}
+      <div class="step-content">
+        <h2 class="step-heading">Toolchain Check</h2>
+        <p class="step-desc">Checking if the required compilers are installed.</p>
+
+        {#if checking}
+          <div class="checking">
+            <div class="spinner"></div>
+            <span>Detecting toolchains…</span>
+          </div>
+        {:else if status}
+          <div class="toolchain-list">
+            {#each allLanguages().filter(l => selectedLangs.includes(l.type)) as lang}
+              {@const ok = toolchainOk(lang.type)}
+              <div class="toolchain-section">
+                <div class="tc-header">
+                  <span class="lang-badge {lang.badgeClass}" style="font-size: 7px">{lang.badge}</span>
+                  <span class="tc-name">{lang.label}</span>
+                  <span class="tc-status" class:ok={ok} class:missing={!ok}>
+                    {ok ? '● Ready' : '○ Not found'}
+                  </span>
+                </div>
+
+                {#if lang.type === 'rust'}
+                  <div class="detail-grid">
+                    <div class="detail-row">
+                      <span class="detail-icon" class:ok={status.rustup.installed} class:missing={!status.rustup.installed}>{status.rustup.installed ? '●' : '○'}</span>
+                      <span class="detail-label">rustup</span>
+                      <span class="detail-value">{status.rustup.installed ? (status.rustup.version ?? 'installed') : 'not found'}</span>
+                    </div>
+                    <div class="detail-row">
+                      <span class="detail-icon" class:ok={status.cargo.installed} class:missing={!status.cargo.installed}>{status.cargo.installed ? '●' : '○'}</span>
+                      <span class="detail-label">cargo</span>
+                      <span class="detail-value">{status.cargo.installed ? (status.cargo.version ?? 'installed') : 'not found'}</span>
+                    </div>
+                    <div class="detail-row">
+                      <span class="detail-icon" class:ok={status.rustc.installed} class:missing={!status.rustc.installed}>{status.rustc.installed ? '●' : '○'}</span>
+                      <span class="detail-label">rustc</span>
+                      <span class="detail-value">{status.rustc.installed ? (status.rustc.version ?? 'installed') : 'not found'}</span>
+                    </div>
+                    <div class="detail-row">
+                      <span class="detail-icon" class:ok={status.components.rustfmt} class:missing={!status.components.rustfmt}>{status.components.rustfmt ? '●' : '○'}</span>
+                      <span class="detail-label">rustfmt</span>
+                      <span class="detail-value">{status.components.rustfmt ? 'installed' : 'not found'}</span>
+                    </div>
+                    <div class="detail-row">
+                      <span class="detail-icon" class:ok={status.components.clippy} class:missing={!status.components.clippy}>{status.components.clippy ? '●' : '○'}</span>
+                      <span class="detail-label">clippy</span>
+                      <span class="detail-value">{status.components.clippy ? 'installed' : 'not found'}</span>
+                    </div>
+                  </div>
+                  {#if !status.all_good}
+                    <div class="install-section">
+                      <p class="install-text">Install Rust:</p>
+                      <code class="install-cmd">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code>
+                      <p class="install-hint">Or visit <button class="link-btn" onclick={() => shellOpen('https://rustup.rs')}>rustup.rs</button></p>
+                    </div>
+                  {/if}
+
+                {:else if lang.type === 'clang'}
+                  <div class="detail-grid">
+                    <div class="detail-row">
+                      <span class="detail-icon" class:ok={status.clang.installed} class:missing={!status.clang.installed}>{status.clang.installed ? '●' : '○'}</span>
+                      <span class="detail-label">clang</span>
+                      <span class="detail-value">{status.clang.installed ? (status.clang.version ?? 'installed') : 'not found'}</span>
+                    </div>
+                  </div>
+                  {#if !status.clang.installed}
+                    <div class="install-section">
+                      <code class="install-cmd">xcode-select --install</code>
+                    </div>
+                  {/if}
+
+                {:else if lang.type === 'zig'}
+                  {@const zigInstalled = status.zig?.installed ?? false}
+                  {@const zigVersionOk = status.zig?.version_ok ?? false}
+                  {@const zigOk = zigInstalled && zigVersionOk}
+                  <div class="detail-grid">
+                    <div class="detail-row">
+                      <span class="detail-icon" class:ok={zigOk} class:warn={zigInstalled && !zigVersionOk} class:missing={!zigInstalled}>{zigOk ? '●' : zigInstalled ? '◐' : '○'}</span>
+                      <span class="detail-label">zig</span>
+                      <span class="detail-value">{zigInstalled ? (status.zig?.version ?? 'installed') : 'not found'}</span>
+                    </div>
+                  </div>
+                  {#if zigInstalled && !zigVersionOk}
+                    <div class="install-section warn-note">
+                      <p class="install-hint">Zig support targets <strong>0.15.x</strong>. Your version may have breaking API changes. Consider:</p>
+                      <code class="install-cmd">brew install zig</code>
+                    </div>
+                  {:else if !zigInstalled}
+                    <div class="install-section">
+                      <code class="install-cmd">brew install zig</code>
+                      <p class="install-hint">Or download from <button class="link-btn" onclick={() => shellOpen('https://ziglang.org/download/')}>ziglang.org</button></p>
+                    </div>
+                  {/if}
+
+                {:else if lang.type === 'swift'}
+                  {@const swiftOk = status.swiftc?.installed ?? false}
+                  <div class="detail-grid">
+                    <div class="detail-row">
+                      <span class="detail-icon" class:ok={swiftOk} class:missing={!swiftOk}>{swiftOk ? '●' : '○'}</span>
+                      <span class="detail-label">swiftc</span>
+                      <span class="detail-value">{swiftOk ? (status.swiftc?.version ?? 'installed') : 'not found'}</span>
+                    </div>
+                  </div>
+                  {#if !swiftOk}
+                    <div class="install-section">
+                      <code class="install-cmd">xcode-select --install</code>
+                    </div>
+                  {/if}
+                {/if}
+              </div>
+            {/each}
+          </div>
+
+          <!-- Cargo path (always shown) -->
+          <div class="cargo-path-row">
+            <label for="wiz-cargo-path">Cargo Path</label>
+            <input
+              id="wiz-cargo-path"
+              type="text"
+              bind:value={draftSettings.cargo_path}
+              class="path-input"
+              spellcheck="false"
+            />
+          </div>
+
+          <button class="btn btn-secondary recheck-btn" onclick={runCheck}>Re-check</button>
+        {/if}
+      </div>
+
+    <!-- ═══════════ Panel: Appearance ═══════════ -->
+    {:else if currentPanel === 'appearance'}
+      <div class="step-content">
+        <h2 class="step-heading">Appearance</h2>
+        <p class="step-desc">Set your preferred theme and editor font.</p>
+
+        <div class="appearance-grid">
+          <div class="setting-row">
+            <label for="wiz-theme">Theme</label>
+            <select
+              id="wiz-theme"
+              value={draftSettings.theme}
+              onchange={(e) => setTheme((e.target as HTMLSelectElement).value)}
+            >
+              <optgroup label="General">
+                <option value="system">System</option>
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </optgroup>
+              <optgroup label="Languages">
+                <option value="auto">Auto (match language)</option>
+                <option value="rust">Rust</option>
+                <option value="seagreen">Clang</option>
+                <option value="zig">Zig</option>
+                <option value="swift">Swift</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <label for="wiz-font-size">Font Size</label>
+            <div class="input-group">
+              <input id="wiz-font-size" type="number" min="8" max="32" bind:value={draftSettings.font_size} />
+              <span class="unit">px</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <label for="wiz-font-family">Font</label>
+            <select id="wiz-font-family" bind:value={draftSettings.font_family}>
+              {#each fontFamilies as f}
+                <option value={f}>{f}</option>
+              {/each}
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <label for="wiz-tab-size">Tab Size</label>
+            <select id="wiz-tab-size" bind:value={draftSettings.tab_size}>
+              <option value={2}>2 spaces</option>
+              <option value={4}>4 spaces</option>
+              <option value={8}>8 spaces</option>
+            </select>
+          </div>
+        </div>
+
+        <div
+          class="preview-box"
+          style="font-size: {draftSettings.font_size}px; font-family: '{draftSettings.font_family}', monospace;"
+        >
+          <span class="preview-kw">fn</span> <span class="preview-fn">main</span>() &#123;<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="preview-mac">println!</span>(<span class="preview-str">"Hello, playground!"</span>);<br/>
+          &#125;
+        </div>
+      </div>
+
+    <!-- ═══════════ Panel: Books ═══════════ -->
+    {:else if currentPanel === 'books'}
+      <div class="step-content">
+        <h2 class="step-heading">Example Books</h2>
+        <p class="step-desc">{mode === 'wizard' ? 'Load book examples to learn from. Each book creates read-only reference projects.' : 'Manage loaded book examples.'}</p>
+
+        {#if availableBooks.length === 0}
+          <div class="no-books">
+            <p>No books are available for your selected languages.</p>
+          </div>
+        {:else}
+          <div class="book-list">
+            {#each availableBooks as lang}
+              {@const book = lang.book!}
+              <button
+                class="book-card"
+                class:selected={booksChecked.includes(lang.type)}
+                onclick={() => toggleBook(lang.type)}
+              >
+                <span class="book-icon">📖</span>
+                <div class="book-info">
+                  <span class="book-name">{book.commandLabel}</span>
+                  <span class="book-desc">Read-only reference projects with example code</span>
+                </div>
+                <div class="check-mark">
+                  {#if booksChecked.includes(lang.type)}
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <circle cx="8" cy="8" r="7" fill="var(--accent)" stroke="var(--accent)" stroke-width="1"/>
+                      <path d="M4.5 8l2.5 2.5 4.5-5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    </svg>
+                  {:else}
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <circle cx="8" cy="8" r="7" stroke="var(--border-strong)" stroke-width="1"/>
+                    </svg>
+                  {/if}
+                </div>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+
+    <!-- ═══════════ Panel: Finish (wizard only) ═══════════ -->
+    {:else if currentPanel === 'finish'}
+      <div class="step-content finish-step">
+        <div class="finish-icon">🚀</div>
+        <h2 class="step-heading">You're All Set!</h2>
+
+        <div class="summary">
+          <div class="summary-row">
+            <span class="summary-label">Languages</span>
+            <span class="summary-value">
+              {selectedLangs.map(t => getLang(t as ProjectType).label).join(', ')}
+            </span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Theme</span>
+            <span class="summary-value">{({ system: 'System', auto: 'Auto (match language)', dark: 'Dark', light: 'Light', rust: 'Rust', seagreen: 'Clang', zig: 'Zig', swift: 'Swift' } as Record<string, string>)[draftSettings.theme] ?? draftSettings.theme}</span>
+          </div>
+          {#if booksChecked.length > 0}
+            <div class="summary-row">
+              <span class="summary-label">Books to load</span>
+              <span class="summary-value">
+                {booksChecked.map(t => getLang(t as ProjectType).book?.commandLabel).filter(Boolean).join(', ')}
+              </span>
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+  </div>
+
+  <!-- Footer -->
   <div class="modal-footer">
-    {#if !checking}
-      {#if !status?.all_good || (activeTab === 'native' && !status?.clang.installed) || (activeTab === 'zig' && !status?.zig?.installed) || (activeTab === 'swift' && !status?.swiftc?.installed)}
-        <button class="btn btn-secondary" onclick={runCheck}>Re-check</button>
+    {#if mode === 'wizard'}
+      {#if step > 1}
+        <button class="btn btn-secondary" onclick={back}>Back</button>
+      {:else}
+        <div></div>
       {/if}
-      <button class="btn btn-primary" onclick={finish}>
-        {status?.all_good ? 'Done' : 'Continue Anyway'}
-      </button>
+      <div class="footer-right">
+        {#if step < 5}
+          <button class="btn btn-primary" onclick={next} disabled={!hasSelection}>Next</button>
+        {:else}
+          <button class="btn btn-primary btn-finish" onclick={finish} disabled={!hasSelection}>Get Started</button>
+        {/if}
+      </div>
+    {:else}
+      <div></div>
+      <div class="footer-right">
+        <button class="btn btn-secondary" onclick={cancel}>Cancel</button>
+        <button class="btn btn-primary" onclick={apply} disabled={!hasSelection}>Apply</button>
+        <button class="btn btn-secondary" onclick={finish}>Done</button>
+      </div>
     {/if}
   </div>
 </div>
@@ -378,7 +590,7 @@
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
     z-index: 300;
-    width: min(480px, calc(100vw - 40px));
+    width: min(520px, calc(100vw - 40px));
     max-height: calc(100vh - 80px);
     display: flex; flex-direction: column;
     background: var(--bg-elevated);
@@ -388,6 +600,7 @@
     overflow: hidden;
   }
 
+  /* ── Header ── */
   .modal-header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 16px;
@@ -395,7 +608,12 @@
     flex-shrink: 0;
   }
   .header-left { display: flex; align-items: center; gap: 8px; }
-  .modal-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .rs-badge {
+    font-size: 8px; font-weight: 800; letter-spacing: 0.04em;
+    background: var(--rust-orange); color: #fff;
+    border-radius: 3px; padding: 2px 4px; line-height: 1.3;
+  }
+  .modal-title { font-size: 14px; font-weight: 600; color: var(--text); }
   .close-btn {
     width: 24px; height: 24px;
     display: flex; align-items: center; justify-content: center;
@@ -404,7 +622,7 @@
   }
   .close-btn:hover { background: var(--bg-hover); color: var(--text); }
 
-  /* ── Tab bar ── */
+  /* ── Tab bar (settings mode) ── */
   .tab-bar {
     display: flex;
     border-bottom: 1px solid var(--border);
@@ -413,7 +631,7 @@
   }
   .tab {
     flex: 1;
-    display: flex; align-items: center; justify-content: center; gap: 6px;
+    display: flex; align-items: center; justify-content: center;
     padding: 9px 12px;
     font-size: 12px; font-weight: 600;
     color: var(--text-tertiary);
@@ -427,19 +645,111 @@
     color: var(--text);
     border-bottom-color: var(--accent);
   }
-  .tab-badge {
-    font-size: 7px; font-weight: 800; letter-spacing: 0.04em;
-    color: #fff; border-radius: 3px; padding: 1.5px 3.5px; line-height: 1.3;
+
+  /* ── Step indicator (wizard mode) ── */
+  .step-bar {
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px 24px 12px;
+    gap: 0;
+    flex-shrink: 0;
   }
-  .tab-badge.rs { background: var(--rust-orange); }
-  .tab-badge.native { background: #4a9; }
-  .tab-badge.zig { background: #f7a41d; font-size: 6px; }
-  .tab-badge.swift { background: #f05138; }
-  .tab-dot {
-    width: 6px; height: 6px; border-radius: 50%;
+  .step-dot {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    background: none; border: none; cursor: pointer; padding: 0;
+    min-width: 60px;
   }
-  .tab-dot.ok { background: var(--green); }
-  .tab-dot.missing { background: var(--text-tertiary); }
+  .step-dot:disabled { cursor: default; }
+  .dot {
+    width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    font-size: 11px; font-weight: 700;
+    background: var(--bg-input);
+    color: var(--text-tertiary);
+    border: 1.5px solid var(--border);
+    transition: all 0.2s;
+  }
+  .step-dot.active .dot {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .step-dot.done .dot {
+    background: var(--green);
+    color: #fff;
+    border-color: var(--green);
+    font-size: 10px;
+  }
+  .step-label {
+    font-size: 9px; font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .step-dot.active .step-label { color: var(--accent); }
+  .step-dot.done .step-label { color: var(--green); }
+  .step-line {
+    flex: 1; height: 1.5px;
+    background: var(--border);
+    margin: 0 4px;
+    margin-bottom: 16px;
+    transition: background 0.2s;
+  }
+  .step-line.done { background: var(--green); }
+
+  /* ── Body ── */
+  .modal-body {
+    flex: 1; overflow-y: auto;
+    padding: 16px 24px 20px;
+  }
+
+  .step-content {
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .step-heading {
+    font-size: 16px; font-weight: 600; color: var(--text);
+    margin: 0;
+  }
+  .step-desc {
+    font-size: 12px; color: var(--text-secondary);
+    margin: -8px 0 0 0; line-height: 1.5;
+  }
+
+  /* ── Language cards ── */
+  .lang-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .selection-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 10px;
+  }
+  .selection-label.error {
+    color: var(--red, #e44);
+  }
+  .lang-card {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    background: var(--bg-input);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
+  }
+  .lang-card:hover { border-color: var(--border-strong); background: var(--bg-hover); }
+  .lang-card.selected { border-color: var(--accent); background: rgba(var(--accent-rgb, 229, 115, 0), 0.06); }
+  .lang-badge {
+    font-size: 8px; font-weight: 800; letter-spacing: 0.04em;
+    color: #fff; border-radius: 3px; padding: 2px 5px; line-height: 1.3;
+  }
+  .lang-badge.badge-rust { background: var(--rust-orange); }
+  .lang-badge.badge-clang { background: #4a9; }
+  .lang-badge.badge-zig { background: #f7a41d; font-size: 7px; }
+  .lang-badge.badge-swift { background: #f05138; }
+  .lang-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
   .exp-tag {
     font-size: 7px; font-weight: 700; letter-spacing: 0.03em;
     text-transform: uppercase;
@@ -450,35 +760,39 @@
     padding: 0.5px 3px;
     line-height: 1.3;
   }
-  .exp-note { color: #f7a41d !important; }
-
-  .modal-body {
-    flex: 1; overflow-y: auto;
-    padding: 20px;
-    display: flex; flex-direction: column; gap: 16px;
-  }
-
-  .modal-footer {
-    display: flex; align-items: center; justify-content: flex-end; gap: 8px;
-    padding: 12px 16px;
-    border-top: 1px solid var(--border);
+  .check-mark {
     flex-shrink: 0;
   }
 
-  .btn {
-    font-size: 12px; font-weight: 600;
-    padding: 5px 14px; border-radius: 6px;
-    cursor: pointer; transition: background 0.1s;
+  /* ── Toolchain list ── */
+  .toolchain-list {
+    display: flex; flex-direction: column; gap: 16px;
   }
-  .btn-secondary {
-    color: var(--text-secondary);
-    background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+  .toolchain-section {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 8px;
   }
-  .btn-secondary:hover { background: rgba(255,255,255,0.1); border-color: var(--border-strong); }
-  .btn-primary { color: #fff; background: var(--accent); border: 1px solid var(--accent); }
-  .btn-primary:hover { filter: brightness(1.15); }
+  .tc-header {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tc-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+  .tc-status { font-size: 11px; font-weight: 600; }
+  .tc-status.ok { color: var(--green); }
+  .tc-status.missing { color: var(--red, #d42020); }
+  .recheck-btn { align-self: flex-start; margin-top: 4px; }
 
-  /* Checking spinner */
+  .cargo-path-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-top: 4px;
+  }
+  .cargo-path-row label {
+    font-size: 12px; color: var(--text-secondary); font-weight: 600;
+    flex-shrink: 0;
+  }
+
   .checking {
     display: flex; align-items: center; gap: 12px;
     padding: 20px 0;
@@ -494,103 +808,163 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .error-box {
-    text-align: center; padding: 16px;
-    color: var(--red); font-size: 13px;
-  }
-  .error-box .btn { margin-top: 12px; }
-
-  /* Status banner */
-  .status-banner {
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 14px;
-    border-radius: 8px;
-    font-size: 14px; font-weight: 600;
-  }
-  .status-banner.good {
-    background: rgba(52, 199, 89, 0.12);
-    border: 1px solid rgba(52, 199, 89, 0.3);
-    color: var(--green);
-  }
-  .status-banner.warn {
-    background: rgba(255, 159, 10, 0.12);
-    border: 1px solid rgba(255, 159, 10, 0.3);
-    color: #ff9f0a;
-  }
-
-  /* Detail grid */
-  .detail-grid {
-    display: flex; flex-direction: column; gap: 2px;
-  }
+  .detail-grid { display: flex; flex-direction: column; gap: 2px; }
   .detail-row {
     display: flex; align-items: center; gap: 10px;
-    padding: 6px 8px;
-    border-radius: 4px;
-    font-size: 12px;
+    padding: 4px 8px; border-radius: 4px; font-size: 12px;
   }
-  .detail-row:hover { background: rgba(255,255,255,0.03); }
-
   .detail-icon { font-size: 8px; width: 12px; text-align: center; }
   .detail-icon.ok { color: var(--green); }
-  .detail-icon.missing { color: var(--text-tertiary); }
-
+  .detail-icon.warn { color: #e8a820; }
+  .detail-icon.missing { color: var(--red, #d42020); }
   .detail-label {
     font-family: var(--font-mono); font-weight: 600;
-    color: var(--text-secondary);
-    width: 80px; flex-shrink: 0;
+    color: var(--text-secondary); width: 70px; flex-shrink: 0;
   }
   .detail-value {
-    font-family: var(--font-mono);
-    color: var(--text-tertiary);
+    font-family: var(--font-mono); color: var(--text-tertiary);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
-  /* Path row */
-  .path-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 6px 8px;
-    font-size: 11px;
-  }
-  .path-label {
-    color: var(--text-tertiary); font-size: 10px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.05em;
-    width: 80px; flex-shrink: 0; padding-left: 22px;
-  }
-  .path-value {
-    color: var(--text-tertiary);
-    font-family: var(--font-mono); font-size: 11px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-
-  /* Install section */
   .install-section {
-    background: rgba(0,0,0,0.2);
+    background: rgba(0,0,0,0.15);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
+    border-radius: 6px;
+    padding: 10px 12px;
   }
-  .install-text {
-    font-size: 12px; color: var(--text-secondary);
-    margin: 0 0 8px 0;
+  .install-section.warn-note {
+    border-color: rgba(232, 168, 32, 0.3);
+    background: rgba(232, 168, 32, 0.06);
   }
+  .install-text { font-size: 11px; color: var(--text-secondary); margin: 0 0 6px 0; }
   .install-cmd {
     display: block;
     font-family: var(--font-mono); font-size: 11px;
-    color: var(--text); background: rgba(0,0,0,0.3);
+    color: var(--text); background: rgba(0,0,0,0.2);
     border: 1px solid var(--border);
-    border-radius: 4px; padding: 8px 10px;
-    margin: 4px 0;
-    user-select: all;
-    word-break: break-all;
+    border-radius: 4px; padding: 6px 8px; margin: 2px 0;
+    user-select: all; word-break: break-all;
   }
-  .install-hint {
-    font-size: 11px; color: var(--text-tertiary);
-    margin: 8px 0 0 0;
-  }
+  .install-hint { font-size: 10px; color: var(--text-tertiary); margin: 6px 0 0 0; }
   .link-btn {
     background: none; border: none; padding: 0;
-    color: var(--accent); font-size: 11px;
+    color: var(--accent); font-size: 10px;
     text-decoration: underline; cursor: pointer;
   }
   .link-btn:hover { filter: brightness(1.2); }
+
+  /* ── Appearance ── */
+  .appearance-grid {
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .setting-row label {
+    font-size: 13px; color: var(--text-secondary); font-weight: 500; flex-shrink: 0;
+  }
+  select, input[type="number"] {
+    font-family: var(--font-mono); font-size: 12px;
+    background: var(--bg-input); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-xs);
+    padding: 4px 8px; outline: none;
+    min-width: 140px; cursor: pointer;
+    color-scheme: var(--color-scheme, dark);
+  }
+  select:focus, input[type="number"]:focus { border-color: var(--accent); }
+  select option { background: var(--bg-elevated); color: var(--text); }
+  select optgroup { background: var(--bg-elevated); color: var(--text-secondary); font-style: normal; }
+  .input-group { display: flex; align-items: center; gap: 4px; }
+  .input-group input { width: 60px; text-align: right; min-width: 60px; }
+  .unit { font-size: 11px; color: var(--text-tertiary); }
+
+  .path-input {
+    font-family: var(--font-mono); font-size: 11px;
+    background: var(--bg-input); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-xs);
+    padding: 4px 8px; outline: none;
+    flex: 1; min-width: 0;
+  }
+  .path-input:focus { border-color: var(--accent); }
+
+  .preview-box {
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    line-height: 1.7;
+    color: var(--text);
+    white-space: pre;
+  }
+  .preview-kw  { color: #fc5fa3; }
+  .preview-fn  { color: #67b7a4; }
+  .preview-mac { color: #b281eb; }
+  .preview-str { color: #fc6a5d; }
+
+  /* ── Books ── */
+  .book-list {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .book-card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+    background: var(--bg-input);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    text-align: left;
+  }
+  .book-card:hover { border-color: var(--border-strong); background: var(--bg-hover); }
+  .book-card.selected { border-color: var(--accent); }
+  .book-icon { font-size: 20px; }
+  .book-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .book-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .book-desc { font-size: 11px; color: var(--text-tertiary); }
+  .no-books {
+    text-align: center; padding: 24px;
+    color: var(--text-tertiary); font-size: 13px;
+  }
+
+  /* ── Finish ── */
+  .finish-step { align-items: center; text-align: center; }
+  .finish-icon { font-size: 40px; margin-bottom: 4px; }
+  .summary {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex; flex-direction: column; gap: 8px;
+    text-align: left;
+  }
+  .summary-row {
+    display: flex; justify-content: space-between; gap: 12px;
+    font-size: 12px;
+  }
+  .summary-label { color: var(--text-tertiary); font-weight: 600; }
+  .summary-value { color: var(--text); font-weight: 500; text-align: right; }
+
+  /* ── Footer ── */
+  .modal-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .footer-right { display: flex; gap: 8px; }
+
+  .btn {
+    font-size: 12px; font-weight: 600;
+    padding: 6px 18px; border-radius: 6px;
+    cursor: pointer; transition: background 0.1s;
+  }
+  .btn-secondary {
+    color: var(--text-secondary);
+    background: var(--bg-input); border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+  .btn-primary { color: #fff; background: var(--accent); border: 1px solid var(--accent); }
+  .btn-primary:hover { filter: brightness(1.15); }
+  .btn-finish { padding: 8px 28px; font-size: 13px; }
 </style>

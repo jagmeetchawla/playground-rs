@@ -1,4 +1,4 @@
-//! Native (C/C++) language module — flat directory with clang/clang++ compilation.
+//! Clang (C/C++) language module — flat directory with clang/clang++ compilation.
 
 use std::path::Path;
 
@@ -7,13 +7,13 @@ use crate::rustic_manifest::RusticManifest;
 
 // ── Scaffold ─────────────────────────────────────────────────────────────────
 
-/// Create a new native project: hello.c + content/ + rustic.toml.
+/// Create a new clang project: hello.c + content/ + rustic.toml.
 pub fn scaffold_project(project_path: &Path) -> Result<(), String> {
     std::fs::create_dir_all(project_path)
         .map_err(|e| format!("Failed to create project: {}", e))?;
     std::fs::create_dir_all(project_path.join("content"))
         .map_err(|e| format!("Failed to create content dir: {}", e))?;
-    let manifest = crate::rustic_manifest::new_native_manifest();
+    let manifest = crate::rustic_manifest::new_clang_manifest();
     crate::rustic_manifest::write_manifest(project_path, &manifest)?;
     std::fs::write(project_path.join("hello.c"), starter_template("hello", "c"))
         .map_err(|e| format!("Failed to seed hello.c: {}", e))?;
@@ -22,7 +22,7 @@ pub fn scaffold_project(project_path: &Path) -> Result<(), String> {
 
 // ── Templates ────────────────────────────────────────────────────────────────
 
-/// Starter template for native project files, based on language extension.
+/// Starter template for clang project files, based on language extension.
 pub fn starter_template(name: &str, ext: &str) -> String {
     match ext {
         "c" => format!(
@@ -68,7 +68,7 @@ pub(crate) fn resolve_sdk_path() -> Option<String> {
 
 // ── Run ──────────────────────────────────────────────────────────────────────
 
-/// Build a RunConfig::CompileThenRun for a native C/C++ playground.
+/// Build a RunConfig::CompileThenRun for a clang C/C++ playground.
 pub fn build_run_command(
     name: &str,
     source_path: &Path,

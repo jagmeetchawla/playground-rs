@@ -281,7 +281,7 @@ mod tests {
     }
 }
 
-/// Shell script CLI runner for native C/C++ projects.
+/// Shell script CLI runner for clang C/C++ projects.
 /// Mirrors the Rust CLI runner: list, pick, compile & run.
 const CLI_PLAYGROUND_SH: &str = r##"#!/bin/sh
 # playground — CLI runner for C/C++ playground files
@@ -428,7 +428,7 @@ pub fn export_project(dest: String, app: AppHandle) -> Result<String, String> {
     let lang = Lang::from_str(&ptype);
     match lang {
         Lang::Rust => export_rust_project(dest, &app),
-        Lang::Native => export_native_project(dest, &app),
+        Lang::Clang => export_clang_project(dest, &app),
         Lang::Zig => export_zig_project(dest, &app),
         Lang::Swift => export_swift_project(dest, &app),
     }
@@ -524,10 +524,10 @@ fn export_rust_project(dest: String, app: &AppHandle) -> Result<String, String> 
     Ok(export_dir.to_string_lossy().to_string())
 }
 
-/// Export a native C/C++ project as a standalone CLI playground.
+/// Export a clang C/C++ project as a standalone CLI playground.
 /// Creates dest/<project>/ with playground.sh runner, Makefile, src/*.c|cpp,
 /// and content/ files.
-fn export_native_project(dest: String, app: &AppHandle) -> Result<String, String> {
+fn export_clang_project(dest: String, app: &AppHandle) -> Result<String, String> {
     let workspace = workspace_dir(app);
     let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
 
@@ -538,7 +538,7 @@ fn export_native_project(dest: String, app: &AppHandle) -> Result<String, String
 
     // Read build flags from manifest
     let manifest = rustic_manifest::ensure_manifest(&workspace)
-        .unwrap_or_else(|_| rustic_manifest::new_native_manifest());
+        .unwrap_or_else(|_| rustic_manifest::new_clang_manifest());
     let cflags = manifest.build.cflags.join(" ");
     let cxxflags = manifest.build.cxxflags.join(" ");
 

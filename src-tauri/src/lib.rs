@@ -33,6 +33,12 @@ pub(crate) struct Config {
     pub(crate) active_project: String,
     #[serde(default)]
     pub(crate) wizard_completed: bool,
+    #[serde(default = "default_enabled_languages")]
+    pub(crate) enabled_languages: Vec<String>,
+}
+
+fn default_enabled_languages() -> Vec<String> {
+    vec!["rust".to_string()]
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -137,17 +143,19 @@ pub(crate) fn load_config(app: &AppHandle) -> Config {
         }
     }
     Config {
-        active_project: "default".to_string(),
+        active_project: "hello_rust".to_string(),
         wizard_completed: false,
+        enabled_languages: default_enabled_languages(),
     }
 }
 
 pub(crate) fn save_config(app: &AppHandle, active_project: &str) -> Result<(), String> {
-    // Preserve wizard_completed from existing config
+    // Preserve wizard_completed and enabled_languages from existing config
     let existing = load_config(app);
     let config = Config {
         active_project: active_project.to_string(),
         wizard_completed: existing.wizard_completed,
+        enabled_languages: existing.enabled_languages,
     };
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialise config: {}", e))?;
@@ -186,12 +194,16 @@ fn ensure_project(app: &AppHandle) -> Result<(), String> {
             .map_err(|e| format!("Failed to create project directory: {}", e))?;
     }
 
-    // For new Rust projects: create Cargo.toml + src/bin BEFORE ensure_manifest,
-    // so that legacy detection sees Cargo.toml and correctly picks "rust".
+    // For brand-new projects: scaffold only if the wizard has been completed
+    // (on first launch the wizard creates hello projects for selected languages).
     let cargo_toml = workspace.join("Cargo.toml");
     let bin = workspace.join("src").join("bin");
-    if !cargo_toml.exists() && !workspace.join("rustic.toml").exists() {
-        // Brand new project — scaffold as Rust by default
+    let config = load_config(app);
+    if config.wizard_completed
+        && !cargo_toml.exists()
+        && !workspace.join("rustic.toml").exists()
+    {
+        // Post-wizard new Rust project — scaffold Cargo.toml + hello.rs
         std::fs::create_dir_all(&bin)
             .map_err(|e| format!("Failed to create project dirs: {}", e))?;
         let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
@@ -201,12 +213,17 @@ fn ensure_project(app: &AppHandle) -> Result<(), String> {
             .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
     }
 
+    // If project isn't scaffolded yet (first launch before wizard), just return OK
+    if !cargo_toml.exists() && !workspace.join("rustic.toml").exists() {
+        return Ok(());
+    }
+
     // Ensure rustic.toml exists (auto-generates for legacy projects)
     let mut manifest = rustic_manifest::ensure_manifest(&workspace)?;
 
-    // Repair: if Cargo.toml exists but rustic.toml was incorrectly generated as "native"
+    // Repair: if Cargo.toml exists but rustic.toml was incorrectly generated as "clang"
     // (e.g. from a startup race), fix it.
-    if cargo_toml.exists() && manifest.project.project_type == "native" {
+    if cargo_toml.exists() && manifest.project.project_type == "clang" {
         manifest.project.project_type = "rust".to_string();
         rustic_manifest::write_manifest(&workspace, &manifest)?;
     }
@@ -417,6 +434,31 @@ fn save_settings(settings: Settings, app: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to write settings.json: {}", e))
 }
 
+// ── Language gating ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn get_enabled_languages(app: AppHandle) -> Vec<String> {
+    load_config(&app).enabled_languages
+}
+
+#[tauri::command]
+fn set_enabled_languages(languages: Vec<String>, app: AppHandle) -> Result<(), String> {
+    let existing = load_config(&app);
+    if languages.is_empty() {
+        return Err("At least one language must be enabled".to_string());
+    }
+    let langs = languages;
+    let config = Config {
+        active_project: existing.active_project,
+        wizard_completed: existing.wizard_completed,
+        enabled_languages: langs,
+    };
+    let json = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialise config: {}", e))?;
+    std::fs::write(config_path(&app), json)
+        .map_err(|e| format!("Failed to write config.json: {}", e))
+}
+
 // ── Book seeding ─────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -448,7 +490,9 @@ pub fn run() {
             std::fs::create_dir_all(&proj_dir).expect("Cannot create projects dir");
 
             // Resolve active project: use config value if its dir exists,
-            // otherwise fall back to the first existing project or "default"
+            // otherwise fall back to the first existing project.
+            // On first launch (wizard not completed), use a placeholder —
+            // the wizard will create the real projects.
             let active = if proj_dir.join(&config.active_project).exists() {
                 config.active_project.clone()
             } else {
@@ -459,7 +503,7 @@ pub fn run() {
                     })
                     .and_then(|e| e.ok())
                     .and_then(|e| e.file_name().into_string().ok())
-                    .unwrap_or_else(|| "default".to_string())
+                    .unwrap_or_else(|| config.active_project.clone())
             };
 
             // Register active project in app state BEFORE calling ensure_project
@@ -469,7 +513,10 @@ pub fn run() {
             app.manage(CheckProcess(Mutex::new(None)));
 
             // Bootstrap the active project's directory structure if needed
-            ensure_project(app.handle()).expect("Failed to initialise project");
+            // (skip on first launch — the wizard creates projects)
+            if config.wizard_completed {
+                ensure_project(app.handle()).expect("Failed to initialise project");
+            }
 
             // ── Native macOS menu ─────────────────────────────────────────────
             // Read the initial project list so the Project menu is populated.
@@ -516,6 +563,7 @@ pub fn run() {
                 &ptype,
                 is_book,
                 &sources,
+                &config.enabled_languages,
             )?;
             app.set_menu(menu)?;
             Ok(())
@@ -588,6 +636,8 @@ pub fn run() {
             save_window_state,
             get_settings,
             save_settings,
+            get_enabled_languages,
+            set_enabled_languages,
             // Playground management
             playground_commands::list_playgrounds,
             playground_commands::load_playground,
@@ -760,7 +810,7 @@ mod tests {
         assert!(validate_filename("..hidden").is_ok());
     }
 
-    // ── file_validate_name (native) ────────────────────────────────────────
+    // ── file_validate_name (clang) ─────────────────────────────────────────
 
     #[test]
     fn file_validate_name_accepts_valid_c() {
@@ -938,11 +988,13 @@ mod tests {
         let c = Config {
             active_project: "my_project".to_string(),
             wizard_completed: true,
+            enabled_languages: vec!["rust".to_string(), "clang".to_string()],
         };
         let json = serde_json::to_string(&c).unwrap();
         let c2: Config = serde_json::from_str(&json).unwrap();
         assert_eq!(c2.active_project, "my_project");
         assert!(c2.wizard_completed);
+        assert_eq!(c2.enabled_languages, vec!["rust", "clang"]);
     }
 
     #[test]
@@ -950,6 +1002,7 @@ mod tests {
         let json = r#"{"active_project":"default"}"#;
         let c: Config = serde_json::from_str(json).unwrap();
         assert!(!c.wizard_completed);
+        assert_eq!(c.enabled_languages, vec!["rust"]);
     }
 
     // ── WindowState ──────────────────────────────────────────────────────

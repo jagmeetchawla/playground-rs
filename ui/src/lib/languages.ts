@@ -1,5 +1,5 @@
 /** All supported project types. */
-export type ProjectType = 'rust' | 'native' | 'zig' | 'swift'
+export type ProjectType = 'rust' | 'clang' | 'zig' | 'swift'
 
 /** Configuration for a language's companion book (Help menu). */
 export interface BookConfig {
@@ -26,7 +26,7 @@ export interface LanguageConfig {
   needsExtension: boolean
   toolchainName: string
   runCommandDisplay: (filename: string) => string
-  /** Sub-languages (e.g. C and C++ within Native) */
+  /** Sub-languages (e.g. C and C++ within Clang) */
   subLanguages?: { id: string; label: string; ext: string }[]
   /** Mark unstable languages whose stdlib/API may break between versions */
   experimental?: boolean
@@ -58,11 +58,11 @@ const LANGUAGES: Record<ProjectType, LanguageConfig> = {
       sourceTag: 'rust_book',
     },
   },
-  native: {
-    type: 'native',
+  clang: {
+    type: 'clang',
     label: 'C/C++',
-    badge: '\u{F8FF}', // Apple logo
-    badgeClass: 'badge-native',
+    badge: 'CLG',
+    badgeClass: 'badge-clang',
     color: '#44aa99',
     extensions: ['c', 'cpp'],
     hasCargoToml: false,
@@ -91,7 +91,7 @@ const LANGUAGES: Record<ProjectType, LanguageConfig> = {
   },
   zig: {
     type: 'zig',
-    label: 'Zig',
+    label: 'Zig (v0.15)',
     badge: 'ZIG',
     badgeClass: 'badge-zig',
     color: '#f7a41d',
@@ -139,6 +139,10 @@ export function getLang(type: ProjectType): LanguageConfig {
 
 export function allLanguages(): LanguageConfig[] {
   return Object.values(LANGUAGES)
+}
+
+export function enabledLanguageConfigs(enabled: string[]): LanguageConfig[] {
+  return allLanguages().filter(l => enabled.includes(l.type))
 }
 
 /** Map a file extension to a badge type for the tab bar. */

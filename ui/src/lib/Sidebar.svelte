@@ -360,7 +360,7 @@
             />
           {:else}
             {@const badgeType = lang.needsExtension ? (name.split('.').pop()?.toLowerCase() ?? '') : 'rs'}
-            <span class="file-icon" class:native={badgeType === 'c' || badgeType === 'cpp'} class:zig={badgeType === 'zig'} class:swift={badgeType === 'swift'}>
+            <span class="file-icon" class:clang={badgeType === 'c' || badgeType === 'cpp'} class:zig={badgeType === 'zig'} class:swift={badgeType === 'swift'}>
               {badgeType === 'cpp' ? 'C++' : badgeType === 'c' ? 'C' : badgeType === 'zig' ? 'ZIG' : badgeType === 'swift' ? 'SW' : 'RS'}
             </span>
             {#if readOnly}
@@ -429,7 +429,7 @@
       </div>
       {#if flagsExpanded}
         <div class="flags-body">
-          {#if projectType === 'native'}
+          {#if projectType === 'clang'}
             <label class="flags-label">C flags</label>
             <input class="flags-input" type="text" value={cflagsText} placeholder="-lsqlite3" spellcheck="false"
               onchange={(e) => { cflagsText = e.currentTarget.value; saveBuildFlags() }} />
@@ -763,7 +763,7 @@
   .playground-item.active { background: var(--accent); }
   .playground-item.active .name { color: #fff; }
   .playground-item.active .file-icon { background: rgba(255,255,255,0.25); color: #fff; }
-  .playground-item.active .file-icon.native { background: rgba(68,170,153,0.5); }
+  .playground-item.active .file-icon.clang { background: rgba(68,170,153,0.5); }
   .playground-item.active .dirty-dot { color: rgba(255,255,255,0.7); }
 
   .file-icon {
@@ -773,7 +773,7 @@
     flex-shrink: 0; line-height: 1.3;
     min-width: 18px; text-align: center;
   }
-  .file-icon.native {
+  .file-icon.clang {
     background: #4a9; letter-spacing: 0;
   }
   .file-icon.zig {
@@ -820,7 +820,7 @@
   .cargo-body { overflow-y: auto; flex: 1; min-height: 0; }
   .cargo-pre {
     margin: 0; padding: 8px 10px;
-    font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6;
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.6;
     color: var(--text-secondary); white-space: pre-wrap; word-break: break-word;
   }
   .cargo-empty { display: block; padding: 8px 10px; font-size: 11px; color: var(--text-tertiary); font-style: italic; }
@@ -905,7 +905,7 @@
 
   .file-type-icon { font-size: 13px; flex-shrink: 0; line-height: 1; }
   .file-name {
-    flex: 1; font-size: 12.5px; color: var(--text-secondary);
+    flex: 1; font-size: 13px; color: var(--text-secondary);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 

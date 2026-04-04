@@ -124,14 +124,14 @@
   }
 
   .app-name {
-    font-size: 18px; font-weight: 700; color: var(--text);
+    font-size: 18px; font-weight: 600; color: var(--text);
     margin: 0 0 4px;
   }
   .app-version {
     font-size: 12px; color: var(--text-tertiary); margin: 0 0 12px;
   }
   .app-desc {
-    font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;
+    font-size: 13px; color: var(--text-secondary); line-height: 1.6;
     margin: 0 0 16px;
   }
 
@@ -153,13 +153,13 @@
   .stack-label { color: var(--text-tertiary); flex-shrink: 0; }
   .stack-value { color: var(--text-secondary); }
   .stack-link {
-    color: var(--accent); font-size: 11.5px;
+    color: var(--accent); font-size: 12px;
     text-decoration: none; word-break: break-all;
   }
   .stack-link:hover { text-decoration: underline; }
 
   .disclaimer {
-    font-size: 10.5px; color: var(--text-tertiary);
+    font-size: 11px; color: var(--text-tertiary);
     line-height: 1.55; margin: 0; text-align: center;
   }
 </style>

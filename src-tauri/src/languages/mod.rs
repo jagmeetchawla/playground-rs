@@ -6,7 +6,7 @@
 //! every arm is handled when a new language is added.
 
 mod knr_book;
-pub mod native;
+pub mod clang;
 pub mod rust;
 mod rust_book;
 pub mod swift;
@@ -39,7 +39,7 @@ pub struct BookInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lang {
     Rust,
-    Native,
+    Clang,
     Zig,
     Swift,
 }
@@ -48,7 +48,7 @@ impl Lang {
     pub fn from_str(s: &str) -> Self {
         match s {
             "rust" => Lang::Rust,
-            "native" => Lang::Native,
+            "clang" => Lang::Clang,
             "zig" => Lang::Zig,
             "swift" => Lang::Swift,
             _ => Lang::Rust, // fallback
@@ -59,7 +59,7 @@ impl Lang {
     pub fn project_type(&self) -> &'static str {
         match self {
             Lang::Rust => "rust",
-            Lang::Native => "native",
+            Lang::Clang => "clang",
             Lang::Zig => "zig",
             Lang::Swift => "swift",
         }
@@ -67,7 +67,7 @@ impl Lang {
 
     /// All language variants, in display order.
     pub fn all() -> &'static [Lang] {
-        &[Lang::Rust, Lang::Native, Lang::Zig, Lang::Swift]
+        &[Lang::Rust, Lang::Clang, Lang::Zig, Lang::Swift]
     }
 
     /// Returns book info if this language has a companion book.
@@ -82,7 +82,7 @@ impl Lang {
                 source_tag: "rust_book",
                 url: "https://doc.rust-lang.org/book/",
             }),
-            Lang::Native => Some(BookInfo {
+            Lang::Clang => Some(BookInfo {
                 book_name: "The K&&R C Book",
                 menu_id: "seed_knr_book",
                 remove_menu_id: "remove_knr_book",
@@ -109,7 +109,7 @@ impl Lang {
     pub fn seed_book(&self, projects_dir: &Path) -> Result<Vec<String>, String> {
         match self {
             Lang::Rust => rust_book::seed_book(projects_dir),
-            Lang::Native => knr_book::seed_book(projects_dir),
+            Lang::Clang => knr_book::seed_book(projects_dir),
             Lang::Swift => swift_book::seed_book(projects_dir),
             Lang::Zig => Err("Zig has no companion book".to_string()),
         }
@@ -118,7 +118,7 @@ impl Lang {
     pub fn extensions(&self) -> &'static [&'static str] {
         match self {
             Lang::Rust => &["rs"],
-            Lang::Native => &["c", "cpp"],
+            Lang::Clang => &["c", "cpp"],
             Lang::Zig => &["zig"],
             Lang::Swift => &["swift"],
         }
@@ -129,7 +129,7 @@ impl Lang {
     pub fn src_dir(&self) -> &'static str {
         match self {
             Lang::Rust => "src/bin",
-            Lang::Native | Lang::Zig | Lang::Swift => ".",
+            Lang::Clang | Lang::Zig | Lang::Swift => ".",
         }
     }
 
@@ -137,7 +137,7 @@ impl Lang {
     pub fn supports_live_check(&self) -> bool {
         match self {
             Lang::Rust => true,
-            Lang::Native | Lang::Zig | Lang::Swift => false,
+            Lang::Clang | Lang::Zig | Lang::Swift => false,
         }
     }
 
@@ -145,7 +145,7 @@ impl Lang {
     pub fn list_playgrounds(&self, src_dir: &Path) -> Vec<String> {
         match self {
             Lang::Rust => rust::list_playgrounds(src_dir),
-            Lang::Native | Lang::Zig | Lang::Swift => {
+            Lang::Clang | Lang::Zig | Lang::Swift => {
                 file_list_playgrounds(src_dir, self.extensions())
             }
         }
@@ -155,7 +155,7 @@ impl Lang {
     pub fn validate_name(&self, name: &str) -> Result<(String, String), String> {
         match self {
             Lang::Rust => rust::validate_name(name),
-            Lang::Native | Lang::Zig | Lang::Swift => file_validate_name(name, self.extensions()),
+            Lang::Clang | Lang::Zig | Lang::Swift => file_validate_name(name, self.extensions()),
         }
     }
 
@@ -163,7 +163,7 @@ impl Lang {
     pub fn playground_path(&self, name: &str, src_dir: &Path) -> Result<PathBuf, String> {
         match self {
             Lang::Rust => rust::playground_path(name, src_dir),
-            Lang::Native | Lang::Zig | Lang::Swift => {
+            Lang::Clang | Lang::Zig | Lang::Swift => {
                 file_playground_path(name, src_dir, self.extensions())
             }
         }
@@ -173,7 +173,7 @@ impl Lang {
     pub fn scaffold_project(&self, project_path: &Path, project_name: &str) -> Result<(), String> {
         match self {
             Lang::Rust => rust::scaffold_project(project_path, project_name),
-            Lang::Native => native::scaffold_project(project_path),
+            Lang::Clang => clang::scaffold_project(project_path),
             Lang::Zig => zig::scaffold_project(project_path),
             Lang::Swift => swift::scaffold_project(project_path),
         }
@@ -183,7 +183,7 @@ impl Lang {
     pub fn starter_template(&self, name: &str, ext: &str) -> String {
         match self {
             Lang::Rust => rust::starter_template(name),
-            Lang::Native => native::starter_template(name, ext),
+            Lang::Clang => clang::starter_template(name, ext),
             Lang::Zig => zig::starter_template(name),
             Lang::Swift => swift::starter_template(name),
         }
@@ -193,7 +193,7 @@ impl Lang {
     pub fn new_manifest(&self) -> RusticManifest {
         match self {
             Lang::Rust => crate::rustic_manifest::new_rust_manifest(),
-            Lang::Native => crate::rustic_manifest::new_native_manifest(),
+            Lang::Clang => crate::rustic_manifest::new_clang_manifest(),
             Lang::Zig => crate::rustic_manifest::new_zig_manifest(),
             Lang::Swift => crate::rustic_manifest::new_swift_manifest(),
         }
@@ -209,7 +209,7 @@ impl Lang {
     ) -> Result<RunConfig, String> {
         match self {
             Lang::Rust => rust::build_run_command(name, workspace),
-            Lang::Native => native::build_run_command(name, source_path, workspace, manifest),
+            Lang::Clang => clang::build_run_command(name, source_path, workspace, manifest),
             Lang::Zig => zig::build_run_command(name, source_path, workspace, manifest),
             Lang::Swift => swift::build_run_command(name, source_path, workspace, manifest),
         }
@@ -251,7 +251,7 @@ pub struct ToolInfo {
 }
 
 // ── Shared FileLanguage helpers ──────────────────────────────────────────────
-// Used by Native, Zig, and Swift — flat-directory languages where playground
+// Used by Clang, Zig, and Swift — flat-directory languages where playground
 // files live at the project root with their extension in the name.
 
 /// List playground files by scanning a directory for files with matching extensions.

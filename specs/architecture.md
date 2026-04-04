@@ -18,7 +18,7 @@ src-tauri/src/
 ├── languages/               — per-language modules (v0.3)
 │   ├── mod.rs               — Lang enum, RunConfig enum, shared FileLanguage helpers
 │   ├── rust.rs              — Cargo workspace: scaffold, run, check, export
-│   ├── native.rs            — C/C++ with clang: scaffold, compile+run, export
+│   ├── clang.rs             — C/C++ with clang: scaffold, compile+run, export
 │   ├── zig.rs               — Zig: scaffold, zig run (direct), export
 │   └── swift.rs             — Swift: scaffold, swiftc compile+run, export
 ├── playground_commands.rs   — thin dispatchers: CRUD + run/kill/check via Lang enum
@@ -26,8 +26,10 @@ src-tauri/src/
 ├── content_commands.rs      — content file CRUD (9 commands)
 ├── export.rs                — thin router: Lang enum → per-language export
 ├── menu.rs                  — build_menu + rebuild_menu (macOS menu bar)
-├── book_chapters.rs         — seed_rust_book command (20 Rust Book chapter projects)
-├── knr_chapters.rs          — seed_knr_book command (8 K&R C Book chapter projects)
+├── languages/rust_book.rs   — seed_rust_book command (20 Rust Book chapter projects)
+├── languages/knr_book.rs    — seed_knr_book command (8 K&R C Book chapter projects)
+├── languages/swift_book.rs  — seed_swift_book command (8 Swift Book chapter projects)
+├── rustic_manifest.rs       — rustic.toml manifest CRUD (project type, flags, toolchain)
 └── main.rs                  — Tauri entry point
 
 Frontend Structure
@@ -38,12 +40,13 @@ ui/src/
 │   ├── Sidebar.svelte       — project/playground/file tree, drag-drop, context menus
 │   ├── Editor.svelte        — Monaco wrapper, theme sync, diagnostics markers
 │   ├── Output.svelte        — console panel, run blocks, streaming output
-│   ├── SettingsModal.svelte  — settings panel (editor, appearance, toolchain)
+│   ├── SettingsModal.svelte  — settings panel (editor, appearance) [legacy, mostly moved to ToolchainWizard]
 │   ├── NewPlaygroundModal.svelte — new playground dialog with template picker
-│   ├── HelpModal.svelte     — help overlay (⌘⇧/)
+│   ├── HelpModal.svelte     — Apple-style user guide with sidebar nav (⌘⇧/)
 │   ├── AboutModal.svelte    — about dialog
 │   ├── ProjectSwitcher.svelte — project list popover, new/rename/delete project
-│   ├── ToolchainWizard.svelte — first-run wizard, tabbed (Rust / C/C++)
+│   ├── ToolchainWizard.svelte — dual-mode: 5-step Welcome Wizard + Settings panel (⌘,)
+│   ├── CopyToProjectModal.svelte — copy book playground to user project
 │   ├── TabBar.svelte        — editor tab bar with language-aware badges
 │   ├── templates.ts         — Rust, C, and C++ starter templates
 │   ├── languages.ts         — frontend language registry (v0.3)
@@ -77,11 +80,11 @@ content_commands.rs (~120 lines):
 - Content file CRUD: list/create/read/save/delete/rename/import, reveal_in_finder, get_content_file_path
 
 export.rs (~400 lines):
-- export_project: thin router — detects project type, dispatches to Rust or native export
+- export_project: thin router — detects project type, dispatches to Rust or Clang export
 - Rust path: export_rust_project + CLI_MAIN_RS (clap-based CLI runner, merged Cargo.toml)
-- Native path: export_native_project + CLI_PLAYGROUND_SH (shell script runner, Makefile)
+- Clang path: export_clang_project + CLI_PLAYGROUND_SH (shell script runner, Makefile)
 - Shared helper: copy_content_files (pure I/O, no language-specific logic)
-- Separation: Rust and native exports are independent functions with own constants.
+- Separation: Rust and Clang exports are independent functions with own constants.
   Modifying one cannot break the other. Kept in the same file for discoverability.
 
 menu.rs (~150 lines):
@@ -92,20 +95,20 @@ book_chapters.rs (~2,700 lines):
 - seed_rust_book: creates 20 Rust Book chapter projects with all playgrounds and attribution
 
 knr_chapters.rs (~1,200 lines):
-- seed_knr_book: creates 8 K&R C Book chapter projects (native type) with attribution
+- seed_knr_book: creates 8 K&R C Book chapter projects (clang type) with attribution
 - Fully separate module from book_chapters.rs — no shared code
 
 Project Types & Language Module Architecture
 
-Four project types: "rust" (default, first-class), "native" (C/C++), "zig", "swift".
+Four project types: "rust" (default, first-class), "clang" (C/C++), "zig", "swift".
 
 Rust is the first-class citizen. The app always starts with Rust toolchain detection,
 defaults to creating Rust projects. Other languages are additive.
 
 Architecture (v0.3):
 - Backend: Lang enum in languages/mod.rs with exhaustive match dispatch.
-  Each language has its own module (rust.rs, native.rs, zig.rs, swift.rs).
-  Shared FileLanguage helpers serve flat-directory languages (native, zig, swift).
+  Each language has its own module (rust.rs, clang.rs, zig.rs, swift.rs).
+  Shared FileLanguage helpers serve flat-directory languages (clang, zig, swift).
   Dispatcher files (playground_commands.rs, export.rs) are thin routers.
   Adding a new language = new module + new enum arm → compiler catches all missing arms.
 - Frontend: languages.ts registry with LanguageConfig objects per language.
@@ -113,7 +116,7 @@ Architecture (v0.3):
   instead of hardcoded project type checks.
   Templates in separate files per language (templates.ts, zig_templates.ts, etc.).
 - Manifest: rustic.toml [project] type field determines everything. Detection
-  heuristic: rustic.toml → Cargo.toml → .zig → .swift → "native".
+  heuristic: rustic.toml → Cargo.toml → .zig → .swift → "clang".
 
 How It Works
 
@@ -142,12 +145,13 @@ Output Streaming
 - Frontend renders each stream with a different colour
 
 Theme System
-- Four modes: System / Light / Dark / Sea Green (persisted in settings)
+- Eight themes: System / Light / Dark / Auto (match language) / Rust / Clang / Zig / Swift
 - System mode tracks prefers-color-scheme media query
-- CSS custom properties on body (.theme-dark / .theme-light / .theme-seagreen) for app chrome
-- Monaco has paired themes: playground-dark / playground-light / playground-seagreen
+- Auto mode switches theme based on active project's language type
+- CSS custom properties on body (.theme-dark / .theme-light / .theme-rust / .theme-seagreen / .theme-zig / .theme-swift) for app chrome
+- Monaco has paired themes per language
 - Both sync reactively via Svelte $effect
-- Sea Green theme: deep ocean palette honoring C — complements the Rust orange theme
+- Each language theme has a distinct accent color and palette
 
 Toolchain Detection & Setup
 - Rust (required at startup):
@@ -157,14 +161,16 @@ Toolchain Detection & Setup
   - If found: read version via cargo --version
   - If not found: show first-run setup wizard (Rust tab)
   - All cargo invocations use the resolved absolute path
-- Native C/C++ (detected on demand):
+- Clang C/C++ (detected on demand):
     1. xcrun --find clang
     2. clang --version for display
-  - Not required at startup — detected when first native project is created
+  - Not required at startup — detected when first Clang project is created
   - Wizard has a separate C/C++ tab showing status and install instructions
 - Zig (detected on demand):
     1. which zig or PATH lookup
     2. zig version for display
+  - Targets Zig 0.15.x — version_ok check in check_toolchain
+  - Other versions may have breaking stdlib API changes (yellow warning in wizard/pill)
   - Not required at startup
 - Swift (detected on demand):
     1. swiftc --version (ships with Xcode CLI tools)

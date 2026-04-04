@@ -14,7 +14,7 @@ v0.3 — Language Module Architecture + Zig & Swift Support
 
   Shipped:
   1. Lang enum with exhaustive match dispatch (languages/mod.rs)
-  2. Per-language modules: rust.rs, native.rs, zig.rs, swift.rs
+  2. Per-language modules: rust.rs, clang.rs, zig.rs, swift.rs
   3. RunConfig enum (Direct vs CompileThenRun) with generic runners
   4. Shared FileLanguage helpers for flat-directory languages
   5. Zig project type: zig run, custom Monaco tokenizer, 6 templates
@@ -29,14 +29,61 @@ v0.3 — Language Module Architecture + Zig & Swift Support
   14. Dynamic Help menu: book items generated from language modules
 
   After v0.3: website (rustic-playground.app), DMG distribution, wiki, announcements.
+  Website/FAQ/wiki content source: HelpModal.svelte (Apple-style user guide).
+  When building the website: extract HelpModal content into shared markdown files that
+  both the Svelte app and the static site generator consume. Until then, HelpModal.svelte
+  is the single source of truth — edit inline.
+  Must document: Zig support targets 0.15.x — breaking API changes between versions.
 
 ---
 
 IN PROGRESS
 ───────────
 
+v0.3.2 — Welcome Wizard + Language Gating
+  Status: in progress — 2026-04-04
+
+  Overview:
+  Multi-step Welcome Wizard replaces the single-screen toolchain check. Users
+  choose which languages to enable, verify toolchains, set theme/font, and
+  optionally load book examples — all in a guided 5-step flow. Only enabled
+  languages appear in project switcher, Learn menu, books section, and Settings.
+  Languages can be added/removed later from Settings. At least one language must
+  be selected.
+
+  Completed:
+  1. Config: enabled_languages field with serde default (backward compatible)
+  2. Backend commands: get_enabled_languages, set_enabled_languages
+  3. complete_wizard: accepts and persists enabled_languages
+  4. Menu: Learn menu filters by enabled languages
+  5. languages.ts: enabledLanguageConfigs helper
+  6. Welcome Wizard: 5-step (Languages, Toolchains, Appearance, Books, Finish)
+  7. App.svelte: enabledLangs state, wizard/settings handlers, menu rebuild
+  8. ProjectSwitcher: project types and books filtered by enabled languages
+  9. Dual-mode ToolchainWizard: wizard (first launch) + settings panel (⌘,)
+  10. Empty-state book buttons filtered by enabled languages
+  11. Apply button in settings mode (persist without closing)
+  12. Book management via explicit checkboxes (load/remove, not auto)
+  13. Toolchain pill: language support status (red=not enabled, yellow=partial, green=ok)
+  14. Per-language hello projects on wizard completion (hello_rust, hello_c, etc.)
+  15. Rename native→clang throughout codebase (backend, frontend, docs)
+  16. CLG badge for project-level, C/C++ badges for file-level
+  17. Apple HIG styling: ghost/tinted toolbar buttons, 600-weight titles, standardized font sizes
+  18. Toast stacking with independent auto-dismiss timers
+  19. Books section in dropdown only shows loaded books (no "Load" option)
+  20. Project selector pill matches popover width (240–320px)
+  21. Stdout streaming fix: byte-level pipe reading for prompts without newline
+  22. Synthetic "Running" marker for non-cargo direct runners (zig run)
+  23. CLI Input templates for Zig (0.15 API) and Swift
+  24. Zig version pinning: version_ok check for 0.15.x, yellow warning for other versions
+  25. Zig label includes version: "Zig (v0.15)" throughout UI
+  26. HelpModal rewrite: Apple User Guide style with sidebar navigation, 9 sections
+      (source of truth for website/wiki/FAQ content)
+
+---
+
 v0.3.1 — Read-Only Book Projects, Copy to Project, Learn Menu
-  Status: in progress — 2026-04-03
+  Status: complete — 2026-04-03
 
   Overview:
   Book projects (The Rust Book, The K&R C Book, The Swift Book) become read-only
@@ -81,21 +128,21 @@ v0.3.1 — Read-Only Book Projects, Copy to Project, Learn Menu
 
 ---
 
-v0.2 — Native C/C++ Projects
+v0.2 — Clang (C/C++) Projects
   Status: complete — released 2026-04-03
 
   Shipped:
   1. rustic.toml project manifest (type, paths, build flags, toolchain)
-  2. Project type selection: Rust vs Native (C/C++) in new project dialog
-  3. Native playground CRUD (list/new/load/save/rename/delete/duplicate)
+  2. Project type selection: Rust vs Clang (C/C++) in new project dialog
+  3. Clang playground CRUD (list/new/load/save/rename/delete/duplicate)
   4. Compile and run: clang/clang++ dispatch by extension, stdin, process kill
   5. Compiler flags UI: sidebar panel with C/C++ flag inputs, saved to rustic.toml
   6. New playground dialog: language tabs (C/C++), 8 templates each
   7. Sidebar: file badges (C/C++ in sea green), compiler flags panel
   8. Monaco language detection (.c → "c", .cpp → "cpp")
-  9. Conditional menus: K&R book for native, Rust book for Rust
+  9. Conditional menus: K&R book for Clang, Rust book for Rust
   10. Toolchain wizard: tabbed Rust-first layout with C/C++ status tab
-  11. Native export: POSIX shell runner, Makefile, flags.sh, README
+  11. Clang export: POSIX shell runner, Makefile, flags.sh, README
   12. K&R C Book examples (8 chapters, 16 playgrounds)
   13. Sea green theme (Monaco + app chrome)
   14. Settings: clang version display with install instructions
