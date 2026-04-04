@@ -148,15 +148,24 @@
   // ── Theme resolution ──────────────────────────────────────────────────────
   let systemDark = $state(window.matchMedia('(prefers-color-scheme: dark)').matches)
 
-  // Resolved theme: "dark", "light", or "rust" based on setting + OS preference
+  // Map project type → language theme
+  const autoThemeMap: Record<string, string> = {
+    rust: 'rust', native: 'seagreen', zig: 'zig', swift: 'swift',
+  }
+
+  // Resolved theme based on setting + OS preference + project type
   let resolvedTheme = $derived(
-    settings.theme === 'system' ? (systemDark ? 'dark' : 'light') : settings.theme
+    settings.theme === 'system' ? (systemDark ? 'dark' : 'light')
+      : settings.theme === 'auto' ? (autoThemeMap[projectType] ?? 'dark')
+      : settings.theme
   )
 
   // Monaco theme name derived from resolved theme
   let monacoTheme = $derived(
     resolvedTheme === 'rust' ? 'playground-rust'
       : resolvedTheme === 'seagreen' ? 'playground-seagreen'
+      : resolvedTheme === 'zig' ? 'playground-zig'
+      : resolvedTheme === 'swift' ? 'playground-swift'
       : resolvedTheme === 'light' ? 'playground-light'
       : 'playground-dark'
   )
@@ -373,7 +382,7 @@
 
   // Apply theme class to document body whenever resolved theme changes
   $effect(() => {
-    document.body.classList.remove('theme-dark', 'theme-light', 'theme-rust', 'theme-seagreen')
+    document.body.classList.remove('theme-dark', 'theme-light', 'theme-rust', 'theme-seagreen', 'theme-zig', 'theme-swift')
     document.body.classList.add(`theme-${resolvedTheme}`)
   })
 

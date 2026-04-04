@@ -113,7 +113,7 @@ All runtime data lives under:
 
 ## Current Version Status
 
-**v0.3.1** — in progress (read-only book projects, per-playground locking, "Copy to Project" action, "Learn" menu, grouped project list with search filter and flyout submenus, empty-state book loading, project source metadata).
+**v0.3.1** — in progress (read-only book projects, per-playground locking, "Copy to Project" action, "Learn" menu, grouped project list with flyout submenus, empty-state book loading, Zig/Swift themes, auto theme matching, theme dropdown).
 
 **v0.3** — shipped (language module architecture: Lang enum dispatch, per-language modules, shared FileLanguage helpers. Zig and Swift project types. Frontend language registry. Book system modularization with Swift Book examples).
 

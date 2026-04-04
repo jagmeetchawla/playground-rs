@@ -119,6 +119,60 @@
   --rust-orange:     #ce422b;
 }
 
+.theme-zig {
+  /* Warm amber palette inspired by Zig's lightning bolt */
+  --bg:              #18150e;   /* dark amber */
+  --bg-sidebar:      #221e14;   /* toasted oak */
+  --bg-elevated:     #2c271c;   /* warm bronze */
+  --bg-tab:          #18150e;
+  --bg-tab-active:   #221e14;
+  --bg-hover:        rgba(247,164,29,0.10);
+  --bg-input:        rgba(247,164,29,0.08);
+
+  --border:          rgba(247,164,29,0.15);
+  --border-strong:   rgba(247,164,29,0.25);
+
+  --text:            #e8dcc8;   /* warm cream */
+  --text-secondary:  rgba(232,220,200,0.75);
+  --text-tertiary:   rgba(232,220,200,0.45);
+
+  --accent:          #f7a41d;   /* Zig amber */
+  --accent-hover:    #ffbc42;
+  --accent-text:     #1a1508;
+
+  --red:             #e05a3a;
+  --amber:           #f7a41d;
+  --green:           #8baa3c;   /* olive gold */
+  --rust-orange:     #ce422b;
+}
+
+.theme-swift {
+  /* Warm coral palette inspired by Swift's orange-red */
+  --bg:              #1a100e;   /* deep ember */
+  --bg-sidebar:      #241816;   /* dark cherry */
+  --bg-elevated:     #2e201e;   /* warm mahogany */
+  --bg-tab:          #1a100e;
+  --bg-tab-active:   #241816;
+  --bg-hover:        rgba(240,81,56,0.10);
+  --bg-input:        rgba(240,81,56,0.08);
+
+  --border:          rgba(240,81,56,0.15);
+  --border-strong:   rgba(240,81,56,0.25);
+
+  --text:            #e8d0c8;   /* warm blush */
+  --text-secondary:  rgba(232,208,200,0.75);
+  --text-tertiary:   rgba(232,208,200,0.45);
+
+  --accent:          #f05138;   /* Swift orange-red */
+  --accent-hover:    #ff6b52;
+  --accent-text:     #ffffff;
+
+  --red:             #f05138;
+  --amber:           #d4903c;   /* warm amber */
+  --green:           #5aab6e;   /* garden green */
+  --rust-orange:     #ce422b;
+}
+
 html, body, #app {
   height: 100%;
   background: var(--bg);

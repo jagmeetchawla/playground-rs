@@ -70,6 +70,11 @@ v0.3.1 — Read-Only Book Projects, Copy to Project, Learn Menu
   22. Grouped project list with search filter in ProjectSwitcher
   23. Remove book: backend command + Help/Learn menu integration
   24. Help menu restructured: books in Learn, Help has only Help + About
+  25. Zig theme: warm amber palette (#f7a41d accent) — CSS + Monaco editor
+  26. Swift theme: warm coral palette (#f05138 accent) — CSS + Monaco editor
+  27. "Auto (match language)" theme: switches theme based on active project type
+  28. Theme selector: dropdown replacing segmented control (7 themes + auto)
+  29. SVG gear icon in toolbar replacing Unicode character (proper centering)
 
   Still TODO:
   - Visual read-only indicator in sidebar (lock icons next to locked playgrounds)

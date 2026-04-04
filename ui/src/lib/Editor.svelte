@@ -215,6 +215,96 @@
     }
   })
 
+  // ── Custom Zig theme — warm amber tones inspired by Zig's lightning bolt ──
+  monaco.editor.defineTheme('playground-zig', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment',            foreground: '7a7058', fontStyle: 'italic' },
+      { token: 'keyword',            foreground: 'f7a41d' },   // Zig amber
+      { token: 'type',               foreground: 'e0c060' },   // warm gold
+      { token: 'type.identifier',    foreground: 'e0c060' },
+      { token: 'string',             foreground: '8baa3c' },   // olive
+      { token: 'string.escape',      foreground: 'a8c858' },
+      { token: 'number',             foreground: 'd4903c' },   // copper amber
+      { token: 'number.float',       foreground: 'd4903c' },
+      { token: 'operator',           foreground: 'e8dcc8' },   // warm cream
+      { token: 'delimiter',          foreground: '8a7a60' },
+      { token: 'attribute',          foreground: 'c89030' },   // deep gold
+      { token: 'macro',              foreground: 'ffbc42' },   // bright amber
+      { token: 'identifier',         foreground: 'e8dcc8' },
+    ],
+    colors: {
+      'editor.background':                  '#18150e',
+      'editor.foreground':                  '#e8dcc8',
+      'editorLineNumber.foreground':        '#3a3420',
+      'editorLineNumber.activeForeground':  '#8a7a60',
+      'editor.lineHighlightBackground':     '#221e14',
+      'editor.lineHighlightBorder':         '#00000000',
+      'editor.selectionBackground':         '#f7a41d35',
+      'editor.inactiveSelectionBackground': '#f7a41d20',
+      'editorCursor.foreground':            '#f7a41d',
+      'editorIndentGuide.background':       '#2c271c',
+      'editorIndentGuide.activeBackground': '#3a3420',
+      'editorBracketMatch.background':      '#f7a41d25',
+      'editorBracketMatch.border':          '#f7a41d60',
+      'editorGutter.background':            '#18150e',
+      'editor.findMatchBackground':         '#f7a41d40',
+      'editor.findMatchHighlightBackground':'#f7a41d20',
+      'editorError.foreground':             '#e05a3a',
+      'editorWarning.foreground':           '#f7a41d',
+      'editorInfo.foreground':              '#d4903c',
+      'scrollbarSlider.background':         '#f7a41d20',
+      'scrollbarSlider.hoverBackground':    '#f7a41d35',
+      'scrollbarSlider.activeBackground':   '#f7a41d50',
+    }
+  })
+
+  // ── Custom Swift theme — warm coral tones inspired by Swift's orange-red ──
+  monaco.editor.defineTheme('playground-swift', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment',            foreground: '7a5d58', fontStyle: 'italic' },
+      { token: 'keyword',            foreground: 'f05138' },   // Swift orange-red
+      { token: 'type',               foreground: 'd4903c' },   // warm amber
+      { token: 'type.identifier',    foreground: 'd4903c' },
+      { token: 'string',             foreground: '5aab6e' },   // garden green
+      { token: 'string.escape',      foreground: '78c88a' },
+      { token: 'number',             foreground: 'c87050' },   // terra cotta
+      { token: 'number.float',       foreground: 'c87050' },
+      { token: 'operator',           foreground: 'e8d0c8' },   // warm blush
+      { token: 'delimiter',          foreground: '8a6a62' },
+      { token: 'attribute',          foreground: 'cc6040' },   // deep coral
+      { token: 'macro',              foreground: 'ff6b52' },   // bright coral
+      { token: 'identifier',         foreground: 'e8d0c8' },
+    ],
+    colors: {
+      'editor.background':                  '#1a100e',
+      'editor.foreground':                  '#e8d0c8',
+      'editorLineNumber.foreground':        '#3a2822',
+      'editorLineNumber.activeForeground':  '#8a6a62',
+      'editor.lineHighlightBackground':     '#241816',
+      'editor.lineHighlightBorder':         '#00000000',
+      'editor.selectionBackground':         '#f0513835',
+      'editor.inactiveSelectionBackground': '#f0513820',
+      'editorCursor.foreground':            '#f05138',
+      'editorIndentGuide.background':       '#2e201e',
+      'editorIndentGuide.activeBackground': '#3a2822',
+      'editorBracketMatch.background':      '#f0513825',
+      'editorBracketMatch.border':          '#f0513860',
+      'editorGutter.background':            '#1a100e',
+      'editor.findMatchBackground':         '#d4903c40',
+      'editor.findMatchHighlightBackground':'#d4903c20',
+      'editorError.foreground':             '#f05138',
+      'editorWarning.foreground':           '#d4903c',
+      'editorInfo.foreground':              '#c87050',
+      'scrollbarSlider.background':         '#f0513820',
+      'scrollbarSlider.hoverBackground':    '#f0513835',
+      'scrollbarSlider.activeBackground':   '#f0513850',
+    }
+  })
+
   // ── Register Zig language (not built into Monaco) ─────────────────────────
   monaco.languages.register({ id: 'zig' })
   monaco.languages.setMonarchTokensProvider('zig', {

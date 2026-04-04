@@ -161,34 +161,21 @@
       <h2>Appearance</h2>
 
       <div class="setting-row">
-        <label>Theme</label>
-        <div class="segmented">
-          <button
-            class="seg-btn"
-            class:seg-active={draft.theme === 'system'}
-            onclick={() => setTheme('system')}
-          >System</button>
-          <button
-            class="seg-btn"
-            class:seg-active={draft.theme === 'light'}
-            onclick={() => setTheme('light')}
-          >Light</button>
-          <button
-            class="seg-btn"
-            class:seg-active={draft.theme === 'dark'}
-            onclick={() => setTheme('dark')}
-          >Dark</button>
-          <button
-            class="seg-btn"
-            class:seg-active={draft.theme === 'rust'}
-            onclick={() => setTheme('rust')}
-          >Rust</button>
-          <button
-            class="seg-btn"
-            class:seg-active={draft.theme === 'seagreen'}
-            onclick={() => setTheme('seagreen')}
-          >C</button>
-        </div>
+        <label for="theme-select">Theme</label>
+        <select
+          id="theme-select"
+          value={draft.theme}
+          onchange={(e) => setTheme((e.target as HTMLSelectElement).value)}
+        >
+          <option value="system">System</option>
+          <option value="auto">Auto (match language)</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+          <option value="rust">Rust</option>
+          <option value="seagreen">C / C++</option>
+          <option value="zig">Zig</option>
+          <option value="swift">Swift</option>
+        </select>
       </div>
     </section>
 
