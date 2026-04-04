@@ -326,7 +326,7 @@
         listen('menu:settings',          () => { showSettings = true }),
         listen('menu:help',              () => { showHelp  = true }),
         listen('menu:about',             () => { showAbout = true }),
-        ...allLanguages().filter(l => l.book).map(l => listen(l.book!.menuEvent, () => seedBook())),
+        ...allLanguages().filter(l => l.book).map(l => listen(l.book!.menuEvent, () => seedBook(l.type))),
         ...allLanguages().filter(l => l.book).map(l => listen(l.book!.removeMenuEvent, () => removeBook(l.book!.sourceTag, l.book!.commandLabel))),
         listen('menu:edit-cut',          () => { document.execCommand('cut') }),
         listen('menu:edit-paste',        () => { navigator.clipboard.readText().then(t => document.execCommand('insertText', false, t)).catch(() => {}) }),
@@ -444,6 +444,7 @@
         await switchProject(created[0])  // also rebuilds menu
         showToast(`Loaded ${created.length} ${bookConfig.toastEntity}${created.length > 1 ? 's' : ''}. Starting with ${created[0]}.`)
       } else {
+        syncMenuProjects()
         showToast(bookConfig.toastAlreadyLoaded)
       }
     } catch (e) {
@@ -459,16 +460,14 @@
         showToast(`No ${label} chapters found.`)
         return
       }
+      projects = await invoke<string[]>('list_projects')
+      await refreshProjectTypes()
       // If the active project was removed, switch to the first remaining project
       if (removed.includes(activeProject)) {
-        projects = await invoke<string[]>('list_projects')
-        await refreshProjectTypes()
         if (projects.length > 0) {
           await switchProject(projects[0])
         }
       } else {
-        projects = await invoke<string[]>('list_projects')
-        await refreshProjectTypes()
         syncMenuProjects()
       }
       showToast(`Removed ${removed.length} ${label} chapter${removed.length > 1 ? 's' : ''}.`)
