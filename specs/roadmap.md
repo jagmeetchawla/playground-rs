@@ -76,9 +76,8 @@ v0.3.1 — Read-Only Book Projects, Copy to Project, Learn Menu
   28. Theme selector: dropdown replacing segmented control (7 themes + auto)
   29. SVG gear icon in toolbar replacing Unicode character (proper centering)
 
-  Still TODO:
-  - Visual read-only indicator in sidebar (lock icons next to locked playgrounds)
-  - Theme verification for lock button colors across all themes
+  30. Sidebar lock icons next to locked/read-only playgrounds
+  31. Lock button colors (red/green) verified across all 7 themes
 
 ---
 
