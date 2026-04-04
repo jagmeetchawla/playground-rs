@@ -124,7 +124,9 @@ All runtime data lives under:
 
 **v0.1.9** — shipped (renamed from playground-rs to rustic-playground, cleaned up src/bin).
 
-After v0.3.2: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
+**v0.3.3** — planned (Edition Builds: Rust Edition, C Edition, Power Edition — same codebase, build-time config controls app name/icon/languages/themes. Single-language editions skip language picker, hide badges, filter help content dynamically).
+
+After v0.3.3: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
 
 ---
 

@@ -82,6 +82,68 @@ v0.3.2 — Welcome Wizard + Language Gating
 
 ---
 
+PLANNED
+───────
+
+v0.3.3 — Edition Builds (Rust Edition, C Edition, Power Edition)
+  Status: planned
+
+  Overview:
+  Ship multiple editions of the app as separate DMGs, each tailored to a single
+  language or the full multi-language experience. Examples: "Rustic Playground —
+  The Rust Edition", "Rustic Playground — The C Edition", "Rustic Playground —
+  Power Edition" (all languages). Each edition has its own app name, title bar,
+  icon, and bundled configuration.
+
+  Approach:
+  Build-time edition config (e.g. edition.toml or tauri.conf overrides) defines:
+  - App name and window title ("Rustic Playground — The Rust Edition")
+  - Supported languages list (["rust"], ["clang"], or all)
+  - App icon (language-themed variant)
+  - Bundle identifier suffix (com.rustic-playground.rust-edition)
+  - Default theme (Rust theme for Rust Edition, Sea Green for C Edition, etc.)
+
+  The same codebase produces all editions — no forks. A single edition config
+  file controls what the build includes.
+
+  UI Adaptations for Single-Language Editions:
+  - Welcome Wizard: skip language picker step entirely (only 1 language = auto-selected)
+  - Settings: hide "Languages" section (nothing to toggle)
+  - ProjectSwitcher: no language badges needed (all projects are the same type)
+  - New Project dialog: no language/type selector
+  - HelpModal: dynamic — only render sections for included languages
+  - Learn menu: only books for the edition's language
+  - Toolchain pill: simplified (no "not enabled" state possible)
+  - Themes: only offer relevant themes (e.g. Rust Edition = System/Light/Dark/Rust)
+
+  UI Adaptations for Multi-Language (Power) Edition:
+  - Everything works as today — full language picker, all themes, all books
+
+  Detection Pattern:
+  Frontend reads edition config at startup (Tauri command or embedded JSON).
+  Components check `edition.languages.length === 1` vs `> 1` to decide
+  single-language vs multi-language rendering paths.
+
+  Build Pipeline:
+  - `cargo tauri build --config editions/rust.json` (or similar override mechanism)
+  - CI matrix: one build per edition → separate DMG artifacts
+  - Each DMG uses the edition's icon and app name
+
+  Items:
+  1. Edition config schema (languages, appName, icon, bundleId, defaultTheme)
+  2. Backend: load edition config, expose via Tauri command
+  3. Frontend: edition-aware rendering (single vs multi-language branches)
+  4. Welcome Wizard: conditional language step
+  5. Settings: conditional languages section
+  6. ProjectSwitcher: conditional badges and type selector
+  7. HelpModal: dynamic content based on edition languages
+  8. Themes: filter to edition-relevant themes
+  9. Per-edition icons (Rust crab, C brackets, etc.)
+  10. Per-edition tauri.conf overrides (name, identifier, icon paths)
+  11. Build scripts / CI matrix for multi-edition DMG output
+
+---
+
 v0.3.1 — Read-Only Book Projects, Copy to Project, Learn Menu
   Status: complete — 2026-04-03
 
