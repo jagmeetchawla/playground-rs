@@ -1,0 +1,11 @@
+{
+  "productName": "Rustic Playground — The Swift Edition",
+  "identifier": "com.rustic-playground.swift",
+  "app": {
+    "windows": [
+      {
+        "title": "Rustic Playground — The Swift Edition"
+      }
+    ]
+  }
+}

@@ -3,6 +3,7 @@
   import { open as shellOpen } from '@tauri-apps/plugin-shell'
   import { allLanguages, getLang, type ProjectType } from './languages'
   import type { Settings } from './SettingsModal.svelte'
+  import type { EditionConfig } from './editions'
 
   let {
     onclose,
@@ -12,6 +13,7 @@
     projectSources = {},
     onthemechange,
     mode = 'wizard',
+    edition,
   }: {
     onclose: (result: { enabledLanguages: string[]; booksToLoad: string[]; booksToRemove: string[]; settings?: Settings }) => void
     onapply?: (result: { enabledLanguages: string[]; booksToLoad: string[]; booksToRemove: string[]; settings: Settings }) => void
@@ -20,6 +22,7 @@
     projectSources?: Record<string, string>
     onthemechange?: (theme: string) => void
     mode?: 'wizard' | 'settings'
+    edition: EditionConfig
   } = $props()
 
   type ToolchainStatus = {
@@ -52,18 +55,33 @@
       .map(l => l.type)
   )
 
-  const wizardSteps = ['Languages', 'Toolchains', 'Appearance', 'Books', 'Finish']
-  const settingsTabs: { id: typeof activeTab; label: string }[] = [
-    { id: 'languages', label: 'Languages' },
+  // Edition-aware steps/tabs: single-language editions skip language picker
+  const allWizardSteps = edition.isSingleLanguage
+    ? ['Toolchains', 'Appearance', 'Books', 'Finish']
+    : ['Languages', 'Toolchains', 'Appearance', 'Books', 'Finish']
+  const allWizardPanels = edition.isSingleLanguage
+    ? (['toolchains', 'appearance', 'books', 'finish'] as const)
+    : (['languages', 'toolchains', 'appearance', 'books', 'finish'] as const)
+  const wizardSteps = allWizardSteps
+  const totalSteps = wizardSteps.length
+
+  const allSettingsTabs: { id: typeof activeTab; label: string }[] = [
+    ...(!edition.isSingleLanguage ? [{ id: 'languages' as const, label: 'Languages' }] : []),
     { id: 'toolchains', label: 'Toolchains' },
     { id: 'appearance', label: 'Appearance' },
     { id: 'books', label: 'Books' },
   ]
+  const settingsTabs = allSettingsTabs
+
+  // Default settings tab for single-language editions
+  if (edition.isSingleLanguage && activeTab === 'languages') {
+    activeTab = 'toolchains'
+  }
 
   // Current panel (unified for both modes)
   let currentPanel = $derived(
     mode === 'wizard'
-      ? (['languages', 'toolchains', 'appearance', 'books', 'finish'] as const)[step - 1]
+      ? allWizardPanels[step - 1]
       : activeTab
   )
 
@@ -131,7 +149,7 @@
 
   // ── Navigation (wizard mode) ──────────────────────────────────────────
   function next() {
-    if (step < 5) step += 1 as any
+    if (step < totalSteps) step += 1 as any
   }
   function back() {
     if (step > 1) step -= 1 as any
@@ -203,7 +221,7 @@
   <div class="modal-header">
     <div class="header-left">
       <span class="rs-badge">RS</span>
-      <span class="modal-title">{mode === 'wizard' ? 'Welcome to Rustic Playground' : 'Settings'}</span>
+      <span class="modal-title">{mode === 'wizard' ? `Welcome to ${edition.displayName}` : 'Settings'}</span>
     </div>
     {#if mode === 'settings'}
       <button class="close-btn" onclick={cancel} aria-label="Close">
@@ -434,11 +452,21 @@
                 <option value="light">Light</option>
               </optgroup>
               <optgroup label="Languages">
-                <option value="auto">Auto (match language)</option>
-                <option value="rust">Rust</option>
-                <option value="seagreen">Clang</option>
-                <option value="zig">Zig</option>
-                <option value="swift">Swift</option>
+                {#if !edition.isSingleLanguage}
+                  <option value="auto">Auto (match language)</option>
+                {/if}
+                {#if selectedLangs.includes('rust')}
+                  <option value="rust">Rust</option>
+                {/if}
+                {#if selectedLangs.includes('clang')}
+                  <option value="seagreen">Clang</option>
+                {/if}
+                {#if selectedLangs.includes('zig')}
+                  <option value="zig">Zig</option>
+                {/if}
+                {#if selectedLangs.includes('swift')}
+                  <option value="swift">Swift</option>
+                {/if}
               </optgroup>
             </select>
           </div>
@@ -561,7 +589,7 @@
         <div></div>
       {/if}
       <div class="footer-right">
-        {#if step < 5}
+        {#if step < totalSteps}
           <button class="btn btn-primary" onclick={next} disabled={!hasSelection}>Next</button>
         {:else}
           <button class="btn btn-primary btn-finish" onclick={finish} disabled={!hasSelection}>Get Started</button>

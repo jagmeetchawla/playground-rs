@@ -19,6 +19,7 @@
   import type { Template } from './lib/templates'
   import type { RunBlock } from './lib/Output.svelte'
   import { getLang, allLanguages, type ProjectType } from './lib/languages'
+  import { currentEdition } from './lib/editions'
 
   // ── Constants ────────────────────────────────────────────────────────────────
   const CARGO_TAB = 'Cargo.toml'
@@ -295,6 +296,13 @@
       toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
       settings = await invoke<Settings>('get_settings')
       enabledLangs = await invoke<string[]>('get_enabled_languages')
+
+      // Edition builds: lock languages to edition's fixed set
+      const edition = currentEdition()
+      if (edition.languages !== null) {
+        enabledLangs = edition.languages
+        await invoke('set_enabled_languages', { languages: edition.languages })
+      }
 
       // Show wizard on first launch or if toolchain is missing
       const tc = await invoke<any>('check_toolchain')
@@ -1052,6 +1060,7 @@
         {projectSources}
         {projectReadonly}
         enabledLanguages={enabledLangs}
+        edition={currentEdition()}
         onswitch={switchProject}
         onnew={onNewProject}
         onrename={onRenameProject}
@@ -1373,11 +1382,11 @@
 </div>
 
 {#if showHelp}
-  <HelpModal onclose={() => showHelp = false} />
+  <HelpModal onclose={() => showHelp = false} enabledLanguages={enabledLangs} edition={currentEdition()} />
 {/if}
 
 {#if showAbout}
-  <AboutModal onclose={() => showAbout = false} />
+  <AboutModal onclose={() => showAbout = false} edition={currentEdition()} />
 {/if}
 
 {#if showWizard}
@@ -1386,6 +1395,7 @@
     enabledLanguages={enabledLangs}
     {settings}
     {projectSources}
+    edition={currentEdition()}
     onthemechange={(t) => { settings = { ...settings, theme: t } }}
     onapply={async (result) => {
       enabledLangs = result.enabledLanguages

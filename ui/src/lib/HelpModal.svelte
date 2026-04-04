@@ -1,14 +1,19 @@
 <script lang="ts">
   import { open as shellOpen } from '@tauri-apps/plugin-shell'
   import appIcon from './app-icon.png'
+  import type { EditionConfig } from './editions'
 
-  let { onclose }: { onclose: () => void } = $props()
+  let { onclose, enabledLanguages = ['rust', 'clang', 'zig', 'swift'], edition }: {
+    onclose: () => void
+    enabledLanguages?: string[]
+    edition: EditionConfig
+  } = $props()
 
   let activeSection: string = $state('overview')
 
-  const sections = [
+  const allSections = [
     { id: 'overview', label: 'Overview' },
-    { id: 'languages', label: 'Languages' },
+    ...(!edition.isSingleLanguage ? [{ id: 'languages', label: 'Languages' }] : []),
     { id: 'playgrounds', label: 'Playgrounds' },
     { id: 'projects', label: 'Projects' },
     { id: 'console', label: 'Console' },
@@ -17,6 +22,7 @@
     { id: 'books', label: 'Book Examples' },
     { id: 'security', label: 'Security' },
   ]
+  const sections = allSections
 
   function handleKey(e: KeyboardEvent) {
     if (e.key === 'Escape') onclose()
@@ -34,7 +40,7 @@
   <nav class="help-nav">
     <div class="nav-header">
       <img class="nav-icon" src={appIcon} alt="" width="32" height="32" />
-      <span class="nav-title">Rustic Playground</span>
+      <span class="nav-title">{edition.displayName}</span>
     </div>
     <ul class="nav-list">
       {#each sections as s (s.id)}
@@ -94,11 +100,12 @@
     {:else if activeSection === 'languages'}
       <h1>Supported Languages</h1>
       <p class="lead">
-        Rustic Playground supports four languages. Enable or disable them in Settings.
+        {edition.displayName} supports {edition.isSingleLanguage ? 'one language' : 'four languages'}. {!edition.isSingleLanguage ? 'Enable or disable them in Settings.' : ''}
         Each language uses your locally installed toolchain.
       </p>
 
       <div class="lang-cards">
+        {#if enabledLanguages.includes('rust')}
         <div class="lang-card">
           <div class="lang-header">
             <span class="lang-dot" style="background: var(--rust-orange)"></span>
@@ -115,7 +122,9 @@
             <span>Install: <button class="link-btn" onclick={() => shellOpen('https://rustup.rs')}>rustup.rs</button></span>
           </div>
         </div>
+        {/if}
 
+        {#if enabledLanguages.includes('clang')}
         <div class="lang-card">
           <div class="lang-header">
             <span class="lang-dot" style="background: #4a9"></span>
@@ -130,7 +139,9 @@
             <span>Install: <code>xcode-select --install</code></span>
           </div>
         </div>
+        {/if}
 
+        {#if enabledLanguages.includes('zig')}
         <div class="lang-card">
           <div class="lang-header">
             <span class="lang-dot" style="background: #f7a41d"></span>
@@ -147,7 +158,9 @@
             <span>Install: <code>brew install zig</code></span>
           </div>
         </div>
+        {/if}
 
+        {#if enabledLanguages.includes('swift')}
         <div class="lang-card">
           <div class="lang-header">
             <span class="lang-dot" style="background: #f05138"></span>
@@ -162,6 +175,7 @@
             <span>Install: <code>xcode-select --install</code></span>
           </div>
         </div>
+        {/if}
       </div>
 
     {:else if activeSection === 'playgrounds'}
@@ -320,6 +334,7 @@ fn main() &#123;
       </p>
 
       <div class="book-list">
+        {#if enabledLanguages.includes('rust')}
         <div class="book-item">
           <h3>The Rust Book</h3>
           <p>20 chapters covering the full curriculum of <em>The Rust Programming Language</em>
@@ -329,10 +344,14 @@ fn main() &#123;
             <span><button class="link-btn" onclick={() => shellOpen('https://doc.rust-lang.org/book/')}>Read online</button></span>
           </div>
         </div>
+        {/if}
+        {#if enabledLanguages.includes('clang')}
         <div class="book-item">
           <h3>The K&R C Book</h3>
           <p>8 chapters based on <em>The C Programming Language</em> by Kernighan & Ritchie.</p>
         </div>
+        {/if}
+        {#if enabledLanguages.includes('swift')}
         <div class="book-item">
           <h3>The Swift Book</h3>
           <p>8 chapters based on <em>The Swift Programming Language</em> by Apple.</p>
@@ -340,6 +359,7 @@ fn main() &#123;
             <span><button class="link-btn" onclick={() => shellOpen('https://docs.swift.org/swift-book/')}>Read online</button></span>
           </div>
         </div>
+        {/if}
       </div>
 
       <h2>Read-Only</h2>

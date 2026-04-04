@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import { getLang, allLanguages, type ProjectType } from './languages'
+  import type { EditionConfig } from './editions'
 
   // ── Props — callback-based (Svelte 5 idiom, lets us await and catch errors) ──
   let {
@@ -17,6 +18,7 @@
     ondelete,
     onduplicate,
     onloadbook,
+    edition,
     pendingMode = $bindable(null as 'new' | 'rename' | 'delete-confirm' | null),
   }: {
     projects: string[]
@@ -32,6 +34,7 @@
     ondelete: (name: string) => Promise<void>
     onduplicate: (name: string) => Promise<void>
     onloadbook: (ptype: ProjectType) => Promise<void>
+    edition: EditionConfig
     pendingMode?: 'new' | 'rename' | 'delete-confirm' | null
   } = $props()
 
@@ -181,9 +184,11 @@
 
 <div class="project-switcher">
   <button class="pill" onclick={toggle} class:open>
-    <span class="pill-badge" class:clang={projectType === 'clang'} class:zig={projectType === 'zig'} class:swift={projectType === 'swift'}>{activeLang.badge}</span>
+    {#if !edition.isSingleLanguage}
+      <span class="pill-badge" class:clang={projectType === 'clang'} class:zig={projectType === 'zig'} class:swift={projectType === 'swift'}>{activeLang.badge}</span>
+    {/if}
     <span class="pill-name">{active}</span>
-    {#if activeLang.experimental}<span class="exp-tag">exp</span>{/if}
+    {#if activeLang.experimental && !edition.isSingleLanguage}<span class="exp-tag">exp</span>{/if}
     <svg class="pill-caret" width="10" height="6" viewBox="0 0 10 6">
       <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5"
             stroke-linecap="round" fill="none"/>
@@ -220,9 +225,11 @@
                 onclick={() => selectProject(name)}
                 disabled={busy}
               >
-                <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
+                {#if !edition.isSingleLanguage}
+                  <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
+                {/if}
                 <span class="project-name">{name}</span>
-                {#if itemLang.experimental}<span class="exp-tag">exp</span>{/if}
+                {#if itemLang.experimental && !edition.isSingleLanguage}<span class="exp-tag">exp</span>{/if}
                 {#if name === active}
                   <svg class="active-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
                     <path d="M1 4l3 3 5-6" stroke="currentColor" stroke-width="1.6"
@@ -276,7 +283,9 @@
                             onclick={() => selectProject(name)}
                             disabled={busy}
                           >
-                            <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
+                            {#if !edition.isSingleLanguage}
+                              <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
+                            {/if}
                             <span class="project-name">{name}</span>
                             {#if name === active}
                               <svg class="active-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -298,9 +307,12 @@
       {:else if mode === 'new'}
         <div class="inline-input-section">
           <p class="inline-label">
-            <span class="form-badge" class:clang={newProjectType === 'clang'} class:zig={newProjectType === 'zig'} class:swift={newProjectType === 'swift'}>{newLang.badge}</span>
+            {#if !edition.isSingleLanguage}
+              <span class="form-badge" class:clang={newProjectType === 'clang'} class:zig={newProjectType === 'zig'} class:swift={newProjectType === 'swift'}>{newLang.badge}</span>
+            {/if}
             New Project
           </p>
+          {#if !edition.isSingleLanguage}
           <div class="type-toggle">
             {#each allLanguages().filter(l => enabledLanguages.includes(l.type)) as l (l.type)}
               <button
@@ -315,6 +327,7 @@
               : newProjectType === 'zig' ? 'Zig playground (experimental) — zig run with flags in rustic.toml'
               : 'Swift playground — swiftc compile & run'}
           </span>
+          {/if}
           <input
             class="inline-input"
             class:error={!!newError}

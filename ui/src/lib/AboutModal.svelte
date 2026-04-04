@@ -2,8 +2,9 @@
   import { onMount } from 'svelte'
   import { getVersion } from '@tauri-apps/api/app'
   import appIcon from './app-icon.png'
+  import type { EditionConfig } from './editions'
 
-  let { onclose }: { onclose: () => void } = $props()
+  let { onclose, edition }: { onclose: () => void; edition: EditionConfig } = $props()
   let version = $state('')
 
   onMount(async () => {
@@ -34,13 +35,10 @@
   </div>
 
   <div class="about-body">
-    <h1 class="app-name">Rustic Playground</h1>
+    <h1 class="app-name">{edition.displayName}</h1>
     <p class="app-version">Version {version}</p>
 
-    <p class="app-desc">
-      A macOS desktop app for Rust experiments,<br/>
-      inspired by Swift Playgrounds.
-    </p>
+    <p class="app-desc">{edition.tagline}</p>
 
     <div class="divider"></div>
 

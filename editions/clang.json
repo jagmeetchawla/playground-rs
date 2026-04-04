@@ -1,0 +1,11 @@
+{
+  "productName": "Rustic Playground — The C Edition",
+  "identifier": "com.rustic-playground.clang",
+  "app": {
+    "windows": [
+      {
+        "title": "Rustic Playground — The C Edition"
+      }
+    ]
+  }
+}

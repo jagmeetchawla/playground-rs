@@ -86,61 +86,34 @@ PLANNED
 ───────
 
 v0.3.3 — Edition Builds (Rust Edition, C Edition, Power Edition)
-  Status: planned
+  Status: in progress — 2026-04-04
 
   Overview:
   Ship multiple editions of the app as separate DMGs, each tailored to a single
-  language or the full multi-language experience. Examples: "Rustic Playground —
-  The Rust Edition", "Rustic Playground — The C Edition", "Rustic Playground —
-  Power Edition" (all languages). Each edition has its own app name, title bar,
-  icon, and bundled configuration.
+  language or the full multi-language experience. Same codebase, different configs.
+  Tauri --config overrides handle app name/identifier/icon; VITE_EDITION env var
+  controls frontend behavior via editions.ts registry. Single-language editions
+  feel native — no language pickers, no irrelevant badges/themes/books.
 
-  Approach:
-  Build-time edition config (e.g. edition.toml or tauri.conf overrides) defines:
-  - App name and window title ("Rustic Playground — The Rust Edition")
-  - Supported languages list (["rust"], ["clang"], or all)
-  - App icon (language-themed variant)
-  - Bundle identifier suffix (com.rustic-playground.rust-edition)
-  - Default theme (Rust theme for Rust Edition, Sea Green for C Edition, etc.)
+  Completed:
+  1. Edition config registry (ui/src/lib/editions.ts) — EditionConfig type,
+     5 editions (power, rust, clang, zig, swift), currentEdition() helper
+  2. Tauri config overrides (editions/*.json) — per-edition productName,
+     identifier, window title for all 5 editions
+  3. App.svelte: edition language enforcement on mount (locks enabledLangs)
+  4. ToolchainWizard: edition-aware wizard steps (skip Languages for single-lang),
+     edition-aware settings tabs, filtered theme dropdown, edition display name
+  5. ProjectSwitcher: hide language badges and type selector for single-lang editions
+  6. HelpModal: dynamic sections (skip Languages for single-lang), filtered
+     language cards and book items by enabledLanguages, edition display name
+  7. AboutModal: edition display name and tagline
+  8. menu.rs: dynamic product name from tauri.conf (merged config)
+  9. Build script (scripts/build-editions.sh) — multi-edition build pipeline
 
-  The same codebase produces all editions — no forks. A single edition config
-  file controls what the build includes.
-
-  UI Adaptations for Single-Language Editions:
-  - Welcome Wizard: skip language picker step entirely (only 1 language = auto-selected)
-  - Settings: hide "Languages" section (nothing to toggle)
-  - ProjectSwitcher: no language badges needed (all projects are the same type)
-  - New Project dialog: no language/type selector
-  - HelpModal: dynamic — only render sections for included languages
-  - Learn menu: only books for the edition's language
-  - Toolchain pill: simplified (no "not enabled" state possible)
-  - Themes: only offer relevant themes (e.g. Rust Edition = System/Light/Dark/Rust)
-
-  UI Adaptations for Multi-Language (Power) Edition:
-  - Everything works as today — full language picker, all themes, all books
-
-  Detection Pattern:
-  Frontend reads edition config at startup (Tauri command or embedded JSON).
-  Components check `edition.languages.length === 1` vs `> 1` to decide
-  single-language vs multi-language rendering paths.
-
-  Build Pipeline:
-  - `cargo tauri build --config editions/rust.json` (or similar override mechanism)
-  - CI matrix: one build per edition → separate DMG artifacts
-  - Each DMG uses the edition's icon and app name
-
-  Items:
-  1. Edition config schema (languages, appName, icon, bundleId, defaultTheme)
-  2. Backend: load edition config, expose via Tauri command
-  3. Frontend: edition-aware rendering (single vs multi-language branches)
-  4. Welcome Wizard: conditional language step
-  5. Settings: conditional languages section
-  6. ProjectSwitcher: conditional badges and type selector
-  7. HelpModal: dynamic content based on edition languages
-  8. Themes: filter to edition-relevant themes
-  9. Per-edition icons (Rust crab, C brackets, etc.)
-  10. Per-edition tauri.conf overrides (name, identifier, icon paths)
-  11. Build scripts / CI matrix for multi-edition DMG output
+  Remaining:
+  10. Per-edition icons (art task)
+  11. CI matrix for automated multi-edition builds
+  12. End-to-end testing of each edition
 
 ---
 

@@ -1,0 +1,11 @@
+{
+  "productName": "Rustic Playground — The Rust Edition",
+  "identifier": "com.rustic-playground.rust",
+  "app": {
+    "windows": [
+      {
+        "title": "Rustic Playground — The Rust Edition"
+      }
+    ]
+  }
+}
