@@ -115,6 +115,67 @@ v0.3.3 — Edition Builds (Rust Edition, C Edition, Power Edition)
   11. CI matrix for automated multi-edition builds
   12. End-to-end testing of each edition
 
+v0.3.4 — Linux Port (GTK4 / Vala)
+  Status: planned
+
+  Overview:
+  Native Linux desktop app using GTK4 and Vala, packaged as .deb and .rpm.
+  Not a Tauri port — a purpose-built native Linux app that shares the same
+  project storage format and playground model but uses GTK4 for the UI layer.
+
+  Why GTK4/Vala instead of porting Tauri:
+  - Tauri on Linux uses WebKitGTK which has quality/performance issues
+  - GTK4 is the native Linux toolkit — proper theming, keyboard handling,
+    system integration (file dialogs, notifications, dark mode)
+  - Vala compiles to C with GObject, giving native performance with a
+    high-level syntax similar to C#
+  - GTK4's GtkSourceView provides syntax highlighting without a WebView
+  - .deb and .rpm are the expected distribution formats on Linux
+
+  Architecture:
+  - GTK4 + libadwaita for UI (sidebar, output panel, toolbar, dialogs)
+  - GtkSourceView 5 for the code editor (syntax highlighting, line numbers)
+  - Vala for application code (compiles to C via valac)
+  - Subprocess spawning for toolchain invocation (cargo, clang, zig, swiftc)
+  - Same ~/. local/share/rustic-playground/ storage layout as macOS version
+  - Same rustic.toml manifest format — projects are portable between platforms
+
+  Scope:
+  - Core playground loop: edit, run (⌘R / Ctrl+R), streaming output
+  - Multi-language support (Rust, C/C++, Zig, Swift)
+  - Project and playground CRUD
+  - Content files
+  - Book examples (same chapter data, different UI)
+  - Edition builds (reuse edition config concept from v0.3.3)
+  - Theming via libadwaita (light/dark/accent, no custom Monaco themes)
+
+  Not in scope (initially):
+  - Live error checking (no cargo check integration — add later)
+  - Monaco editor (GtkSourceView is the Linux equivalent)
+  - Exact feature parity with macOS — Linux version ships core features first
+
+  Packaging:
+  - .deb for Debian/Ubuntu (apt install)
+  - .rpm for Fedora/RHEL (dnf install)
+  - Flatpak as a stretch goal
+  - Build via Meson (standard GTK4/Vala build system)
+
+  Items:
+  1. GTK4 + Vala project scaffold with Meson build
+  2. Application window: sidebar + editor + output panel layout
+  3. GtkSourceView editor integration (Rust, C, Zig, Swift highlighting)
+  4. Subprocess runner: spawn toolchain, stream stdout/stderr
+  5. Project/playground CRUD (same storage format as macOS)
+  6. rustic.toml manifest support
+  7. Content files support
+  8. Settings dialog (font, theme, toolchain paths)
+  9. Toolchain detection (cargo, clang, zig, swiftc)
+  10. Book examples (port chapter data)
+  11. Edition config support (single-language vs power)
+  12. .deb packaging (debian/ directory)
+  13. .rpm packaging (spec file)
+  14. CI: build and package for Ubuntu + Fedora
+
 ---
 
 v0.3.1 — Read-Only Book Projects, Copy to Project, Learn Menu
