@@ -126,7 +126,7 @@ All runtime data lives under:
 
 **v0.3.3** — in progress (Edition Builds: Rust Edition, C Edition, Power Edition — same codebase, Tauri --config overrides + VITE_EDITION env var. editions.ts registry, single-language editions skip language picker, hide badges, filter themes/help/books dynamically. Build script: `scripts/build-editions.sh`).
 
-**v0.3.4** — planned (Linux Port: native GTK4/Vala app with GtkSourceView editor, .deb and .rpm packaging. Same project format and playground model, purpose-built for Linux).
+**v0.3.4** — planned (Linux Port: Rust Edition only, same Tauri/Svelte/Monaco stack, .deb and .rpm packaging).
 
 After v0.3.4: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
 

@@ -115,66 +115,55 @@ v0.3.3 — Edition Builds (Rust Edition, C Edition, Power Edition)
   11. CI matrix for automated multi-edition builds
   12. End-to-end testing of each edition
 
-v0.3.4 — Linux Port (GTK4 / Vala)
+v0.3.4 — Linux Port (Rust Edition only)
   Status: planned
 
   Overview:
-  Native Linux desktop app using GTK4 and Vala, packaged as .deb and .rpm.
-  Not a Tauri port — a purpose-built native Linux app that shares the same
-  project storage format and playground model but uses GTK4 for the UI layer.
-
-  Why GTK4/Vala instead of porting Tauri:
-  - Tauri on Linux uses WebKitGTK which has quality/performance issues
-  - GTK4 is the native Linux toolkit — proper theming, keyboard handling,
-    system integration (file dialogs, notifications, dark mode)
-  - Vala compiles to C with GObject, giving native performance with a
-    high-level syntax similar to C#
-  - GTK4's GtkSourceView provides syntax highlighting without a WebView
-  - .deb and .rpm are the expected distribution formats on Linux
+  Linux build of Rustic Playground — The Rust Edition. Same Tauri + Svelte +
+  Monaco stack as macOS. Rust-only (single-language edition via v0.3.3 edition
+  config). Packaged as .deb and .rpm.
 
   Architecture:
-  - GTK4 + libadwaita for UI (sidebar, output panel, toolbar, dialogs)
-  - GtkSourceView 5 for the code editor (syntax highlighting, line numbers)
-  - Vala for application code (compiles to C via valac)
-  - Subprocess spawning for toolchain invocation (cargo, clang, zig, swiftc)
-  - Same ~/. local/share/rustic-playground/ storage layout as macOS version
-  - Same rustic.toml manifest format — projects are portable between platforms
+  - Same codebase: Tauri 2 + Svelte 5 + Monaco (WebKitGTK on Linux)
+  - VITE_EDITION=rust — locks to Rust-only edition
+  - editions/rust.json Tauri config override (identifier, app name)
+  - Tauri's built-in Linux bundling: .deb and .AppImage out of the box
+  - RPM via additional packaging (cargo-generate-rpm or spec file)
+  - Storage: ~/.local/share/com.rustic-playground.rust/ (XDG standard)
 
   Scope:
-  - Core playground loop: edit, run (⌘R / Ctrl+R), streaming output
-  - Multi-language support (Rust, C/C++, Zig, Swift)
-  - Project and playground CRUD
-  - Content files
-  - Book examples (same chapter data, different UI)
-  - Edition builds (reuse edition config concept from v0.3.3)
-  - Theming via libadwaita (light/dark/accent, no custom Monaco themes)
+  - Full Rust Edition feature set: playground CRUD, run, live checking,
+    Cargo.toml management, dependencies, templates, The Rust Book examples
+  - Edition-aware UI: no language picker, no multi-language themes, Rust-focused
+    help content (already implemented in v0.3.3)
+  - Dark/Light/System/Rust themes (Monaco + app chrome)
+  - Toolchain wizard: Rust only (cargo, rustc, rustfmt, clippy)
 
-  Not in scope (initially):
-  - Live error checking (no cargo check integration — add later)
-  - Monaco editor (GtkSourceView is the Linux equivalent)
-  - Exact feature parity with macOS — Linux version ships core features first
+  Linux-specific work:
+  - Tauri Linux capabilities and permissions
+  - GTK file dialogs (Tauri handles this, but needs testing)
+  - Keyboard shortcuts: Ctrl+R/S/N instead of ⌘ (Tauri remaps automatically)
+  - Desktop entry file (.desktop) with icon
+  - Test on Ubuntu 22.04+ and Fedora 38+
+  - PATH resolution for cargo (differs from macOS ~/.cargo/bin)
 
   Packaging:
-  - .deb for Debian/Ubuntu (apt install)
-  - .rpm for Fedora/RHEL (dnf install)
+  - .deb for Debian/Ubuntu (Tauri built-in bundler)
+  - .AppImage for universal Linux (Tauri built-in bundler)
+  - .rpm for Fedora/RHEL (cargo-generate-rpm or spec file)
   - Flatpak as a stretch goal
-  - Build via Meson (standard GTK4/Vala build system)
 
   Items:
-  1. GTK4 + Vala project scaffold with Meson build
-  2. Application window: sidebar + editor + output panel layout
-  3. GtkSourceView editor integration (Rust, C, Zig, Swift highlighting)
-  4. Subprocess runner: spawn toolchain, stream stdout/stderr
-  5. Project/playground CRUD (same storage format as macOS)
-  6. rustic.toml manifest support
-  7. Content files support
-  8. Settings dialog (font, theme, toolchain paths)
-  9. Toolchain detection (cargo, clang, zig, swiftc)
-  10. Book examples (port chapter data)
-  11. Edition config support (single-language vs power)
-  12. .deb packaging (debian/ directory)
-  13. .rpm packaging (spec file)
-  14. CI: build and package for Ubuntu + Fedora
+  1. Tauri Linux build verification (cargo tauri build on Linux)
+  2. Linux-specific PATH resolution for cargo/rustup
+  3. Keyboard shortcut remapping verification (Ctrl vs ⌘)
+  4. GTK file dialog and system integration testing
+  5. Desktop entry file with icon
+  6. .deb packaging verification (Tauri bundler)
+  7. .AppImage packaging verification (Tauri bundler)
+  8. .rpm packaging (additional tooling)
+  9. CI: GitHub Actions Linux build matrix (Ubuntu + Fedora)
+  10. End-to-end testing on Ubuntu 22.04 and Fedora 38+
 
 ---
 

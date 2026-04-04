@@ -191,7 +191,7 @@ See the warning at the top of this file. Additionally:
 
 | Version | Highlights |
 |---|---|
-| v0.3.4 | _(planned)_ Linux port — native GTK4/Vala app with .deb and .rpm packaging |
+| v0.3.4 | _(planned)_ Linux port — Rust Edition only, same Tauri/Svelte/Monaco stack, .deb and .rpm |
 | v0.3.3 | _(in progress)_ Edition builds — Rust Edition, C Edition, Power Edition as separate DMGs from one codebase |
 | v0.3.2 | Welcome Wizard (5-step first-launch), language gating, per-language hello projects, native→clang rename, Apple HIG styling, dual-mode settings/wizard, book management via checkboxes, toolchain pill status |
 | v0.3.1 | Read-only book projects, per-playground locking, Copy to Project, Learn menu, flyout submenus, Zig/Swift themes, auto theme matching, theme dropdown |
