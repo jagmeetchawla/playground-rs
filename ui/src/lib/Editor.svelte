@@ -371,7 +371,7 @@
     language = 'rust',
     fontSize = 13,
     fontFamily = 'Menlo',
-    tabSize = 4,
+    tabSize = 0,
     theme = 'playground-dark',
     diagnostics = [],
     readOnly = false,
@@ -414,7 +414,8 @@
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       automaticLayout: true,
-      tabSize,
+      tabSize: tabSize === 0 ? 2 : tabSize,
+      detectIndentation: tabSize === 0,
       insertSpaces: true,
       wordWrap: 'off',
       padding: { top: 20, bottom: 20 },
@@ -470,12 +471,14 @@
   // Sync editor settings when they change (e.g. from Settings panel)
   $effect(() => {
     if (!editor) return
+    const effectiveTabSize = tabSize === 0 ? 2 : tabSize
     editor.updateOptions({
       fontSize,
       fontFamily: `'${fontFamily}', monospace`,
-      tabSize,
+      tabSize: effectiveTabSize,
+      detectIndentation: tabSize === 0,
     })
-    editor.getModel()?.updateOptions({ tabSize })
+    editor.getModel()?.updateOptions({ tabSize: effectiveTabSize })
   })
 
   // Sync readOnly when it changes (e.g. switching between book and user projects)

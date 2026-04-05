@@ -50,7 +50,7 @@ const LANGUAGES: Record<ProjectType, LanguageConfig> = {
     toolchainName: 'cargo',
     runCommandDisplay: (name) => `cargo run --bin ${name}`,
     book: {
-      commandLabel: 'The Rust Book',
+      commandLabel: 'The Rust Programming Language (2021 Edition)',
       toastEntity: 'Rust Book chapter',
       toastAlreadyLoaded: 'Rust Book chapters are already loaded.',
       menuEvent: 'menu:rust-book',
@@ -81,9 +81,9 @@ const LANGUAGES: Record<ProjectType, LanguageConfig> = {
       { id: 'cpp', label: 'C++', ext: 'cpp' },
     ],
     book: {
-      commandLabel: 'The K&R C Book',
-      toastEntity: 'K&R C chapter',
-      toastAlreadyLoaded: 'K&R C chapters are already loaded.',
+      commandLabel: 'The C Programming Language (K&R, 2nd Ed.)',
+      toastEntity: 'K&R chapter',
+      toastAlreadyLoaded: 'K&R chapters are already loaded.',
       menuEvent: 'menu:knr-book',
       removeMenuEvent: 'menu:remove-knr-book',
       sourceTag: 'knr_book',
@@ -123,7 +123,7 @@ const LANGUAGES: Record<ProjectType, LanguageConfig> = {
       return `swiftc ${filename} && ./${stem}`
     },
     book: {
-      commandLabel: 'The Swift Book',
+      commandLabel: 'The Swift Programming Language (Swift 6.1)',
       toastEntity: 'Swift Book chapter',
       toastAlreadyLoaded: 'Swift Book chapters are already loaded.',
       menuEvent: 'menu:swift-book',

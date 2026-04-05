@@ -74,7 +74,7 @@ impl Lang {
     pub fn book_info(&self) -> Option<BookInfo> {
         match self {
             Lang::Rust => Some(BookInfo {
-                book_name: "The Rust Book",
+                book_name: "The Rust Programming Language (2021 Edition)",
                 menu_id: "seed_rust_book",
                 remove_menu_id: "remove_rust_book",
                 event_name: "menu:rust-book",
@@ -83,7 +83,7 @@ impl Lang {
                 url: "https://doc.rust-lang.org/book/",
             }),
             Lang::Clang => Some(BookInfo {
-                book_name: "The K&&R C Book",
+                book_name: "The C Programming Language (K&&R)",
                 menu_id: "seed_knr_book",
                 remove_menu_id: "remove_knr_book",
                 event_name: "menu:knr-book",
@@ -93,7 +93,7 @@ impl Lang {
             }),
             Lang::Zig => None,
             Lang::Swift => Some(BookInfo {
-                book_name: "The Swift Book",
+                book_name: "The Swift Programming Language",
                 menu_id: "seed_swift_book",
                 remove_menu_id: "remove_swift_book",
                 event_name: "menu:swift-book",

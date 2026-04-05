@@ -54,9 +54,9 @@ cd ui && pnpm build        # production bundle
 
 ## Data Storage
 
-All runtime data lives under:
+Each edition stores data under its own bundle identifier:
 ```
-~/Library/Application Support/com.rustic-playground.app/
+~/Library/Application Support/com.rustic-playground.<edition>/
 ├── config.json              ← active_project, cargo_path, wizard_completed, enabled_languages
 ├── window-state.json        ← window geometry, panel sizes, open tabs
 └── projects/
@@ -66,6 +66,7 @@ All runtime data lives under:
         │   └── <playground>.rs
         └── content/         ← runtime assets (PLAYGROUND_CONTENT env var)
 ```
+Edition identifiers: `.rust`, `.power`, `.app` (dev builds without flag).
 
 ---
 
@@ -87,9 +88,14 @@ All runtime data lives under:
 | `src-tauri/src/languages/rust_book.rs` | Rust Book chapter data — 20 chapters (~2,700 lines) |
 | `src-tauri/src/languages/knr_book.rs` | K&R C Book chapter data — 8 chapters (~1,200 lines) |
 | `src-tauri/src/languages/swift_book.rs` | Swift Book chapter data — 8 chapters (~400 lines) |
-| `src-tauri/tauri.conf.json` | App config: identifier, window defaults, bundle settings |
+| `src-tauri/tauri.conf.json` | Base app config: identifier, window defaults, bundle settings |
 | `src-tauri/capabilities/default.json` | Tauri 2 IPC permissions — every API call needs an entry here |
+| `editions/*.json` | Per-edition Tauri config overrides (productName, identifier, window title) |
+| `VERSION` | Single source of truth for app version — synced to Cargo.toml, tauri.conf.json, package.json |
+| `scripts/sync-version.sh` | Reads VERSION file and updates all three version locations (hooked into Tauri build) |
+| `scripts/build-editions.sh` | Multi-edition build pipeline — builds DMGs for specified editions |
 | `ui/src/App.svelte` | Root layout, all global state, menu event listeners, window state persistence |
+| `ui/src/lib/editions.ts` | Edition registry: EditionConfig, currentEdition(), VITE_EDITION detection (v0.3.3) |
 | `ui/src/lib/languages.ts` | Language registry: LanguageConfig, BookConfig, LANGUAGES map (v0.3) |
 | `ui/src/lib/Sidebar.svelte` | Project/playground/file tree, drag-drop, context menus |
 | `ui/src/lib/Editor.svelte` | Monaco wrapper, theme sync, diagnostics markers |
@@ -107,6 +113,7 @@ All runtime data lives under:
 | `specs/roadmap.md` | Released / in-progress / next-up / parked ideas |
 | `specs/conventions.md` | Naming rules, code style |
 | `specs/workflow.md` | Workflow steps, spec lifecycle, change checklist |
+| `specs/build-helper.md` | Build/run/distribution guide — editions, versions, icons, troubleshooting |
 | `specs/archive/` | Historical specs — read-only context |
 | `ONBOARDING.md` | Project history, data model deep-dive, known gotchas table |
 
@@ -126,9 +133,9 @@ All runtime data lives under:
 
 **v0.3.3** — in progress (Edition Builds: Rust Edition, C Edition, Power Edition — same codebase, Tauri --config overrides + VITE_EDITION env var. editions.ts registry, single-language editions skip language picker, hide badges, filter themes/help/books dynamically. Build script: `scripts/build-editions.sh`).
 
-**v0.3.4** — planned (Linux Port: Rust Edition only, same Tauri/Svelte/Monaco stack, .deb and .rpm packaging).
+After v0.3.3: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
 
-After v0.3.4: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
+**Parked:** Linux Port (Rust Edition, low ROI for target audience), Windows Port (Rust Edition, high effort). See roadmap.md.
 
 ---
 

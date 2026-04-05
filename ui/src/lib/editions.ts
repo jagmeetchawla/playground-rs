@@ -15,7 +15,7 @@ export interface EditionConfig {
 const EDITIONS: Record<string, EditionConfig> = {
   power: {
     id: 'power',
-    displayName: 'Rustic Playground',
+    displayName: 'Rustic Playground — Power Edition',
     tagline: 'All languages. All features.',
     languages: null,
     defaultTheme: 'system',

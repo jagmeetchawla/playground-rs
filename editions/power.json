@@ -1,4 +1,19 @@
 {
-  "productName": "Rustic Playground",
-  "identifier": "com.rustic-playground.app"
+  "productName": "Rustic Power",
+  "identifier": "com.rustic-playground.power",
+  "app": {
+    "windows": [
+      {
+        "title": "Rustic Power",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true,
+        "dragDropEnabled": true,
+        "visible": false
+      }
+    ]
+  }
 }

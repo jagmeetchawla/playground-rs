@@ -8,9 +8,9 @@ use crate::languages::Lang;
 
 /// Book source tags → submenu labels (same order as frontend BOOK_LABELS).
 const BOOK_LABELS: &[(&str, &str)] = &[
-    ("rust_book", "The Rust Book"),
-    ("knr_book", "The K&&R C Book"),
-    ("swift_book", "The Swift Book"),
+    ("rust_book", "The Rust Programming Language (2021 Edition)"),
+    ("knr_book", "The C Programming Language (K&&R)"),
+    ("swift_book", "The Swift Programming Language"),
 ];
 
 /// Builds the full macOS menu bar.  Called once on startup and again via
@@ -22,6 +22,7 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     active: &str,
     _playground_count: usize,
     has_active_playground: bool,
+    has_active_tab: bool,
     _project_type: &str,
     is_book_project: bool,
     project_sources: &HashMap<String, String>,
@@ -120,19 +121,26 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .item(
             &MenuItemBuilder::with_id("new_playground", "New Playground")
                 .accelerator("CmdOrCtrl+N")
+                .enabled(!is_book_project)
                 .build(handle)?,
         )
         .separator()
         .item(
             &MenuItemBuilder::with_id("save", "Save")
                 .accelerator("CmdOrCtrl+S")
-                .enabled(!is_book_project)
+                .enabled(has_active_tab && !is_book_project)
+                .build(handle)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("revert", "Revert to Saved")
+                .enabled(has_active_tab && !is_book_project)
                 .build(handle)?,
         )
         .separator()
         .item(
             &MenuItemBuilder::with_id("close_tab", "Close Tab")
                 .accelerator("CmdOrCtrl+W")
+                .enabled(has_active_tab)
                 .build(handle)?,
         )
         .separator()
@@ -159,11 +167,13 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .item(
             &MenuItemBuilder::with_id("run_playground", "Run")
                 .accelerator("CmdOrCtrl+R")
+                .enabled(has_active_playground)
                 .build(handle)?,
         )
         .item(
             &MenuItemBuilder::with_id("stop_playground", "Stop")
                 .accelerator("CmdOrCtrl+.")
+                .enabled(has_active_playground)
                 .build(handle)?,
         )
         .build()?;
@@ -172,19 +182,9 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .item(&PredefinedMenuItem::undo(handle, None)?)
         .item(&PredefinedMenuItem::redo(handle, None)?)
         .separator()
-        .item(
-            &MenuItemBuilder::with_id("edit_cut", "Cut")
-                .accelerator("CmdOrCtrl+X")
-                .enabled(!is_book_project)
-                .build(handle)?,
-        )
+        .item(&PredefinedMenuItem::cut(handle, None)?)
         .item(&PredefinedMenuItem::copy(handle, None)?)
-        .item(
-            &MenuItemBuilder::with_id("edit_paste", "Paste")
-                .accelerator("CmdOrCtrl+V")
-                .enabled(!is_book_project)
-                .build(handle)?,
-        )
+        .item(&PredefinedMenuItem::paste(handle, None)?)
         .separator()
         .select_all()
         .build()?;
@@ -250,6 +250,7 @@ pub fn rebuild_menu(
     active: String,
     playground_count: usize,
     has_active_playground: bool,
+    has_active_tab: bool,
     project_type: String,
     is_book_project: bool,
     project_sources: HashMap<String, String>,
@@ -262,6 +263,7 @@ pub fn rebuild_menu(
         &active,
         playground_count,
         has_active_playground,
+        has_active_tab,
         &project_type,
         is_book_project,
         &project_sources,

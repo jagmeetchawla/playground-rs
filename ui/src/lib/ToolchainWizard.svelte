@@ -55,19 +55,23 @@
       .map(l => l.type)
   )
 
-  // Edition-aware labels for single-language editions
+  // Edition-aware: single-language edition's language config (for toolchain labels)
   const editionLang = edition.isSingleLanguage ? getLang(edition.languages![0] as ProjectType) : null
-  const editionBookName = editionLang?.book?.commandLabel ?? null
+
+  // Derive labels from enabled languages and their book counts
+  const enabledBooks = allLanguages().filter(l => enabledLanguages.includes(l.type) && l.book)
+  const bookCount = enabledBooks.length
+  const singleBookName = bookCount === 1 ? enabledBooks[0].book!.commandLabel : null
   const toolchainLabel = edition.isSingleLanguage ? 'Toolchain' : 'Toolchains'
-  const booksLabel = editionBookName ?? 'Books'
+  const booksLabel = bookCount === 1 ? 'Book' : 'Books'
 
   // Edition-aware steps/tabs: single-language editions skip language picker
   const allWizardSteps = edition.isSingleLanguage
-    ? [toolchainLabel, 'Appearance', ...(editionBookName ? [booksLabel] : []), 'Finish']
-    : ['Languages', 'Toolchains', 'Appearance', 'Books', 'Finish']
+    ? [toolchainLabel, 'Appearance', ...(bookCount > 0 ? [booksLabel] : []), 'Finish']
+    : ['Languages', 'Toolchains', 'Appearance', ...(bookCount > 0 ? ['Books'] : []), 'Finish']
   const allWizardPanels = edition.isSingleLanguage
-    ? (['toolchains', 'appearance', ...(editionBookName ? ['books' as const] : []), 'finish'] as const)
-    : (['languages', 'toolchains', 'appearance', 'books', 'finish'] as const)
+    ? (['toolchains', 'appearance', ...(bookCount > 0 ? ['books' as const] : []), 'finish'] as const)
+    : (['languages', 'toolchains', 'appearance', ...(bookCount > 0 ? ['books' as const] : []), 'finish'] as const)
   const wizardSteps = allWizardSteps
   const totalSteps = wizardSteps.length
 
@@ -75,7 +79,7 @@
     ...(!edition.isSingleLanguage ? [{ id: 'languages' as const, label: 'Languages' }] : []),
     { id: 'toolchains', label: toolchainLabel },
     { id: 'appearance', label: 'Appearance' },
-    ...(!edition.isSingleLanguage || editionBookName ? [{ id: 'books' as const, label: booksLabel }] : []),
+    ...(bookCount > 0 ? [{ id: 'books' as const, label: booksLabel }] : []),
   ]
   const settingsTabs = allSettingsTabs
 
@@ -214,8 +218,7 @@
   }
 
   const fontFamilies = [
-    'Menlo', 'Monaco', 'SF Mono', 'Courier New',
-    'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'IBM Plex Mono',
+    'Menlo', 'Monaco', 'Courier New',
   ]
 </script>
 
@@ -497,11 +500,13 @@
           <div class="setting-row">
             <label for="wiz-tab-size">Tab Size</label>
             <select id="wiz-tab-size" bind:value={draftSettings.tab_size}>
+              <option value={0}>Auto</option>
               <option value={2}>2 spaces</option>
               <option value={4}>4 spaces</option>
               <option value={8}>8 spaces</option>
             </select>
           </div>
+
         </div>
 
         <div
@@ -512,15 +517,24 @@
           &nbsp;&nbsp;&nbsp;&nbsp;<span class="preview-mac">println!</span>(<span class="preview-str">"Hello, playground!"</span>);<br/>
           &#125;
         </div>
+
+        {#if draftSettings.font_size !== 13 || draftSettings.font_family !== 'Menlo' || draftSettings.tab_size !== 0 || draftSettings.theme !== 'system'}
+        <button class="btn btn-secondary btn-reset" onclick={() => {
+          draftSettings.font_size = 13
+          draftSettings.font_family = 'Menlo'
+          draftSettings.tab_size = 0
+          draftSettings.theme = 'system'
+        }}>Reset Defaults</button>
+        {/if}
       </div>
 
     <!-- ═══════════ Panel: Books ═══════════ -->
     {:else if currentPanel === 'books'}
       <div class="step-content">
-        <h2 class="step-heading">{editionBookName ?? 'Example Books'}</h2>
+        <h2 class="step-heading">{singleBookName ?? 'Example Books'}</h2>
         <p class="step-desc">{mode === 'wizard'
-          ? (edition.isSingleLanguage ? `Load ${editionBookName} examples to learn from.` : 'Load book examples to learn from. Each book creates read-only reference projects.')
-          : (edition.isSingleLanguage ? `Manage ${editionBookName} examples.` : 'Manage loaded book examples.')}</p>
+          ? (bookCount === 1 ? `Load ${singleBookName} examples to learn from.` : 'Load book examples to learn from. Each book creates read-only reference projects.')
+          : (bookCount === 1 ? `Manage ${singleBookName} examples.` : 'Manage loaded book examples.')}</p>
 
         {#if availableBooks.length === 0}
           <div class="no-books">
@@ -583,12 +597,15 @@
             <span class="summary-value">{({ system: 'System', auto: 'Auto (match language)', dark: 'Dark', light: 'Light', rust: 'Rust', seagreen: 'Clang', zig: 'Zig', swift: 'Swift' } as Record<string, string>)[draftSettings.theme] ?? draftSettings.theme}</span>
           </div>
           {#if booksChecked.length > 0}
-            <div class="summary-row">
-              <span class="summary-label">{edition.isSingleLanguage ? 'Book' : 'Books to load'}</span>
-              <span class="summary-value">
-                {booksChecked.map(t => getLang(t as ProjectType).book?.commandLabel).filter(Boolean).join(', ')}
-              </span>
-            </div>
+            {#each booksChecked as btype, i}
+              {@const bookLabel = getLang(btype as ProjectType).book?.commandLabel}
+              {#if bookLabel}
+              <div class="summary-row">
+                <span class="summary-label">{i === 0 ? (booksChecked.length === 1 ? 'Book' : 'Books') : ''}</span>
+                <span class="summary-value">{bookLabel}</span>
+              </div>
+              {/if}
+            {/each}
           {/if}
         </div>
       </div>
@@ -1010,4 +1027,5 @@
   .btn-primary { color: #fff; background: var(--accent); border: 1px solid var(--accent); }
   .btn-primary:hover { filter: brightness(1.15); }
   .btn-finish { padding: 8px 28px; font-size: 13px; }
+  .btn-reset { margin-top: 12px; font-size: 11px; padding: 4px 12px; opacity: 0.7; }
 </style>

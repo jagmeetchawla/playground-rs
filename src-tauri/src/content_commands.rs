@@ -2,6 +2,9 @@ use tauri::AppHandle;
 
 use crate::{content_dir, is_text_file, safe_content_path, validate_filename, ContentFile};
 
+/// Maximum content file size: 10 MB.
+const MAX_CONTENT_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
 #[tauri::command]
 pub fn list_content_files(app: AppHandle) -> Result<Vec<ContentFile>, String> {
     let dir = content_dir(&app);
@@ -78,6 +81,16 @@ pub fn import_content_file(src_path: String, app: AppHandle) -> Result<String, S
         .ok_or_else(|| "Invalid source path".to_string())?
         .to_string();
     validate_filename(&filename)?;
+
+    let size = std::fs::metadata(src)
+        .map_err(|e| format!("Cannot read file: {}", e))?
+        .len();
+    if size > MAX_CONTENT_FILE_SIZE {
+        return Err(format!(
+            "File too large ({:.1} MB). Maximum is 10 MB.",
+            size as f64 / (1024.0 * 1024.0)
+        ));
+    }
 
     let dir = content_dir(&app);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

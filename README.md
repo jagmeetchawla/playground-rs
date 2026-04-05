@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/app-icon-source.png" width="128" height="128" alt="Rustic Playground icon" />
+  <img src="assets/The Rust Edition/Rustic Playground Icon-MacOS-iOS-Default-1024x1024@1x.png" width="128" height="128" alt="Rustic Playground icon" />
   <br><br>
   <strong style="font-size: 1.5em;">Rustic Playground</strong>
   <br><br>
@@ -9,7 +9,7 @@
   <br><br>
   Built with <a href="https://www.rust-lang.org">Rust</a> + <a href="https://tauri.app">Tauri 2</a> + <a href="https://svelte.dev">Svelte 5</a> + <a href="https://microsoft.github.io/monaco-editor/">Monaco Editor</a>.
   <br><br>
-  <img src="assets/screenshot_themes_v2.png" alt="Rustic Playground — Dark, Rust, and Light themes" />
+  <img src="assets/GitHub/screenshot_themes_v2.png" alt="Rustic Playground — Dark, Rust, and Light themes" />
   <br>
   <sub>Dark · Rust · Light</sub>
 </p>
@@ -81,28 +81,31 @@
 ```sh
 git clone https://github.com/jagmeetchawla/rustic-playground
 cd rustic-playground
-```
-
-**macOS desktop app** (Tauri + Svelte):
-```sh
 cd ui && pnpm install && cd ..
-cargo tauri dev        # development mode — hot reload
-cargo tauri build      # release .app + .dmg in src-tauri/target/release/bundle/
 ```
 
-**CLI runner** (no GUI, no Node required):
+**Rust Edition** (single-language, focused on Rust learners):
 ```sh
-cargo run              # interactive playground picker
-cargo run -- <name>    # run a specific playground
-cargo build            # build all playgrounds
+VITE_EDITION=rust cargo tauri dev --config editions/rust.json       # dev mode
+VITE_EDITION=rust cargo tauri build --config editions/rust.json     # release DMG
 ```
+
+**Power Edition** (all 4 languages):
+```sh
+VITE_EDITION=power cargo tauri dev --config editions/power.json     # dev mode
+VITE_EDITION=power cargo tauri build --config editions/power.json   # release DMG
+```
+
+Editions are fully isolated — each has its own app name, bundle ID, and data directory. They can be installed side by side.
+
+> See [`specs/build-helper.md`](specs/build-helper.md) for the full build guide: version management, edition configs, icon generation, troubleshooting.
 
 ## How It Works
 
 Each **project** is stored at:
 
 ```
-~/Library/Application Support/com.rustic-playground.app/projects/<name>/
+~/Library/Application Support/com.rustic-playground.<edition>/projects/<name>/
 ├── Cargo.toml / rustic.toml  ← project config (Rust uses Cargo.toml, others use rustic.toml)
 ├── src/bin/ or src/           ← playground files (.rs, .c, .cpp, .zig, .swift)
 └── content/                   ← runtime assets (accessible via PLAYGROUND_CONTENT)
@@ -191,7 +194,6 @@ See the warning at the top of this file. Additionally:
 
 | Version | Highlights |
 |---|---|
-| v0.3.4 | _(planned)_ Linux port — Rust Edition only, same Tauri/Svelte/Monaco stack, .deb and .rpm |
 | v0.3.3 | _(in progress)_ Edition builds — Rust Edition, C Edition, Power Edition as separate DMGs from one codebase |
 | v0.3.2 | Welcome Wizard (5-step first-launch), language gating, per-language hello projects, native→clang rename, Apple HIG styling, dual-mode settings/wizard, book management via checkboxes, toolchain pill status |
 | v0.3.1 | Read-only book projects, per-playground locking, Copy to Project, Learn menu, flyout submenus, Zig/Swift themes, auto theme matching, theme dropdown |

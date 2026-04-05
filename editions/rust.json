@@ -1,10 +1,18 @@
 {
-  "productName": "Rustic Playground — The Rust Edition",
+  "productName": "Rustic Rust",
   "identifier": "com.rustic-playground.rust",
   "app": {
     "windows": [
       {
-        "title": "Rustic Playground — The Rust Edition"
+        "title": "Rustic Rust",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true,
+        "dragDropEnabled": true,
+        "visible": false
       }
     ]
   }

@@ -66,7 +66,7 @@ impl Default for Settings {
         Self {
             font_size: 13,
             font_family: "Menlo".to_string(),
-            tab_size: 4,
+            tab_size: 0,
             cargo_path: default_cargo_path(),
             theme: default_theme(),
         }
@@ -372,6 +372,10 @@ struct WindowState {
     active_tab: Option<String>,
     window_width: u32,
     window_height: u32,
+    #[serde(default)]
+    window_x: Option<i32>,
+    #[serde(default)]
+    window_y: Option<i32>,
 }
 
 impl Default for WindowState {
@@ -386,6 +390,8 @@ impl Default for WindowState {
             active_tab: None,
             window_width: 1280,
             window_height: 800,
+            window_x: None,
+            window_y: None,
         }
     }
 }
@@ -560,6 +566,7 @@ pub fn run() {
                 &active_name,
                 usize::MAX,
                 false,
+                false,
                 &ptype,
                 is_book,
                 &sources,
@@ -582,6 +589,7 @@ pub fn run() {
                 "delete_project" => Some("menu:delete-project"),
                 "new_playground" => Some("menu:new"),
                 "save" => Some("menu:save"),
+                "revert" => Some("menu:revert"),
                 "close_tab" => Some("menu:close-tab"),
                 "run_playground" => Some("menu:run"),
                 "stop_playground" => Some("menu:stop"),
@@ -592,8 +600,6 @@ pub fn run() {
                 "show_settings" => Some("menu:settings"),
                 "show_help" => Some("menu:help"),
                 "show_about" => Some("menu:about"),
-                "edit_cut" => Some("menu:edit-cut"),
-                "edit_paste" => Some("menu:edit-paste"),
                 _ => {
                     // Dynamic book events from language modules
                     let mut book_event = None;
@@ -642,6 +648,8 @@ pub fn run() {
             playground_commands::list_playgrounds,
             playground_commands::load_playground,
             playground_commands::save_playground,
+            playground_commands::snapshot_playground,
+            playground_commands::revert_playground,
             playground_commands::new_playground,
             playground_commands::rename_playground,
             playground_commands::delete_playground,
@@ -942,7 +950,7 @@ mod tests {
         let s = Settings::default();
         assert_eq!(s.font_size, 13);
         assert_eq!(s.font_family, "Menlo");
-        assert_eq!(s.tab_size, 4);
+        assert_eq!(s.tab_size, 0);
         assert_eq!(s.theme, "system");
         assert!(!s.cargo_path.is_empty());
     }
@@ -1035,6 +1043,8 @@ mod tests {
             active_tab: Some("pg:hello".to_string()),
             window_width: 1920,
             window_height: 1080,
+            window_x: Some(100),
+            window_y: Some(50),
         };
         let json = serde_json::to_string(&ws).unwrap();
         let ws2: WindowState = serde_json::from_str(&json).unwrap();
@@ -1043,6 +1053,8 @@ mod tests {
         assert_eq!(ws2.open_tabs.len(), 1);
         assert_eq!(ws2.open_tabs[0].id, "pg:hello");
         assert_eq!(ws2.active_tab, Some("pg:hello".to_string()));
+        assert_eq!(ws2.window_x, Some(100));
+        assert_eq!(ws2.window_y, Some(50));
     }
 
     // ── ContentFile ──────────────────────────────────────────────────────

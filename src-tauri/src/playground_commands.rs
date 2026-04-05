@@ -178,6 +178,34 @@ fn resolve_playground_path(name: &str, app: &AppHandle) -> Result<std::path::Pat
     lang.playground_path(name, &dir)
 }
 
+/// Given a playground file path, return the corresponding .saved/ snapshot path.
+/// e.g. `src/bin/hello.rs` → `src/bin/.saved/hello.rs`
+fn saved_path(playground_path: &std::path::Path) -> std::path::PathBuf {
+    let parent = playground_path.parent().unwrap();
+    let filename = playground_path.file_name().unwrap();
+    parent.join(".saved").join(filename)
+}
+
+/// Ensure a .saved/ snapshot exists for a playground file.
+/// Called when a tab is opened — creates the snapshot from the current file if missing.
+fn ensure_snapshot(playground_path: &std::path::Path) -> Result<(), String> {
+    let snap = saved_path(playground_path);
+    if !snap.exists() {
+        let dir = snap.parent().unwrap();
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        std::fs::copy(playground_path, &snap).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Update the .saved/ snapshot (called on explicit save).
+fn update_snapshot(playground_path: &std::path::Path, content: &str) -> Result<(), String> {
+    let snap = saved_path(playground_path);
+    let dir = snap.parent().unwrap();
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    std::fs::write(&snap, content).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn load_playground(name: String, app: AppHandle) -> Result<String, String> {
     let path = resolve_playground_path(&name, &app)?;
@@ -187,7 +215,31 @@ pub fn load_playground(name: String, app: AppHandle) -> Result<String, String> {
 #[tauri::command]
 pub fn save_playground(name: String, content: String, app: AppHandle) -> Result<(), String> {
     let path = resolve_playground_path(&name, &app)?;
-    std::fs::write(&path, content).map_err(|e| e.to_string())
+    std::fs::write(&path, &content).map_err(|e| e.to_string())?;
+    update_snapshot(&path, &content)?;
+    Ok(())
+}
+
+/// Ensure a .saved/ snapshot exists for a playground (called when a tab opens).
+#[tauri::command]
+pub fn snapshot_playground(name: String, app: AppHandle) -> Result<(), String> {
+    let path = resolve_playground_path(&name, &app)?;
+    ensure_snapshot(&path)
+}
+
+/// Revert a playground to its last saved state (from .saved/ snapshot).
+/// Returns the reverted code so the frontend can update the editor.
+#[tauri::command]
+pub fn revert_playground(name: String, app: AppHandle) -> Result<String, String> {
+    let path = resolve_playground_path(&name, &app)?;
+    let snap = saved_path(&path);
+    if !snap.exists() {
+        return Err("No saved snapshot found".to_string());
+    }
+    let saved_code = std::fs::read_to_string(&snap).map_err(|e| e.to_string())?;
+    // Restore the source file to the saved state
+    std::fs::write(&path, &saved_code).map_err(|e| e.to_string())?;
+    Ok(saved_code)
 }
 
 #[tauri::command]
@@ -200,7 +252,9 @@ pub fn new_playground(name: String, content: Option<String>, app: AppHandle) -> 
         return Err(format!("'{}' already exists", name));
     }
     let code = content.unwrap_or_else(|| lang.starter_template(&stem, &ext));
-    std::fs::write(&path, code).map_err(|e| e.to_string())
+    std::fs::write(&path, &code).map_err(|e| e.to_string())?;
+    update_snapshot(&path, &code)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -210,13 +264,26 @@ pub fn rename_playground(old_name: String, new_name: String, app: AppHandle) -> 
     if new_path.exists() {
         return Err(format!("'{}' already exists", new_name));
     }
-    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
+    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())?;
+    // Rename snapshot too
+    let old_snap = saved_path(&old_path);
+    let new_snap = saved_path(&new_path);
+    if old_snap.exists() {
+        let _ = std::fs::rename(&old_snap, &new_snap);
+    }
+    Ok(())
 }
 
 #[tauri::command]
 pub fn delete_playground(name: String, app: AppHandle) -> Result<(), String> {
     let path = resolve_playground_path(&name, &app)?;
-    std::fs::remove_file(&path).map_err(|e| e.to_string())
+    std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    // Clean up snapshot
+    let snap = saved_path(&path);
+    if snap.exists() {
+        let _ = std::fs::remove_file(&snap);
+    }
+    Ok(())
 }
 
 #[tauri::command]

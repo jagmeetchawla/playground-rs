@@ -167,6 +167,7 @@
   }
 
   function fileIcon(filename: string): string {
+    if (!filename.includes('.')) return '📦'
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
     if (['png','jpg','jpeg','gif','webp','svg'].includes(ext)) return '🖼'
     const textExts = ['txt','md','rs','toml','yaml','yml','json','xml','html','htm',
@@ -176,6 +177,7 @@
   }
 
   function isTextFile(filename: string): boolean {
+    if (!filename.includes('.')) return false
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
     const textExts = ['txt','md','rs','toml','yaml','yml','json','xml','html','htm',
                       'css','js','ts','csv','log','sh','bash','zsh','conf','ini','env']
@@ -394,6 +396,7 @@
         <svg width="10" height="10" viewBox="0 0 10 10" class="chevron" class:open={cargoExpanded}>
           <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
         </svg>
+        <span class="file-icon file-icon--toml">TOML</span>
         <span class="cargo-label">Cargo.toml</span>
         <button
           class="cargo-edit-btn"
@@ -781,6 +784,9 @@
   }
   .file-icon.swift {
     background: #f05138; letter-spacing: 0;
+  }
+  .file-icon--toml {
+    background: #6b7280; letter-spacing: 0; font-size: 6px;
   }
 
   .lock-icon { flex-shrink: 0; color: var(--text-tertiary); }

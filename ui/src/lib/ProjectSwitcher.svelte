@@ -184,9 +184,7 @@
 
 <div class="project-switcher">
   <button class="pill" onclick={toggle} class:open>
-    {#if !edition.isSingleLanguage}
-      <span class="pill-badge" class:clang={projectType === 'clang'} class:zig={projectType === 'zig'} class:swift={projectType === 'swift'}>{activeLang.badge}</span>
-    {/if}
+    <span class="pill-badge" class:clang={projectType === 'clang'} class:zig={projectType === 'zig'} class:swift={projectType === 'swift'}>{activeLang.badge}</span>
     <span class="pill-name">{active}</span>
     {#if activeLang.experimental && !edition.isSingleLanguage}<span class="exp-tag">exp</span>{/if}
     <svg class="pill-caret" width="10" height="6" viewBox="0 0 10 6">
@@ -225,9 +223,7 @@
                 onclick={() => selectProject(name)}
                 disabled={busy}
               >
-                {#if !edition.isSingleLanguage}
-                  <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
-                {/if}
+                <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
                 <span class="project-name">{name}</span>
                 {#if itemLang.experimental && !edition.isSingleLanguage}<span class="exp-tag">exp</span>{/if}
                 {#if name === active}
@@ -262,43 +258,67 @@
           <ul class="project-list books-list">
             {#each grouped.bookSections as section (section.key)}
               {#if section.loaded}
-                <li class="submenu-parent">
-                  <button class="project-item submenu-trigger">
-                    <span class="section-book-icon">📖</span>
-                    <span class="project-name">{section.label}</span>
-                    <span class="section-count">{section.projects.length}</span>
-                    <svg class="submenu-arrow" width="6" height="10" viewBox="0 0 6 10">
-                      <path d="M1 1l4 4-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
-                    </svg>
-                  </button>
-                  <div class="submenu">
-                    <ul class="project-list">
-                      {#each section.projects as name (name)}
-                        {@const itemPtype = projectTypes[name] ?? 'rust'}
-                        {@const itemLang = getLang(itemPtype)}
-                        <li>
-                          <button
-                            class="project-item"
-                            class:active-project={name === active}
-                            onclick={() => selectProject(name)}
-                            disabled={busy}
-                          >
-                            {#if !edition.isSingleLanguage}
+                {#if filterText}
+                  <!-- Searching: show matching chapters flat -->
+                  {#each section.projects as name (name)}
+                    {@const itemPtype = projectTypes[name] ?? 'rust'}
+                    {@const itemLang = getLang(itemPtype)}
+                    <li>
+                      <button
+                        class="project-item"
+                        class:active-project={name === active}
+                        onclick={() => selectProject(name)}
+                        disabled={busy}
+                      >
+                        <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
+                        <span class="project-name">{name}</span>
+                        {#if name === active}
+                          <svg class="active-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                            <path d="M1 4l3 3 5-6" stroke="currentColor" stroke-width="1.6"
+                                  stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                        {/if}
+                      </button>
+                    </li>
+                  {/each}
+                {:else}
+                  <!-- No search: flyout submenu -->
+                  <li class="submenu-parent">
+                    <button class="project-item submenu-trigger">
+                      <span class="section-book-icon">📖</span>
+                      <span class="project-name">{section.label}</span>
+                      <span class="section-count">{section.projects.length}</span>
+                      <svg class="submenu-arrow" width="6" height="10" viewBox="0 0 6 10">
+                        <path d="M1 1l4 4-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+                      </svg>
+                    </button>
+                    <div class="submenu">
+                      <ul class="project-list">
+                        {#each section.projects as name (name)}
+                          {@const itemPtype = projectTypes[name] ?? 'rust'}
+                          {@const itemLang = getLang(itemPtype)}
+                          <li>
+                            <button
+                              class="project-item"
+                              class:active-project={name === active}
+                              onclick={() => selectProject(name)}
+                              disabled={busy}
+                            >
                               <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
-                            {/if}
-                            <span class="project-name">{name}</span>
-                            {#if name === active}
-                              <svg class="active-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
-                                <path d="M1 4l3 3 5-6" stroke="currentColor" stroke-width="1.6"
-                                      stroke-linecap="round" stroke-linejoin="round"/>
-                              </svg>
-                            {/if}
-                          </button>
-                        </li>
-                      {/each}
-                    </ul>
-                  </div>
-                </li>
+                              <span class="project-name">{name}</span>
+                              {#if name === active}
+                                <svg class="active-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                                  <path d="M1 4l3 3 5-6" stroke="currentColor" stroke-width="1.6"
+                                        stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                              {/if}
+                            </button>
+                          </li>
+                        {/each}
+                      </ul>
+                    </div>
+                  </li>
+                {/if}
               {/if}
             {/each}
           </ul>

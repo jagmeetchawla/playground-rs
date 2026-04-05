@@ -1,10 +1,18 @@
 {
-  "productName": "Rustic Playground — The Zig Edition",
+  "productName": "Rustic Zig",
   "identifier": "com.rustic-playground.zig",
   "app": {
     "windows": [
       {
-        "title": "Rustic Playground — The Zig Edition"
+        "title": "Rustic Zig",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true,
+        "dragDropEnabled": true,
+        "visible": false
       }
     ]
   }

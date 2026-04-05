@@ -1,7 +1,7 @@
 <script lang="ts">
   import { open as shellOpen } from '@tauri-apps/plugin-shell'
   import appIcon from './app-icon.png'
-  import { getLang, type ProjectType } from './languages'
+  import { getLang, allLanguages, type ProjectType } from './languages'
   import type { EditionConfig } from './editions'
 
   let { onclose, enabledLanguages = ['rust', 'clang', 'zig', 'swift'], edition }: {
@@ -12,9 +12,11 @@
 
   let activeSection: string = $state('overview')
 
-  const editionLang = edition.isSingleLanguage ? getLang(edition.languages![0] as ProjectType) : null
-  const editionBookName = editionLang?.book?.commandLabel ?? null
-  const booksLabel = editionBookName ?? 'Book Examples'
+  // Derive book label from actual book count for enabled languages
+  const enabledBooks = allLanguages().filter(l => enabledLanguages.includes(l.type) && l.book)
+  const bookCount = enabledBooks.length
+  const singleBookName = bookCount === 1 ? enabledBooks[0].book!.commandLabel : null
+  const booksLabel = singleBookName ?? 'Book Examples'
 
   const allSections = [
     { id: 'overview', label: 'Overview' },
@@ -24,7 +26,7 @@
     { id: 'console', label: 'Console' },
     { id: 'content', label: 'Content Files' },
     { id: 'shortcuts', label: 'Shortcuts' },
-    ...(editionBookName !== null || !edition.isSingleLanguage ? [{ id: 'books', label: booksLabel }] : []),
+    ...(bookCount > 0 ? [{ id: 'books', label: booksLabel }] : []),
     { id: 'security', label: 'Security' },
   ]
   const sections = allSections
@@ -302,10 +304,11 @@ fn main() &#123;
       <h2>Managing Files</h2>
       <ul>
         <li><strong>Add</strong> — click <code>[+ Add File]</code> in the sidebar content section</li>
-        <li><strong>Import</strong> — drag a file from Finder onto the project in the sidebar</li>
+        <li><strong>Import</strong> — drag a file from Finder onto the content area in the sidebar</li>
         <li><strong>Edit text files</strong> — click to open as an editor tab</li>
         <li><strong>Open binary / image</strong> — click to open with the default macOS app</li>
         <li><strong>Rename / Delete / Reveal</strong> — right-click the file</li>
+        <li><strong>Size limit</strong> — imported files must be under 10 MB</li>
       </ul>
 
     {:else if activeSection === 'shortcuts'}
@@ -342,7 +345,7 @@ fn main() &#123;
       <div class="book-list">
         {#if enabledLanguages.includes('rust')}
         <div class="book-item">
-          <h3>The Rust Book</h3>
+          <h3>The Rust Programming Language (2021 Edition)</h3>
           <p>20 chapters covering the full curriculum of <em>The Rust Programming Language</em>
             by Steve Klabnik and Carol Nichols.</p>
           <div class="book-meta">
@@ -353,14 +356,14 @@ fn main() &#123;
         {/if}
         {#if enabledLanguages.includes('clang')}
         <div class="book-item">
-          <h3>The K&R C Book</h3>
-          <p>8 chapters based on <em>The C Programming Language</em> by Kernighan & Ritchie.</p>
+          <h3>The C Programming Language (K&R, 2nd Ed.)</h3>
+          <p>8 chapters based on <em>The C Programming Language</em> (2nd Edition, 1988) by Brian W. Kernighan and Dennis M. Ritchie.</p>
         </div>
         {/if}
         {#if enabledLanguages.includes('swift')}
         <div class="book-item">
-          <h3>The Swift Book</h3>
-          <p>8 chapters based on <em>The Swift Programming Language</em> by Apple.</p>
+          <h3>The Swift Programming Language (Swift 6.1)</h3>
+          <p>8 chapters based on <em>The Swift Programming Language</em> by Apple Inc.</p>
           <div class="book-meta">
             <span><button class="link-btn" onclick={() => shellOpen('https://docs.swift.org/swift-book/')}>Read online</button></span>
           </div>
@@ -375,9 +378,9 @@ fn main() &#123;
         <strong>Copy to Project</strong> to create an editable copy in your own project.
       </p>
 
-      <h2>{edition.isSingleLanguage ? 'Managing' : 'Managing Books'}</h2>
+      <h2>{bookCount === 1 ? 'Managing' : 'Managing Books'}</h2>
       <p>
-        Load or remove {edition.isSingleLanguage ? 'the book' : 'books'} from <strong>Settings → {booksLabel}</strong>. Removing {edition.isSingleLanguage ? 'it' : 'a book'} deletes
+        Load or remove {bookCount === 1 ? 'the book' : 'books'} from <strong>Settings → {booksLabel}</strong>. Removing {bookCount === 1 ? 'it' : 'a book'} deletes
         the projects from disk. You can re-load at any time.
       </p>
 

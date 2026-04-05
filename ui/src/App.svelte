@@ -3,7 +3,7 @@
   import { invoke, Channel } from '@tauri-apps/api/core'
   import { open as dialogOpen } from '@tauri-apps/plugin-dialog'
   import { listen } from '@tauri-apps/api/event'
-  import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
+  import { getCurrentWindow, LogicalSize, LogicalPosition } from '@tauri-apps/api/window'
   import Sidebar from './lib/Sidebar.svelte'
   import TabBar from './lib/TabBar.svelte'
   import Editor from './lib/Editor.svelte'
@@ -158,7 +158,7 @@
   let settings: Settings = $state({
     font_size: 13,
     font_family: 'Menlo',
-    tab_size: 4,
+    tab_size: 0,
     cargo_path: '',
     theme: 'system',
   })
@@ -251,6 +251,8 @@
   // ── Window state persistence ──────────────────────────────────────────────────
 
   let _restoring = true   // suppresses saves during the onMount restore phase
+  let _lastWindowX: number | null = null
+  let _lastWindowY: number | null = null
 
   async function saveWindowState() {
     if (_restoring) return
@@ -271,6 +273,8 @@
           active_tab:    activeTab,
           window_width:  Math.round(window.innerWidth),
           window_height: Math.round(window.innerHeight),
+          window_x:      _lastWindowX,
+          window_y:      _lastWindowY,
         }
       })
     } catch(e) {
@@ -279,7 +283,13 @@
   }
 
   let _resizeTimer: ReturnType<typeof setTimeout> | null = null
-  function onWindowResize() {
+  async function onWindowChange() {
+    // Capture position via Tauri API (browser screenX/Y is unreliable in WKWebView)
+    try {
+      const pos = await getCurrentWindow().outerPosition()
+      _lastWindowX = Math.round(pos.x)
+      _lastWindowY = Math.round(pos.y)
+    } catch {}
     if (_resizeTimer) clearTimeout(_resizeTimer)
     _resizeTimer = setTimeout(() => saveWindowState(), 1000)
   }
@@ -330,9 +340,14 @@
       outputW        = ws.output_w        ?? 300
 
       if (ws.window_width && ws.window_height) {
-        // saved as logical content-area pixels — restore as logical size
         await getCurrentWindow().setSize(new LogicalSize(ws.window_width, ws.window_height))
           .catch(e => console.warn('setSize failed:', e))
+      }
+      if (ws.window_x != null && ws.window_y != null) {
+        _lastWindowX = ws.window_x
+        _lastWindowY = ws.window_y
+        await getCurrentWindow().setPosition(new LogicalPosition(ws.window_x, ws.window_y))
+          .catch(e => console.warn('setPosition failed:', e))
       }
 
       if (Array.isArray(ws.open_tabs)) {
@@ -354,6 +369,7 @@
 
       unlisteners = await Promise.all([
         listen('menu:save',      () => save()),
+        listen('menu:revert',    () => revert()),
         listen('menu:run',       () => run()),
         listen('menu:stop',      () => stop()),
         listen('menu:new',       () => { if (!isReadOnly) requestNewPlayground() }),
@@ -370,8 +386,6 @@
         listen('menu:about',             () => { showAbout = true }),
         ...allLanguages().filter(l => l.book).map(l => listen(l.book!.menuEvent, () => seedBook(l.type))),
         ...allLanguages().filter(l => l.book).map(l => listen(l.book!.removeMenuEvent, () => removeBook(l.book!.sourceTag, l.book!.commandLabel))),
-        listen('menu:edit-cut',          () => { document.execCommand('cut') }),
-        listen('menu:edit-paste',        () => { navigator.clipboard.readText().then(t => document.execCommand('insertText', false, t)).catch(() => {}) }),
         listen('menu:rename-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground' && !isReadOnly) renameTarget = activeTab }),
         listen('menu:delete-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground' && !isReadOnly) deletePending = activeTab }),
       ])
@@ -384,11 +398,14 @@
       _restoring = false   // open saves from this point on
     }
 
+    const unlistenMove = await getCurrentWindow().onMoved(() => onWindowChange())
+
     window.addEventListener('keydown', handleKey)
-    window.addEventListener('resize', onWindowResize)
+    window.addEventListener('resize', onWindowChange)
     return () => {
       window.removeEventListener('keydown', handleKey)
-      window.removeEventListener('resize', onWindowResize)
+      window.removeEventListener('resize', onWindowChange)
+      unlistenMove()
       unlisteners.forEach(u => u())
     }
   })
@@ -401,12 +418,14 @@
 
   // Rebuild the native menu whenever projects, playground count, or active tab changes
   let hasActivePlayground = $derived(!!activeTab && currentTabMeta.type === 'playground')
+  let hasActiveTab = $derived(!!activeTab)
   $effect(() => {
     invoke('rebuild_menu', {
       projects,
       active: activeProject,
       playgroundCount: playgrounds.length,
       hasActivePlayground,
+      hasActiveTab,
       projectType,
       isBookProject: isReadOnly,
       projectSources,
@@ -458,7 +477,7 @@
   }
 
   function syncMenuProjects() {
-    invoke('rebuild_menu', { projects, active: activeProject, playgroundCount: playgrounds.length, hasActivePlayground, projectType, isBookProject: isReadOnly, projectSources, enabledLanguages: enabledLangs }).catch(console.error)
+    invoke('rebuild_menu', { projects, active: activeProject, playgroundCount: playgrounds.length, hasActivePlayground, hasActiveTab, projectType, isBookProject: isReadOnly, projectSources, enabledLanguages: enabledLangs }).catch(console.error)
   }
 
   async function switchProject(name: string) {
@@ -544,12 +563,10 @@
   }
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────────
+  // NOTE: ⌘N, ⌘R, ⌘S, ⌘., ⌘W are handled by Tauri menu accelerators (menu.rs).
+  // macOS intercepts these before WKWebView, so JS keydown never fires for them.
+  // Enable/disable logic lives in build_menu() — single source of truth.
   function handleKey(e: KeyboardEvent) {
-    if (e.metaKey && e.key === 'n') { e.preventDefault(); if (!isReadOnly) requestNewPlayground() }
-    if (e.metaKey && e.key === 'r') { e.preventDefault(); run() }
-    if (e.metaKey && e.key === 's') { e.preventDefault(); save() }
-    if (e.metaKey && e.key === '.') { e.preventDefault(); stop() }
-    if (e.metaKey && e.key === 'w') { e.preventDefault(); closeTab(activeTab) }
     if (e.metaKey && e.shiftKey && e.code === 'KeyL') { e.preventDefault(); sidebarVisible = !sidebarVisible }
   }
 
@@ -568,6 +585,10 @@
       tabCode  = { ...tabCode,  [name]: code }
       tabMeta  = { ...tabMeta,  [name]: meta }
       openTabs = [...openTabs, name]
+      // Create a .saved/ snapshot so revert has a clean baseline
+      if (meta.type === 'playground') {
+        invoke('snapshot_playground', { name }).catch(() => {})
+      }
     }
     activeTab = name
     saveWindowState()
@@ -575,6 +596,11 @@
 
   function closeTab(name: string | null) {
     if (!name) return
+    const meta = tabMeta[name]
+    // If closing a dirty playground tab, restore the saved version on disk
+    if (dirtyTabs.includes(name) && meta?.type === 'playground') {
+      invoke('revert_playground', { name }).catch(() => {})
+    }
     dirtyTabs = dirtyTabs.filter(n => n !== name)
     const idx = openTabs.indexOf(name)
     openTabs  = openTabs.filter(n => n !== name)
@@ -629,6 +655,28 @@
       await invoke('save_playground', { name: activeTab, content: tabCode[activeTab] })
     }
     dirtyTabs = dirtyTabs.filter(n => n !== activeTab)
+  }
+
+  async function revert() {
+    if (!activeTab || isReadOnly) return
+    if (!dirtyTabs.includes(activeTab)) return
+    const meta = tabMeta[activeTab] ?? { type: 'playground' }
+    try {
+      let code: string
+      if (meta.type === 'playground') {
+        code = await invoke<string>('revert_playground', { name: activeTab })
+      } else if (meta.type === 'content') {
+        code = await invoke<string>('read_content_file', { filename: meta.filename })
+      } else if (meta.type === 'cargo') {
+        code = await invoke<string>('get_cargo_toml')
+      } else {
+        return
+      }
+      tabCode = { ...tabCode, [activeTab]: code }
+      dirtyTabs = dirtyTabs.filter(n => n !== activeTab)
+    } catch (err) {
+      console.error('Revert failed:', err)
+    }
   }
 
   function onCodeChange(newCode: string) {
@@ -1179,6 +1227,18 @@
           </svg>
           Save
         </button>
+        <button
+          class="btn btn-revert"
+          onclick={revert}
+          disabled={isReadOnly || !dirtyTabs.includes(activeTab)}
+          title="Revert to last saved version"
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+            <path d="M2 6a4.5 4.5 0 1 1 1 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+            <path d="M2 9V6h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          Revert
+        </button>
       {/if}
 
       {#if isRunning}
@@ -1615,6 +1675,9 @@
   .btn-save { color: var(--text-secondary); }
   .btn-save:hover:not(:disabled) { color: var(--text); }
   .btn-save:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn-revert { color: var(--text-secondary); }
+  .btn-revert:hover:not(:disabled) { color: var(--text); }
+  .btn-revert:disabled { opacity: 0.3; cursor: not-allowed; }
 
   .btn-run {
     background: rgba(var(--accent-rgb, 229, 115, 0), 0.15);

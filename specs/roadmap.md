@@ -85,15 +85,23 @@ v0.3.2 — Welcome Wizard + Language Gating
 PLANNED
 ───────
 
-v0.3.3 — Edition Builds (Rust Edition, C Edition, Power Edition)
+v0.3.3 — Edition Builds
   Status: in progress — 2026-04-04
 
   Overview:
-  Ship multiple editions of the app as separate DMGs, each tailored to a single
-  language or the full multi-language experience. Same codebase, different configs.
-  Tauri --config overrides handle app name/identifier/icon; VITE_EDITION env var
-  controls frontend behavior via editions.ts registry. Single-language editions
-  feel native — no language pickers, no irrelevant badges/themes/books.
+  Ship two editions: Rust Edition first (focused Rust learning tool), then
+  Power Edition a few weeks later (all 4 languages). Same codebase, different
+  configs. Tauri --config overrides handle app name/identifier/icon;
+  VITE_EDITION env var controls frontend behavior via editions.ts registry.
+  C/Zig/Swift single-language editions remain in the registry for future use
+  but are not being distributed now.
+
+  Release plan:
+  - Phase 1: Rust Edition — "Rustic Playground — The Rust Edition"
+    Sharpest pitch: one language, one audience (Rust learners).
+    Website + GitHub Releases DMG.
+  - Phase 2: Power Edition — "Rustic Playground" (a few weeks later)
+    Full multi-language experience for users who want all 4 languages.
 
   Completed:
   1. Edition config registry (ui/src/lib/editions.ts) — EditionConfig type,
@@ -111,76 +119,10 @@ v0.3.3 — Edition Builds (Rust Edition, C Edition, Power Edition)
   9. Build script (scripts/build-editions.sh) — multi-edition build pipeline
 
   Remaining:
-  10. Per-edition icons (art task)
-  11. CI matrix for automated multi-edition builds
-  12. End-to-end testing of each edition
+  10. End-to-end testing: Rust Edition (priority) and Power Edition
+  11. Per-edition icons (art task — can ship with same icon initially)
+  12. Distribution: website + GitHub Releases (DMG for both editions)
 
-v0.3.4 — Linux Port (Rust Edition only)
-  Status: planned
-
-  Overview:
-  Linux build of Rustic Playground — The Rust Edition. Same Tauri + Svelte +
-  Monaco stack as macOS. Rust-only (single-language edition via v0.3.3 edition
-  config). Packaged as .deb and .rpm.
-
-  Architecture:
-  - Same codebase: Tauri 2 + Svelte 5 + Monaco (WebKitGTK on Linux)
-  - VITE_EDITION=rust — locks to Rust-only edition
-  - editions/rust.json Tauri config override (identifier, app name)
-  - Tauri's built-in Linux bundling: .deb and .AppImage out of the box
-  - RPM via additional packaging (cargo-generate-rpm or spec file)
-  - Storage: ~/.local/share/com.rustic-playground.rust/ (XDG standard)
-
-  Scope:
-  - Full Rust Edition feature set: playground CRUD, run, live checking,
-    Cargo.toml management, dependencies, templates, The Rust Book examples
-  - Edition-aware UI: no language picker, no multi-language themes, Rust-focused
-    help content (already implemented in v0.3.3)
-  - Dark/Light/System/Rust themes (Monaco + app chrome)
-  - Toolchain wizard: Rust only (cargo, rustc, rustfmt, clippy)
-
-  GNOME HIG Compliance:
-  Feature parity with macOS, but following GNOME Human Interface Guidelines
-  instead of Apple HIG. Key differences from macOS version:
-  - Header bar pattern: CSS-based GtkHeaderBar-style header replacing macOS
-    toolbar (Tauri on Linux doesn't use native GtkHeaderBar — custom in frontend)
-  - Flat/borderless buttons instead of macOS tinted pills
-  - Adwaita-inspired color palette: follow libadwaita light/dark tokens
-  - Larger touch targets, 6px border radius (GNOME standard)
-  - No system tray (GNOME doesn't support it)
-  - Rounded bottom corners on panels/cards matching Adwaita style
-  - Platform-conditional CSS: detect Linux and apply GNOME overrides
-    (same components, different styling — not a fork)
-
-  Linux-specific work:
-  - Tauri Linux capabilities and permissions
-  - GTK file dialogs (Tauri handles this, but needs testing)
-  - Keyboard shortcuts: Ctrl+R/S/N instead of ⌘ (Tauri remaps automatically)
-  - Desktop entry file (.desktop) with icon
-  - Test on Ubuntu 22.04+ and Fedora 38+
-  - PATH resolution for cargo (differs from macOS ~/.cargo/bin)
-
-  Packaging:
-  - .deb for Debian/Ubuntu (Tauri built-in bundler)
-  - .AppImage for universal Linux (Tauri built-in bundler)
-  - .rpm for Fedora/RHEL (cargo-generate-rpm or spec file)
-  - Flatpak as a stretch goal
-
-  Items:
-  1. Tauri Linux build verification (cargo tauri build on Linux)
-  2. Linux-specific PATH resolution for cargo/rustup
-  3. Keyboard shortcut remapping verification (Ctrl vs ⌘)
-  4. GTK file dialog and system integration testing
-  5. Desktop entry file with icon
-  6. GNOME HIG styling: header bar, flat buttons, Adwaita palette
-  7. Platform-conditional CSS (detect Linux, apply GNOME overrides)
-  8. .deb packaging verification (Tauri bundler)
-  9. .AppImage packaging verification (Tauri bundler)
-  10. .rpm packaging (additional tooling)
-  11. CI: GitHub Actions Linux build matrix (Ubuntu + Fedora)
-  12. End-to-end testing on Ubuntu 22.04 and Fedora 38+
-
----
 
 v0.3.1 — Read-Only Book Projects, Copy to Project, Learn Menu
   Status: complete — 2026-04-03
@@ -324,6 +266,125 @@ PARKED IDEAS
 
 These are real, considered proposals that have been deliberately set aside.
 Each has a rationale. Revisit when the time is right.
+
+─────────────────────────────────────────────────────────────────────────────
+IDEA: Linux Port — Rust Edition (deprioritized)
+─────────────────────────────────────────────────────────────────────────────
+Status: Parked — low ROI for target audience
+Logged: 2026-04-04
+
+Background
+  Same Tauri/Svelte/Monaco stack, Rust Edition only. Packaged as .deb, .rpm,
+  .AppImage. GNOME HIG compliance (header bar, flat buttons, Adwaita palette,
+  platform-conditional CSS). Test targets: Ubuntu 22.04+, Fedora 38+.
+
+Why It's Parked
+  Target audience is beginners learning Rust. Linux users who've set up a dev
+  environment are comfortable with cargo + their preferred IDE. The overlap of
+  "wants to learn Rust" + "on Linux" + "would benefit from a playground over
+  CLI" is small. Engineering effort doesn't justify the reach.
+
+Trigger Condition
+  Revisit if there's clear demand (workshop/university lab use cases, user
+  requests) or if the Windows port ships and Linux becomes low-hanging fruit.
+
+─────────────────────────────────────────────────────────────────────────────
+IDEA: Windows Port — Rust Edition (deprioritized)
+─────────────────────────────────────────────────────────────────────────────
+Status: Parked — high value but high effort
+Logged: 2026-04-04
+
+Background
+  Same Tauri/Svelte/Monaco stack, Rust Edition only. Tauri uses WebView2 (Edge)
+  on Windows. Packaged as .msi and/or .exe installer. Windows has the largest
+  population of beginner Rust learners (students, bootcamp attendees).
+
+  Windows-specific work:
+  - MSVC vs GNU toolchain detection and guidance
+  - Windows path handling (backslashes, %USERPROFILE%, Program Files spaces)
+  - WebView2 runtime dependency (may need bundling or install prompt)
+  - Keyboard shortcuts: Ctrl+R/S/N (Tauri remaps automatically)
+  - Installer: .msi via Tauri bundler (WiX) or NSIS
+  - Windows Defender / SmartScreen code signing considerations
+  - Storage: %APPDATA%/com.rustic-playground.rust/
+
+Why It's Parked
+  Higher reach than Linux (most beginner Rust learners are on Windows), but
+  Windows brings significant platform pain: MSVC toolchain setup, path issues,
+  WebView2 dependency, code signing for SmartScreen. Want to avoid this
+  complexity until the macOS version is fully polished and distributed.
+
+Trigger Condition
+  Revisit after website + DMG distribution are live and macOS version is stable.
+  If user demand is strong, Windows port has higher priority than Linux.
+
+─────────────────────────────────────────────────────────────────────────────
+IDEA: TUI Edition — CLI playground with embedded editor
+─────────────────────────────────────────────────────────────────────────────
+Status: Parked — scope after GUI distribution is live
+Logged: 2026-04-04
+
+Background
+  A terminal-based Rustic Playground: single Rust binary, runs everywhere.
+  Install via `cargo install rustic-playground`. Split-pane TUI with file tree,
+  embedded editor, and streaming output — like the GUI app but in terminal.
+  Inspired by lazygit, helix, and Claude Code.
+
+Proposed Stack
+  - ratatui + crossterm for TUI framework
+  - tui-textarea or custom editor widget with tree-sitter syntax highlighting
+  - Direct function calls to existing language modules (no Tauri IPC layer)
+  - Same project structure and data directories as GUI edition
+  - Same backend: languages/, playground_commands, cargo_commands, templates,
+    book data — ~80% of src-tauri/src/ reused directly
+
+  ┌─────────────────────────────────────────────────────────┐
+  │  TUI App (ratatui)                                      │
+  │                                                         │
+  │  ┌──────────┐  ┌──────────────────┐  ┌──────────────┐  │
+  │  │ Sidebar  │  │ Editor           │  │ Output       │  │
+  │  │ projects │  │ tree-sitter      │  │ streaming    │  │
+  │  │ files    │  │ highlighting     │  │ stdout/err   │  │
+  │  │          │  │                  │  │ run status   │  │
+  │  └──────────┘  └──────────────────┘  └──────────────┘  │
+  │                                                         │
+  │  Status bar: project name, language, run state          │
+  └─────────────────────────────────────────────────────────┘
+
+What You'd Reuse vs Rewrite
+  Reuse: all language modules, project CRUD, config/settings, templates,
+  book chapter data, export logic, toolchain detection. Backend is done.
+  Rewrite: UI layer (ratatui replaces Svelte), command dispatch (direct
+  Rust calls replace Tauri IPC — actually simpler). No Tauri dependency.
+
+Strengths
+  - `cargo install` — one command, works on macOS/Linux/Windows/WSL/SSH
+  - Zero GUI dependencies — no WebView, no platform-specific code
+  - Naturally reaches Linux/Windows users who live in the terminal
+  - Complements the GUI: same project format, portable between editions
+  - Smaller binary, faster startup, lower resource usage
+
+Hard Parts
+  - Editor quality gap: tui-textarea is functional but far from Monaco.
+    Needs tree-sitter integration for syntax highlighting. No autocomplete,
+    no inline error squiggles (would need diagnostics pane instead).
+  - "Easier than terminal" pitch weakens — this IS a terminal app. Value
+    shifts from "no terminal needed" to "managed workflow" (lazygit model).
+  - Keyboard conflicts with terminal emulators (Ctrl+S, Ctrl+R, etc.)
+  - Live error checking: cargo check results shown as diagnostics list
+    rather than inline markers. Different UX, still useful.
+
+Why It's Parked
+  The GUI app isn't distributed yet. Shipping a second edition before the
+  first one reaches users splits focus. The backend reuse makes this a
+  medium-effort project, not a large one — worth doing, but after the macOS
+  GUI is live and feedback is rolling in.
+
+Trigger Condition
+  Revisit after website + DMG distribution. If cross-platform demand is the
+  main feedback theme, the TUI edition solves it more efficiently than
+  porting the GUI to Linux and Windows separately. Could also serve as the
+  foundation for a `rustic-playground` crate on crates.io.
 
 ─────────────────────────────────────────────────────────────────────────────
 IDEA: Native Swift + Monaco Hybrid (v2.0 rewrite candidate)

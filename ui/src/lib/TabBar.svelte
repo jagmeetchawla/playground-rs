@@ -29,7 +29,7 @@
       {#if tabType === 'content'}
         <span class="file-badge file-badge--content">📄</span>
       {:else if tabType === 'cargo'}
-        <span class="file-badge file-badge--cargo">CT</span>
+        <span class="file-badge file-badge--cargo">TOML</span>
       {:else if tabType === 'c'}
         <span class="file-badge file-badge--clang">C</span>
       {:else if tabType === 'cpp'}
@@ -133,8 +133,9 @@
     line-height: 1;
   }
   .file-badge--cargo {
-    background: #5a4a3a;
+    background: #6b7280;
     letter-spacing: 0;
+    font-size: 7px;
   }
   .file-badge--clang {
     background: #4a9;
