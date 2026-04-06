@@ -37,11 +37,34 @@ v0.3 — Language Module Architecture + Zig & Swift Support
 
 ---
 
-IN PROGRESS
-───────────
+NEXT UP
+───────
+
+Distribution & Launch (post v0.3.3)
+  Status: not started — 2026-04-06
+
+  The code freeze for v0.3.3 is in. Next phase is shipping it to users.
+  See specs/release-plan.md for the full 16-step launch checklist.
+
+  Tasks:
+  - Per-edition icons (art task — can ship with same icon initially)
+  - Build DMGs via scripts/build-editions.sh (Rust Edition + Power Edition)
+  - Code-sign + notarize DMGs (macOS Gatekeeper requirement)
+  - GitHub Releases: upload DMGs as v0.3.3 release assets
+  - Website launch: rustic-playground.app on GitHub Pages
+  - Wiki / FAQ pages (Zig 0.15 pinning, edition differences, install guide)
+  - Staggered community announcements over 5 days
+
+  Phase 1: Rust Edition first (sharpest pitch — one language, one audience)
+  Phase 2: Power Edition a few weeks later
+
+---
+
+RELEASED (continued)
+───────────────────
 
 v0.3.2 — Welcome Wizard + Language Gating
-  Status: in progress — 2026-04-04
+  Status: complete — released 2026-04-04
 
   Overview:
   Multi-step Welcome Wizard replaces the single-screen toolchain check. Users
@@ -82,11 +105,8 @@ v0.3.2 — Welcome Wizard + Language Gating
 
 ---
 
-PLANNED
-───────
-
 v0.3.3 — Edition Builds
-  Status: in progress — 2026-04-04
+  Status: complete — released 2026-04-06
 
   Overview:
   Ship two editions: Rust Edition first (focused Rust learning tool), then
@@ -146,12 +166,7 @@ v0.3.3 — Edition Builds
   - About modal icon shows macOS padding (black corners around squircle).
     Source images have padding baked in — need unpadded artwork or CSS crop.
 
-  Remaining:
-  23. End-to-end testing: Rust Edition (priority) and Power Edition
-  24. Per-edition icons (art task — can ship with same icon initially)
-  25. Distribution: website + GitHub Releases (DMG for both editions)
-
-  Post v0.3.3 Ideas:
+  Post v0.3.3 Ideas (now backlog for v0.3.4 / v0.4):
   - "Build failed" status bar should show the line number where the build failed
   - App quit with dirty tabs: prompt "Save & Exit / Discard & Exit / Cancel" listing dirty playgrounds
   - (done) Lock icon moved to status bar below editor
