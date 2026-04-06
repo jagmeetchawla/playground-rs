@@ -83,6 +83,9 @@
         {edition.displayName} is a macOS desktop app for running code experiments — inspired
         by Swift Playgrounds. Write code, press <kbd>⌘R</kbd>, see output stream live.
       </p>
+      <p class="lead-meta">
+        Requires <strong>macOS 26 Tahoe or later</strong>.
+      </p>
 
       <div class="card-grid">
         <div class="card">
@@ -528,6 +531,7 @@ fn main() &#123;
 
   p { font-size: 13px; color: var(--text-secondary); line-height: 1.65; margin: 0 0 4px; }
   .lead { font-size: 13px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 16px; }
+  .lead-meta { font-size: 11px; color: var(--text-tertiary); margin: -8px 0 16px 0; }
   .footnote { font-size: 12px; color: var(--text-tertiary); font-style: italic; margin-top: 16px; }
 
   strong { color: var(--text); font-weight: 600; }

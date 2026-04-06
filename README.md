@@ -62,7 +62,7 @@
 
 | Tool | Version |
 |---|---|
-| macOS | 13 Ventura or later |
+| macOS | 26 Tahoe or later |
 | Rust toolchain | stable — install via [rustup.rs](https://rustup.rs) |
 | Node.js | 18+ |
 | pnpm | 8+ |
@@ -194,7 +194,8 @@ See the warning at the top of this file. Additionally:
 
 | Version | Highlights |
 |---|---|
-| v0.3.3 | _(in progress)_ Edition builds — Rust Edition, C Edition, Power Edition as separate DMGs from one codebase |
+| v0.3.4 | In-app Rust toolchain installer & repair (no terminal needed), per-language menu restructure, clickable status pill (●/◐/○), `RUSTUP_AUTO_INSTALL=0` on read-only probes so broken state stays visible |
+| v0.3.3 | Edition builds — Rust Edition, C Edition, Power Edition as separate DMGs from one codebase. Saved snapshots with revert, run lifecycle status, update checker, language logos, dynamic window title |
 | v0.3.2 | Welcome Wizard (5-step first-launch), language gating, per-language hello projects, native→clang rename, Apple HIG styling, dual-mode settings/wizard, book management via checkboxes, toolchain pill status |
 | v0.3.1 | Read-only book projects, per-playground locking, Copy to Project, Learn menu, flyout submenus, Zig/Swift themes, auto theme matching, theme dropdown |
 | v0.3 | Language module architecture (Lang enum dispatch), Zig + Swift project types, Swift Book examples, frontend language registry |

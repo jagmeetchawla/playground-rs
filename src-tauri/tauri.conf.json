@@ -40,7 +40,7 @@
       "entitlements": "./entitlements.plist",
       "exceptionDomain": "",
       "signingIdentity": null,
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "26.0"
     }
   }
 }

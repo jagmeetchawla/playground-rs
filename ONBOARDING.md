@@ -270,7 +270,7 @@ The full menu bar is built by `build_menu()` in `lib.rs` on every state change t
 
 ## 10. Getting Started (Developer Setup)
 
-**Requirements:** macOS 11+, Rust + Cargo, Node.js 18+, Tauri CLI 2.x
+**Requirements:** macOS 26 Tahoe or later, Rust + Cargo, Node.js 18+, Tauri CLI 2.x
 
 ```sh
 git clone https://github.com/jagmeetchawla/rustic-playground
