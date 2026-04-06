@@ -2,11 +2,13 @@
   import { onMount, tick } from 'svelte'
   import { invoke, Channel } from '@tauri-apps/api/core'
   import { open as dialogOpen } from '@tauri-apps/plugin-dialog'
+  import { open as shellOpen } from '@tauri-apps/plugin-shell'
   import { listen } from '@tauri-apps/api/event'
   import { getCurrentWindow, LogicalSize, LogicalPosition } from '@tauri-apps/api/window'
   import Sidebar from './lib/Sidebar.svelte'
   import TabBar from './lib/TabBar.svelte'
   import Editor from './lib/Editor.svelte'
+  import LanguageLogo from './lib/LanguageLogo.svelte'
   import Output from './lib/Output.svelte'
   import ProjectSwitcher from './lib/ProjectSwitcher.svelte'
   import HelpModal from './lib/HelpModal.svelte'
@@ -17,7 +19,7 @@
   import CopyToProjectModal from './lib/CopyToProjectModal.svelte'
   import type { Settings } from './lib/SettingsModal.svelte'
   import type { Template } from './lib/templates'
-  import type { RunBlock } from './lib/Output.svelte'
+  import type { RunBlock, OutputLine } from './lib/Output.svelte'
   import { getLang, allLanguages, type ProjectType } from './lib/languages'
   import { currentEdition } from './lib/editions'
 
@@ -44,6 +46,14 @@
   let isBookProject        = $derived(!!projectSources[activeProject])
   let isPlaygroundLocked   = $derived(activeTab ? lockedPlaygrounds.includes(activeTab) : false)
   let isReadOnly           = $derived(isBookProject || isPlaygroundLocked)
+  let chapterUrl           = $derived.by(() => {
+    if (!isBookProject) return null
+    const sourceTag = projectSources[activeProject]
+    const bookLang = allLanguages().find(l => l.book?.sourceTag === sourceTag)
+    if (!bookLang?.book?.bookUrl || !bookLang.book.chapterUrls) return null
+    const path = bookLang.book.chapterUrls[activeProject]
+    return path ? bookLang.book.bookUrl + path : null
+  })
 
   // ── Playground list ──────────────────────────────────────────────────────────
   let playgrounds: string[] = $state([])
@@ -53,6 +63,8 @@
   let activeTab: string | null           = $state(null)
   let tabCode:   Record<string, string>  = $state({})
   let dirtyTabs: string[]                = $state([])
+  let revertCache: Record<string, string> = $state({})  // tab → dirty code before revert
+  let updateAvailable: { version: string; url: string } | null = $state(null)
   let tabMeta:   Record<string, TabMeta> = $state({})
 
   let currentCode    = $derived(activeTab ? (tabCode[activeTab] ?? '') : '')
@@ -89,12 +101,13 @@
   let currentRuns   = $derived(activeTab ? (tabRuns[activeTab] ?? []) : [])
   let lastRun       = $derived(currentRuns.at(-1))
   let currentStatus = $derived(
+    lastRun?.status === 'saving'    ? 'saving'    :
     lastRun?.status === 'compiling' ? 'compiling' :
     lastRun?.status === 'running'   ? 'running'   :
     lastRun?.status === 'error'     ? 'error'      :
     'idle'
   )
-  let isRunning = $derived(currentStatus === 'compiling' || currentStatus === 'running')
+  let isRunning = $derived(currentStatus === 'saving' || currentStatus === 'compiling' || currentStatus === 'running')
 
   // Check if any playground (not just the active tab) has a running process
   let runningPlayground = $derived.by(() => {
@@ -384,6 +397,18 @@
         listen('menu:settings',          () => { wizardMode = 'settings'; showWizard = true }),
         listen('menu:help',              () => { showHelp  = true }),
         listen('menu:about',             () => { showAbout = true }),
+        listen('menu:check-update',      async () => {
+          try {
+            const update = await invoke<{ version: string; url: string } | null>('check_for_update')
+            if (update) {
+              updateAvailable = update
+            } else {
+              showToast('You\u2019re up to date.')
+            }
+          } catch {
+            showToast('Could not check for updates.')
+          }
+        }),
         ...allLanguages().filter(l => l.book).map(l => listen(l.book!.menuEvent, () => seedBook(l.type))),
         ...allLanguages().filter(l => l.book).map(l => listen(l.book!.removeMenuEvent, () => removeBook(l.book!.sourceTag, l.book!.commandLabel))),
         listen('menu:rename-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground' && !isReadOnly) renameTarget = activeTab }),
@@ -396,6 +421,13 @@
       await tick()
       await getCurrentWindow().show()
       _restoring = false   // open saves from this point on
+
+      // Check for updates (non-blocking, silent on failure)
+      invoke<{ version: string; url: string } | null>('check_for_update').then(update => {
+        if (update) {
+          updateAvailable = update
+        }
+      }).catch(() => {})
     }
 
     const unlistenMove = await getCurrentWindow().onMoved(() => onWindowChange())
@@ -445,6 +477,17 @@
     const handler = (e: MediaQueryListEvent) => { systemDark = e.matches }
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
+  })
+
+  // Update window title: "App Name — Project — Playground"
+  $effect(() => {
+    const edition = currentEdition()
+    let title = edition.displayName
+    if (activeProject) {
+      title += ` \u2014 ${activeProject}`
+      if (activeTab) title += ` \u2014 ${activeTab}`
+    }
+    getCurrentWindow().setTitle(title)
   })
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -594,14 +637,44 @@
     saveWindowState()
   }
 
+  let closePending: string | null = $state(null)
+
   function closeTab(name: string | null) {
     if (!name) return
+    // If dirty, ask before closing
+    if (dirtyTabs.includes(name)) {
+      closePending = name
+      return
+    }
+    doCloseTab(name)
+  }
+
+  async function closeTabSave() {
+    if (!closePending) return
+    const name = closePending
+    closePending = null
+    // Save first, then close
+    const prevActive = activeTab
+    activeTab = name
+    await save()
+    activeTab = prevActive
+    doCloseTab(name)
+  }
+
+  function closeTabDiscard() {
+    if (!closePending) return
+    const name = closePending
+    closePending = null
     const meta = tabMeta[name]
-    // If closing a dirty playground tab, restore the saved version on disk
-    if (dirtyTabs.includes(name) && meta?.type === 'playground') {
+    // Restore saved version on disk for playground tabs
+    if (meta?.type === 'playground') {
       invoke('revert_playground', { name }).catch(() => {})
     }
     dirtyTabs = dirtyTabs.filter(n => n !== name)
+    doCloseTab(name)
+  }
+
+  function doCloseTab(name: string) {
     const idx = openTabs.indexOf(name)
     openTabs  = openTabs.filter(n => n !== name)
 
@@ -609,10 +682,12 @@
     const { [name]: _m, ...restMeta  } = tabMeta
     const { [name]: _r, ...restRuns  } = tabRuns
     const { [name]: _n, ...restCount } = tabRunCount
+    const { [name]: _v, ...restRevert } = revertCache
     tabCode     = restCode
     tabMeta     = restMeta
     tabRuns     = restRuns
     tabRunCount = restCount
+    revertCache = restRevert
 
     if (activeTab === name) {
       activeTab = openTabs[idx] ?? openTabs[idx - 1] ?? null
@@ -672,6 +747,8 @@
       } else {
         return
       }
+      // Stash dirty code so user can undo revert
+      revertCache = { ...revertCache, [activeTab]: tabCode[activeTab] }
       tabCode = { ...tabCode, [activeTab]: code }
       dirtyTabs = dirtyTabs.filter(n => n !== activeTab)
     } catch (err) {
@@ -679,11 +756,26 @@
     }
   }
 
+  function undoRevert() {
+    if (!activeTab || isReadOnly) return
+    const stashed = revertCache[activeTab]
+    if (!stashed) return
+    tabCode = { ...tabCode, [activeTab]: stashed }
+    dirtyTabs = [...dirtyTabs, activeTab]
+    const { [activeTab]: _, ...rest } = revertCache
+    revertCache = rest
+  }
+
   function onCodeChange(newCode: string) {
     if (!activeTab || isReadOnly) return
     tabCode = { ...tabCode, [activeTab]: newCode }
     if (!dirtyTabs.includes(activeTab)) {
       dirtyTabs = [...dirtyTabs, activeTab]
+    }
+    // New edit invalidates undo-revert
+    if (revertCache[activeTab]) {
+      const { [activeTab]: _, ...rest } = revertCache
+      revertCache = rest
     }
     scheduleCheck(activeTab, newCode)
   }
@@ -770,7 +862,6 @@
 
     cancelCheck()
     const name = activeTab
-    await save()
 
     const existing = tabRuns[name] ?? []
     const collapsed = existing.map(r => ({ ...r, collapsed: true }))
@@ -786,13 +877,22 @@
     // Build display command based on project type
     const command = lang.runCommandDisplay(name)
 
+    const ts = () => new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any)
+
     const newBlock: RunBlock = {
       runNum, command, startedAt,
-      status: 'compiling', exitCode: null,
-      compilerLines: [], programLines: [],
+      status: 'saving', exitCode: null,
+      compilerLines: [{ stream: 'info', line: 'Saving…', ts: ts() }], programLines: [],
       collapsed: false, programStarted: false,
     }
     tabRuns = { ...tabRuns, [name]: [...collapsed, newBlock] }
+
+    // Save first — file must be on disk for the compiler
+    await save()
+    updateLastRun(name, r => ({
+      ...r, status: 'compiling',
+      compilerLines: [...r.compilerLines, { stream: 'info', line: 'Compiling…', ts: ts() }],
+    }))
 
     const channel = new Channel()
     channel.onmessage = (msg: any) => {
@@ -801,13 +901,14 @@
           ...r, status: msg.code === 0 ? 'success' : 'error', exitCode: msg.code,
         }))
       } else if (msg.stream === 'stdout') {
-        const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any)
-        updateLastRun(name, r => ({
-          ...r, programStarted: true, status: 'running',
-          programLines: [...r.programLines, { stream: 'stdout', line: msg.line, ts }],
-        }))
+        updateLastRun(name, r => {
+          const runningLine: OutputLine[] = r.programStarted ? [] : [{ stream: 'info', line: 'Running…', ts: ts() }]
+          return {
+            ...r, programStarted: true, status: 'running',
+            programLines: [...r.programLines, ...runningLine, { stream: 'stdout', line: msg.line, ts: ts() }],
+          }
+        })
       } else if (msg.stream === 'stderr') {
-        const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any)
         // Cargo/zig print "     Running `target/...`" on stderr when the binary starts.
         // CompileThenRun languages (native, swift) use the same pattern from the backend.
         // Use this to transition from 'compiling' → 'running' so the stdin input appears.
@@ -815,13 +916,16 @@
         updateLastRun(name, r => {
           const nowRunning = r.programStarted || isBinaryStart
           if (isBinaryStart) {
-            return { ...r, programStarted: true, status: 'running' as const }
+            return {
+              ...r, programStarted: true, status: 'running' as const,
+              programLines: [...r.programLines, { stream: 'info', line: 'Running…', ts: ts() }],
+            }
           }
           return {
             ...r,
             ...(nowRunning
-              ? { programLines: [...r.programLines, { stream: 'stderr', line: msg.line, ts }] }
-              : { compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line, ts }] }),
+              ? { programLines: [...r.programLines, { stream: 'stderr', line: msg.line, ts: ts() }] }
+              : { compilerLines: [...r.compilerLines, { stream: 'stderr', line: msg.line, ts: ts() }] }),
           }
         })
       }
@@ -1117,62 +1221,14 @@
         onloadbook={(ptype) => seedBook(ptype)}
         bind:pendingMode={switcherPendingMode}
       />
-    </div>
 
-    <div class="toolbar-center">
-      <button
-        class="settings-btn"
-        title="Settings (⌘,)"
-        onclick={() => { wizardMode = 'settings'; showWizard = true }}
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M6.8 1.5h2.4l.3 1.7.8.3 1.4-1 1.7 1.7-1 1.4.3.8 1.7.3v2.4l-1.7.3-.3.8 1 1.4-1.7 1.7-1.4-1-.8.3-.3 1.7H6.8l-.3-1.7-.8-.3-1.4 1-1.7-1.7 1-1.4-.3-.8-1.7-.3V6.8l1.7-.3.3-.8-1-1.4 1.7-1.7 1.4 1 .8-.3.3-1.7z"
-                stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" fill="none"/>
-          <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.1" fill="none"/>
-        </svg>
-      </button>
-      <span class="toolchain-pill" class:pill-red={pillStatus === 'not-enabled' || pillStatus === 'missing'} class:pill-yellow={pillStatus === 'partial'} title="{pillStatus === 'not-enabled' ? 'Language support not enabled in Settings' : activeToolchain.path ?? ''}">
-        {#if projectType === 'clang'}
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M5 2C3.5 2 2 3 2 5L2 9C2 11 3.5 12 5 12"
-                  stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
-            <path d="M9 2C10.5 2 12 3 12 5L12 9C12 11 10.5 12 9 12"
-                  stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
-          </svg>
-        {:else if projectType === 'zig'}
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M8 1L3 8h4l-1 5 5-7H7l1-5z"
-                  stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/>
-          </svg>
-        {:else if projectType === 'swift'}
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M11 3C8.5 5 5 7 3 8c2-0.5 4-0.5 6 0.5-1.5 2-4 3-7 3 4 0 7.5-1.5 9-4.5 0.5-1 0.5-2.5 0-4z"
-                  stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" fill="none"/>
-          </svg>
-        {:else}
-          <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
-            <path d="M7 1L13 4L7 7L1 4Z"
-                  stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
-            <path d="M1 4L1 8.5L7 11.5L7 7Z"
-                  stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
-            <path d="M13 4L13 8.5L7 11.5L7 7Z"
-                  stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/>
-          </svg>
-        {/if}
-        {pillText}
+      <span class="toolchain-info" class:pill-red={pillStatus === 'not-enabled' || pillStatus === 'missing'} class:pill-yellow={pillStatus === 'partial'} title="{pillStatus === 'not-enabled' ? 'Language support not enabled in Settings' : activeToolchain.path ?? ''}">
+        <LanguageLogo type={projectType === 'rust' ? 'cargo' : projectType} size={16} />
+        <span class="toolchain-text">{pillText}</span>
       </span>
     </div>
 
     <div class="toolbar-right">
-      {#if currentStatus !== 'idle' && currentStatus !== 'error'}
-        <span class="status-label" class:running={isRunning}>
-          {currentStatus === 'compiling' ? 'Compiling…' : 'Running…'}
-        </span>
-      {/if}
-      {#if currentStatus === 'error'}
-        <span class="status-label error">Build failed</span>
-      {/if}
-
       <button
         class="lock-btn {isReadOnly ? 'lock-btn-locked' : 'lock-btn-unlocked'}"
         onclick={toggleReadOnly}
@@ -1213,6 +1269,18 @@
         {/if}
       </div>
 
+      <button
+        class="settings-icon"
+        title="Settings (⌘,)"
+        onclick={() => { wizardMode = 'settings'; showWizard = true }}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M6.8 1.5h2.4l.3 1.7.8.3 1.4-1 1.7 1.7-1 1.4.3.8 1.7.3v2.4l-1.7.3-.3.8 1 1.4-1.7 1.7-1.4-1-.8.3-.3 1.7H6.8l-.3-1.7-.8-.3-1.4 1-1.7-1.7 1-1.4-.3-.8-1.7-.3V6.8l1.7-.3.3-.8-1-1.4 1.7-1.7 1.4 1 .8-.3.3-1.7z"
+                stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" fill="none"/>
+          <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.1" fill="none"/>
+        </svg>
+      </button>
+
       {#if activeTab}
         <button
           class="btn btn-save"
@@ -1227,18 +1295,32 @@
           </svg>
           Save
         </button>
-        <button
-          class="btn btn-revert"
-          onclick={revert}
-          disabled={isReadOnly || !dirtyTabs.includes(activeTab)}
-          title="Revert to last saved version"
-        >
-          <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-            <path d="M2 6a4.5 4.5 0 1 1 1 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
-            <path d="M2 9V6h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          </svg>
-          Revert
-        </button>
+        {#if activeTab && revertCache[activeTab]}
+          <button
+            class="btn btn-revert"
+            onclick={undoRevert}
+            title="Undo revert — restore your edits"
+          >
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+              <path d="M10 6a4.5 4.5 0 1 0-1 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+              <path d="M10 9V6h-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+            Undo Revert
+          </button>
+        {:else}
+          <button
+            class="btn btn-revert"
+            onclick={revert}
+            disabled={isReadOnly || !dirtyTabs.includes(activeTab)}
+            title="Revert to last saved version"
+          >
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+              <path d="M2 6a4.5 4.5 0 1 1 1 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+              <path d="M2 9V6h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+            Revert
+          </button>
+        {/if}
       {/if}
 
       {#if isRunning}
@@ -1276,6 +1358,14 @@
       </button>
     </div>
   </header>
+
+  {#if updateAvailable}
+    <div class="update-banner">
+      <span>Version {updateAvailable.version} is available.</span>
+      <button class="update-link" onclick={() => shellOpen(updateAvailable!.url)}>Download</button>
+      <button class="update-dismiss" onclick={() => updateAvailable = null} title="Dismiss">&times;</button>
+    </div>
+  {/if}
 
   <!-- ── Main layout ──────────────────────────────────────────────────────────── -->
   <div class="main">
@@ -1407,6 +1497,32 @@
                   </div>
                 {/if}
               {/each}
+            </div>
+          {/if}
+          {#if currentStatus !== 'idle' || chapterUrl}
+            <div class="status-bar">
+              <span class="status-bar-left">
+                {#if currentStatus === 'saving'}
+                  <span class="status-label">Saving…</span>
+                {:else if currentStatus === 'compiling'}
+                  <span class="status-label">Compiling…</span>
+                {:else if currentStatus === 'running'}
+                  <span class="status-label running">Running…</span>
+                {:else if currentStatus === 'error'}
+                  <span class="status-label error">Build failed</span>
+                {/if}
+              </span>
+              <span class="status-bar-right">
+                {#if chapterUrl}
+                  <button class="chapter-link" onclick={() => shellOpen(chapterUrl)} title="Open this chapter in your browser">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                      <path d="M5 1H2.5A1.5 1.5 0 0 0 1 2.5v7A1.5 1.5 0 0 0 2.5 11h7A1.5 1.5 0 0 0 11 9.5V7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                      <path d="M7 1h4v4M11 1 5.5 6.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Read Online
+                  </button>
+                {/if}
+              </span>
             </div>
           {/if}
         </div>
@@ -1563,6 +1679,18 @@
   </div>
 {/if}
 
+{#if closePending}
+  <div class="confirm-backdrop" onclick={() => closePending = null} aria-hidden="true"></div>
+  <div class="confirm-dialog" role="alertdialog" aria-modal="true">
+    <p class="confirm-msg">Do you want to save changes to <strong>{closePending}</strong>?<br><span class="confirm-sub">Your changes will be lost if you don't save them.</span></p>
+    <div class="confirm-actions confirm-actions--three">
+      <button class="confirm-cancel" onclick={() => closePending = null}>Cancel</button>
+      <button class="confirm-discard" onclick={closeTabDiscard}>Don't Save</button>
+      <button class="confirm-proceed" onclick={closeTabSave}>Save</button>
+    </div>
+  </div>
+{/if}
+
 <style>
   .app {
     display: flex;
@@ -1587,12 +1715,6 @@
   .toolbar-left {
     display: flex; align-items: center; gap: 6px;
     flex: 1; min-width: 0;
-  }
-
-  .toolbar-center {
-    display: flex; align-items: center; gap: 8px;
-    flex-shrink: 0;
-    position: absolute; left: 50%; transform: translateX(-50%);
   }
 
   .toolbar-right {
@@ -1625,9 +1747,42 @@
   }
 
 
+  .update-banner {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 12px; height: 26px;
+    background: rgba(46, 160, 67, 0.18);
+    border-bottom: 1px solid rgba(46, 160, 67, 0.4);
+    font-size: 12px; color: var(--text); flex-shrink: 0;
+  }
+  .update-link {
+    font-size: 12px; color: #3fb950; background: none; border: none;
+    cursor: pointer; text-decoration: underline; padding: 0; font-weight: 600;
+  }
+  .update-link:hover { color: #56d364; }
+  .update-dismiss {
+    margin-left: auto; font-size: 16px; line-height: 1;
+    color: var(--text-tertiary); background: none; border: none;
+    cursor: pointer; padding: 0 2px;
+  }
+  .update-dismiss:hover { color: var(--text); }
+
+  .status-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 2px 12px; height: 22px;
+    background: var(--bg-sidebar); border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .status-bar-left { display: flex; align-items: center; gap: 8px; }
+  .status-bar-right { display: flex; align-items: center; gap: 8px; }
   .status-label { font-size: 11px; color: var(--text-tertiary); letter-spacing: 0.02em; }
   .status-label.running { color: var(--green); }
   .status-label.error   { color: var(--red); }
+  .chapter-link {
+    font-size: 11px; color: var(--accent); background: none; border: none;
+    display: flex; align-items: center; gap: 3px; cursor: pointer;
+    opacity: 0.8; transition: opacity 0.15s; padding: 0;
+  }
+  .chapter-link:hover { opacity: 1; }
   .lock-btn {
     display: flex;
     align-items: center;
@@ -1720,37 +1875,29 @@
   }
   .export-item:hover { background: var(--accent); color: #fff; }
 
-  .settings-btn {
+  .settings-icon {
     display: flex; align-items: center; justify-content: center;
-    width: 28px; height: 28px;
+    width: 24px; height: 24px;
     color: var(--text-tertiary);
-    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.11);
-    border-radius: 8px;
-    cursor: pointer; transition: color 0.12s, background 0.12s, border-color 0.12s;
+    background: none; border: none;
+    border-radius: 6px;
+    cursor: pointer; transition: color 0.12s, background 0.12s;
   }
-  .settings-btn:hover {
-    color: var(--text); background: rgba(255,255,255,0.13);
-    border-color: rgba(255,255,255,0.18);
+  .settings-icon:hover {
+    color: var(--text); background: rgba(255,255,255,0.1);
   }
 
-  .toolchain-pill {
-    display: flex; align-items: center; gap: 5px;
-    height: 28px; box-sizing: border-box;
+  .toolchain-info {
+    display: flex; align-items: flex-end; gap: 5px;
     font-size: 11px; font-family: var(--font-mono);
-    color: var(--text-tertiary);
-    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.11);
-    border-radius: 8px; padding: 0 8px;
+    color: var(--text-secondary);
     white-space: nowrap;
-    transition: background 0.12s, border-color 0.12s, color 0.12s;
   }
-  .toolchain-pill.pill-red {
-    color: #f44; border-color: rgba(255, 68, 68, 0.4);
-    background: rgba(255, 68, 68, 0.1);
-  }
-  .toolchain-pill.pill-yellow {
-    color: #e8a820; border-color: rgba(232, 168, 32, 0.4);
-    background: rgba(232, 168, 32, 0.1);
-  }
+  .toolchain-text { line-height: 1; }
+  .toolchain-info.pill-red { color: #f44; }
+  .toolchain-info.pill-red .toolchain-text { color: #f44; }
+  .toolchain-info.pill-yellow { color: #e8a820; }
+  .toolchain-info.pill-yellow .toolchain-text { color: #e8a820; }
 
   /* ── Main layout ── */
   .main {
@@ -1801,7 +1948,7 @@
   }
 
   .editor-wrap {
-    flex: 1; display: flex; overflow: hidden;
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
   }
 
   /* ── Dependency toolbar ── */
@@ -1989,4 +2136,11 @@
     color: #fff;
   }
   .confirm-proceed:hover { background: var(--accent-hover); }
+  .confirm-discard {
+    font-size: 12px; padding: 5px 12px; border-radius: 6px;
+    background: rgba(220, 60, 60, 0.25); border: 1px solid rgba(220,60,60,0.4);
+    color: #ff7070;
+  }
+  .confirm-discard:hover { background: rgba(220, 60, 60, 0.38); }
+  .confirm-actions--three { justify-content: flex-end; }
 </style>

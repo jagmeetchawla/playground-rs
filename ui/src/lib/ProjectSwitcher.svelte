@@ -2,6 +2,7 @@
   import { tick } from 'svelte'
   import { getLang, allLanguages, type ProjectType } from './languages'
   import type { EditionConfig } from './editions'
+  import LanguageLogo from './LanguageLogo.svelte'
 
   // ── Props — callback-based (Svelte 5 idiom, lets us await and catch errors) ──
   let {
@@ -184,7 +185,7 @@
 
 <div class="project-switcher">
   <button class="pill" onclick={toggle} class:open>
-    <span class="pill-badge" class:clang={projectType === 'clang'} class:zig={projectType === 'zig'} class:swift={projectType === 'swift'}>{activeLang.badge}</span>
+    <LanguageLogo type={projectType} size={14} />
     <span class="pill-name">{active}</span>
     {#if activeLang.experimental && !edition.isSingleLanguage}<span class="exp-tag">exp</span>{/if}
     <svg class="pill-caret" width="10" height="6" viewBox="0 0 10 6">
@@ -223,7 +224,7 @@
                 onclick={() => selectProject(name)}
                 disabled={busy}
               >
-                <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
+                <LanguageLogo type={itemPtype} size={14} />
                 <span class="project-name">{name}</span>
                 {#if itemLang.experimental && !edition.isSingleLanguage}<span class="exp-tag">exp</span>{/if}
                 {#if name === active}
@@ -270,7 +271,7 @@
                         onclick={() => selectProject(name)}
                         disabled={busy}
                       >
-                        <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
+                        <LanguageLogo type={itemPtype} size={14} />
                         <span class="project-name">{name}</span>
                         {#if name === active}
                           <svg class="active-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -304,7 +305,7 @@
                               onclick={() => selectProject(name)}
                               disabled={busy}
                             >
-                              <span class="item-badge" class:clang={itemPtype === 'clang'} class:zig={itemPtype === 'zig'} class:swift={itemPtype === 'swift'}>{itemLang.badge}</span>
+                              <LanguageLogo type={itemPtype} size={14} />
                               <span class="project-name">{name}</span>
                               {#if name === active}
                                 <svg class="active-check" width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -328,7 +329,7 @@
         <div class="inline-input-section">
           <p class="inline-label">
             {#if !edition.isSingleLanguage}
-              <span class="form-badge" class:clang={newProjectType === 'clang'} class:zig={newProjectType === 'zig'} class:swift={newProjectType === 'swift'}>{newLang.badge}</span>
+              <LanguageLogo type={newProjectType} size={14} />
             {/if}
             New Project
           </p>
@@ -372,7 +373,7 @@
       {:else if mode === 'rename'}
         <div class="inline-input-section">
           <p class="inline-label">
-            <span class="form-badge" class:clang={projectType === 'clang'} class:zig={projectType === 'zig'} class:swift={projectType === 'swift'}>{activeLang.badge}</span>
+            <LanguageLogo type={projectType} size={14} />
             Rename "{active}"
           </p>
           <input

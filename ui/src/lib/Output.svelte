@@ -8,7 +8,7 @@
     runNum: number
     command: string
     startedAt: string
-    status: 'compiling' | 'running' | 'success' | 'error'
+    status: 'saving' | 'compiling' | 'running' | 'success' | 'error'
     exitCode: number | null
     compilerLines: OutputLine[]
     programLines: OutputLine[]
@@ -165,7 +165,7 @@
   <div class="output-header">
     <div class="header-left">
       <span class="panel-title">Console</span>
-      {#if status === 'compiling' || status === 'running'}
+      {#if status === 'saving' || status === 'compiling' || status === 'running'}
         <span class="spinner" title="Running…"></span>
       {/if}
     </div>
@@ -240,7 +240,12 @@
             {/if}
 
             <!-- Running indicator inside the block -->
-            {#if block.status === 'compiling'}
+            {#if block.status === 'saving'}
+              <div class="run-in-progress">
+                <span class="spinner-sm"></span>
+                <span class="dim">Saving…</span>
+              </div>
+            {:else if block.status === 'compiling'}
               <div class="run-in-progress">
                 <span class="spinner-sm"></span>
                 <span class="dim">Compiling…</span>

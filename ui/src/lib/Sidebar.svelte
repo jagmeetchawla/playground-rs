@@ -26,6 +26,7 @@
   } = $props()
 
   import { getLang } from './languages'
+  import LanguageLogo from './LanguageLogo.svelte'
   let lang = $derived(getLang(projectType))
 
   // ── Sidebar tab ───────────────────────────────────────────────────────────────
@@ -362,8 +363,8 @@
             />
           {:else}
             {@const badgeType = lang.needsExtension ? (name.split('.').pop()?.toLowerCase() ?? '') : 'rs'}
-            <span class="file-icon" class:clang={badgeType === 'c' || badgeType === 'cpp'} class:zig={badgeType === 'zig'} class:swift={badgeType === 'swift'}>
-              {badgeType === 'cpp' ? 'C++' : badgeType === 'c' ? 'C' : badgeType === 'zig' ? 'ZIG' : badgeType === 'swift' ? 'SW' : 'RS'}
+            <span class="file-icon-logo">
+              <LanguageLogo type={badgeType === 'rs' ? 'rust' : badgeType} size={14} />
             </span>
             {#if readOnly}
               <svg class="lock-icon" width="9" height="10" viewBox="0 0 10 11" fill="none">
@@ -396,7 +397,7 @@
         <svg width="10" height="10" viewBox="0 0 10 10" class="chevron" class:open={cargoExpanded}>
           <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
         </svg>
-        <span class="file-icon file-icon--toml">TOML</span>
+        <span class="file-icon-logo"><LanguageLogo type="cargo" size={14} /></span>
         <span class="cargo-label">Cargo.toml</span>
         <button
           class="cargo-edit-btn"
@@ -766,24 +767,19 @@
   .playground-item.active { background: var(--accent); }
   .playground-item.active .name { color: #fff; }
   .playground-item.active .file-icon { background: rgba(255,255,255,0.25); color: #fff; }
-  .playground-item.active .file-icon.clang { background: rgba(68,170,153,0.5); }
   .playground-item.active .dirty-dot { color: rgba(255,255,255,0.7); }
 
+  .file-icon-logo {
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px;
+  }
   .file-icon {
     font-size: 7px; font-weight: 800; letter-spacing: 0.03em;
     background: var(--rust-orange); color: #fff;
     border-radius: 3px; padding: 2px 3px;
     flex-shrink: 0; line-height: 1.3;
     min-width: 18px; text-align: center;
-  }
-  .file-icon.clang {
-    background: #4a9; letter-spacing: 0;
-  }
-  .file-icon.zig {
-    background: #f7a41d; letter-spacing: 0; font-size: 6px;
-  }
-  .file-icon.swift {
-    background: #f05138; letter-spacing: 0;
   }
   .file-icon--toml {
     background: #6b7280; letter-spacing: 0; font-size: 6px;

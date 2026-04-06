@@ -196,7 +196,7 @@
       <p>Click <strong>+</strong> in the sidebar or press <kbd>⌘N</kbd>. Choose from starter templates or start blank.</p>
 
       <h2>Run</h2>
-      <p>Press <kbd>⌘R</kbd> or click the <strong>Run</strong> button. Output streams live to the Console.</p>
+      <p>Press <kbd>⌘R</kbd> or click the <strong>Run</strong> button. The file is saved automatically, then compiled and executed. The Console shows each stage: <strong>Saving → Compiling → Running → Done</strong>.</p>
 
       <h2>Stop</h2>
       <p>Press <kbd>⌘.</kbd> or click <strong>Stop</strong>. This kills the entire process tree.</p>
@@ -263,8 +263,9 @@ tokio = &#123; version = "1", features = ["full"] &#125;</pre>
 
       <h2>Run Blocks</h2>
       <p>
-        Each run creates a collapsible block showing the compiler phase and program output
-        separately. Click the block header to collapse or expand previous runs.
+        Each run creates a collapsible block that progresses through stages:
+        <strong>Saving</strong> (file written to disk) → <strong>Compiling</strong> (compiler output) → <strong>Running</strong> (program output).
+        Click the block header to collapse or expand previous runs.
       </p>
 
       <h2>Interactive Input (stdin)</h2>

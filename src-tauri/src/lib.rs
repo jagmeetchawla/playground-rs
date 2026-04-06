@@ -473,6 +473,57 @@ fn seed_book(project_type: String, app: AppHandle) -> Result<Vec<String>, String
     lang.seed_book(&projects_dir(&app))
 }
 
+// ── Update check ─────────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+struct UpdateInfo {
+    version: String,
+    url: String,
+}
+
+#[tauri::command]
+async fn check_for_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
+    let current = app.config().version.clone().unwrap_or_default();
+
+    let client = reqwest::Client::builder()
+        .user_agent("rustic-playground")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .get("https://api.github.com/repos/jagmeetchawla/rustic-playground/releases/latest")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Ok(None); // silently skip if API unreachable
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let tag = json["tag_name"].as_str().unwrap_or("");
+    let latest = tag.trim_start_matches('v');
+    let html_url = json["html_url"].as_str().unwrap_or("").to_string();
+
+    if latest.is_empty() || latest == current {
+        return Ok(None);
+    }
+
+    // Simple semver comparison: split on '.', compare each part
+    let cur_parts: Vec<u32> = current.split('.').filter_map(|s| s.parse().ok()).collect();
+    let new_parts: Vec<u32> = latest.split('.').filter_map(|s| s.parse().ok()).collect();
+    let is_newer = new_parts > cur_parts;
+
+    if is_newer {
+        Ok(Some(UpdateInfo {
+            version: latest.to_string(),
+            url: html_url,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
 // ── App entry ─────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -597,6 +648,7 @@ pub fn run() {
                 "menu_delete_playground" => Some("menu:delete-playground"),
                 "copy_code" => Some("menu:copy-code"),
                 "export_project" => Some("menu:export-project"),
+                "check_update" => Some("menu:check-update"),
                 "show_settings" => Some("menu:settings"),
                 "show_help" => Some("menu:help"),
                 "show_about" => Some("menu:about"),
@@ -690,6 +742,7 @@ pub fn run() {
             rustic_manifest::set_playground_locked,
             rustic_manifest::get_build_flags,
             rustic_manifest::save_build_flags,
+            check_for_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

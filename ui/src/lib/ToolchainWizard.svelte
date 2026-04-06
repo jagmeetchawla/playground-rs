@@ -2,6 +2,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { open as shellOpen } from '@tauri-apps/plugin-shell'
   import { allLanguages, getLang, type ProjectType } from './languages'
+  import LanguageLogo from './LanguageLogo.svelte'
   import type { Settings } from './SettingsModal.svelte'
   import type { EditionConfig } from './editions'
 
@@ -59,29 +60,27 @@
   const editionLang = edition.isSingleLanguage ? getLang(edition.languages![0] as ProjectType) : null
 
   // Derive labels from enabled languages and their book counts
-  const enabledBooks = allLanguages().filter(l => enabledLanguages.includes(l.type) && l.book)
-  const bookCount = enabledBooks.length
-  const singleBookName = bookCount === 1 ? enabledBooks[0].book!.commandLabel : null
+  let enabledBooks = $derived(allLanguages().filter(l => selectedLangs.includes(l.type) && l.book))
+  let bookCount = $derived(enabledBooks.length)
+  let singleBookName = $derived(bookCount === 1 ? enabledBooks[0].book!.commandLabel : null)
   const toolchainLabel = edition.isSingleLanguage ? 'Toolchain' : 'Toolchains'
-  const booksLabel = bookCount === 1 ? 'Book' : 'Books'
+  let booksLabel = $derived(bookCount === 1 ? 'Book' : 'Books')
 
   // Edition-aware steps/tabs: single-language editions skip language picker
-  const allWizardSteps = edition.isSingleLanguage
+  let wizardSteps = $derived(edition.isSingleLanguage
     ? [toolchainLabel, 'Appearance', ...(bookCount > 0 ? [booksLabel] : []), 'Finish']
-    : ['Languages', 'Toolchains', 'Appearance', ...(bookCount > 0 ? ['Books'] : []), 'Finish']
-  const allWizardPanels = edition.isSingleLanguage
+    : ['Languages', 'Toolchains', 'Appearance', ...(bookCount > 0 ? ['Books'] : []), 'Finish'])
+  let allWizardPanels = $derived(edition.isSingleLanguage
     ? (['toolchains', 'appearance', ...(bookCount > 0 ? ['books' as const] : []), 'finish'] as const)
-    : (['languages', 'toolchains', 'appearance', ...(bookCount > 0 ? ['books' as const] : []), 'finish'] as const)
-  const wizardSteps = allWizardSteps
-  const totalSteps = wizardSteps.length
+    : (['languages', 'toolchains', 'appearance', ...(bookCount > 0 ? ['books' as const] : []), 'finish'] as const))
+  let totalSteps = $derived(wizardSteps.length)
 
-  const allSettingsTabs: { id: typeof activeTab; label: string }[] = [
+  let settingsTabs = $derived([
     ...(!edition.isSingleLanguage ? [{ id: 'languages' as const, label: 'Languages' }] : []),
-    { id: 'toolchains', label: toolchainLabel },
-    { id: 'appearance', label: 'Appearance' },
+    { id: 'toolchains' as const, label: toolchainLabel },
+    { id: 'appearance' as const, label: 'Appearance' },
     ...(bookCount > 0 ? [{ id: 'books' as const, label: booksLabel }] : []),
-  ]
-  const settingsTabs = allSettingsTabs
+  ])
 
   // Default settings tab for single-language editions
   if (edition.isSingleLanguage && activeTab === 'languages') {
@@ -95,6 +94,13 @@
       : activeTab
   )
 
+  // Redirect away from books tab if no books available (language deselected)
+  $effect(() => {
+    if (mode === 'settings' && activeTab === 'books' && bookCount === 0) {
+      activeTab = 'appearance'
+    }
+  })
+
   // Auto-run toolchain check when entering toolchains panel
   $effect(() => {
     if (currentPanel === 'toolchains' && !status && !checking) {
@@ -106,9 +112,13 @@
   function toggleLang(type: string) {
     if (selectedLangs.includes(type)) {
       selectedLangs = selectedLangs.filter(l => l !== type)
-      booksChecked = booksChecked.filter(b => b !== type)
     } else {
       selectedLangs = [...selectedLangs, type]
+      // Auto-select book when enabling a language (if it has one)
+      const lang = getLang(type as ProjectType)
+      if (lang.book && !booksChecked.includes(type)) {
+        booksChecked = [...booksChecked, type]
+      }
     }
   }
   let hasSelection = $derived(selectedLangs.length > 0)
@@ -166,12 +176,14 @@
   }
 
   // ── Book diff: what to load vs remove based on checkbox changes ──────
+  // Books for deselected languages are always removed, even if still in booksChecked
   function bookDiff() {
     const wasLoaded = allLanguages()
       .filter(l => l.book && loadedSourceTags.has(l.book.sourceTag))
       .map(l => l.type)
-    const toLoad = booksChecked.filter(b => !wasLoaded.includes(b))
-    const toRemove = wasLoaded.filter(b => !booksChecked.includes(b))
+    const effectiveChecked = booksChecked.filter(b => selectedLangs.includes(b))
+    const toLoad = effectiveChecked.filter(b => !wasLoaded.includes(b))
+    const toRemove = wasLoaded.filter(b => !effectiveChecked.includes(b))
     return { toLoad, toRemove }
   }
 
@@ -286,7 +298,7 @@
               class:selected={selectedLangs.includes(lang.type)}
               onclick={() => toggleLang(lang.type)}
             >
-              <span class="lang-badge {lang.badgeClass}">{lang.badge}</span>
+              <LanguageLogo type={lang.type} size={24} />
               <span class="lang-name">{lang.label}</span>
               {#if lang.experimental}
                 <span class="exp-tag">exp</span>
@@ -326,7 +338,7 @@
               {@const ok = toolchainOk(lang.type)}
               <div class="toolchain-section">
                 <div class="tc-header">
-                  <span class="lang-badge {lang.badgeClass}" style="font-size: 7px">{lang.badge}</span>
+                  <LanguageLogo type={lang.type} size={18} />
                   <span class="tc-name">{lang.label}</span>
                   <span class="tc-status" class:ok={ok} class:missing={!ok}>
                     {ok ? '● Ready' : '○ Not found'}

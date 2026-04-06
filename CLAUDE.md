@@ -96,7 +96,8 @@ Edition identifiers: `.rust`, `.power`, `.app` (dev builds without flag).
 | `scripts/build-editions.sh` | Multi-edition build pipeline — builds DMGs for specified editions |
 | `ui/src/App.svelte` | Root layout, all global state, menu event listeners, window state persistence |
 | `ui/src/lib/editions.ts` | Edition registry: EditionConfig, currentEdition(), VITE_EDITION detection (v0.3.3) |
-| `ui/src/lib/languages.ts` | Language registry: LanguageConfig, BookConfig, LANGUAGES map (v0.3) |
+| `ui/src/lib/languages.ts` | Language registry: LanguageConfig, BookConfig, book URLs, LANGUAGES map (v0.3) |
+| `ui/src/lib/LanguageLogo.svelte` | Official language/toolchain SVG logos with dark-mode invert (v0.3.3) |
 | `ui/src/lib/Sidebar.svelte` | Project/playground/file tree, drag-drop, context menus |
 | `ui/src/lib/Editor.svelte` | Monaco wrapper, theme sync, diagnostics markers |
 | `ui/src/lib/Output.svelte` | Console panel, run blocks, streaming output |
@@ -121,7 +122,7 @@ Edition identifiers: `.rust`, `.power`, `.app` (dev builds without flag).
 
 ## Current Version Status
 
-**v0.3.2** — in progress (Welcome Wizard + Language Gating: 5-step first-launch wizard, language enable/disable, per-language hello projects, book management via explicit checkboxes, toolchain pill status, dual-mode ToolchainWizard/Settings component, native→clang rename, Apple HIG styling).
+**v0.3.2** — shipped (Welcome Wizard + Language Gating: 5-step first-launch wizard, language enable/disable, per-language hello projects, book management via explicit checkboxes, toolchain pill status, dual-mode ToolchainWizard/Settings component, native→clang rename, Apple HIG styling).
 
 **v0.3.1** — shipped (read-only book projects, per-playground locking, "Copy to Project" action, "Learn" menu, grouped project list with flyout submenus, empty-state book loading, Zig/Swift themes, auto theme matching, theme dropdown).
 
@@ -131,7 +132,7 @@ Edition identifiers: `.rust`, `.power`, `.app` (dev builds without flag).
 
 **v0.1.9** — shipped (renamed from playground-rs to rustic-playground, cleaned up src/bin).
 
-**v0.3.3** — in progress (Edition Builds: Rust Edition, C Edition, Power Edition — same codebase, Tauri --config overrides + VITE_EDITION env var. editions.ts registry, single-language editions skip language picker, hide badges, filter themes/help/books dynamically. Build script: `scripts/build-editions.sh`).
+**v0.3.3** — in progress (Edition Builds + UI polish: Rust/C/Power Edition from same codebase via Tauri --config + VITE_EDITION. editions.ts registry, single-language editions skip language picker, filter themes/help/books. Saved snapshots (.saved/) with revert + undo-revert. Run lifecycle: Saving→Compiling→Running in console + status bar. Close-dirty-tab dialog. Book chapter "Read Online" links. Status bar below editor. Toolbar reorganization. Dynamic window title. Min width 900px. Update checker via GitHub Releases API. Official language logos (SVG) replacing text badges. Book auto-select + reactive labels. Build script: `scripts/build-editions.sh`).
 
 After v0.3.3: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
 

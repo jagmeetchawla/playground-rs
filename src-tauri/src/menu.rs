@@ -31,6 +31,11 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     let product_name = handle.config().product_name.clone().unwrap_or_else(|| "Rustic Playground".to_string());
     let app_submenu = SubmenuBuilder::new(handle, &product_name)
         .item(
+            &MenuItemBuilder::with_id("check_update", "Check for Updates…")
+                .build(handle)?,
+        )
+        .separator()
+        .item(
             &MenuItemBuilder::with_id("show_settings", "Settings…")
                 .accelerator("CmdOrCtrl+,")
                 .build(handle)?,

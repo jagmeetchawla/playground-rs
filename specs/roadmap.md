@@ -118,10 +118,25 @@ v0.3.3 — Edition Builds
   8. menu.rs: dynamic product name from tauri.conf (merged config)
   9. Build script (scripts/build-editions.sh) — multi-edition build pipeline
 
+  10. Saved snapshots (.saved/) with revert and undo-revert (App.svelte revertCache)
+  11. Menu overhaul: per-project Learn menu, Check for Updates, dynamic product name
+  12. Run lifecycle status: Saving → Compiling → Running stages in console + status bar
+  13. Close-dirty-tab dialog (Save / Don't Save / Cancel)
+  14. Book chapter "Read Online" links (Rust Book, Swift Book) in status bar
+  15. Status bar below Monaco editor (VS Code style) — status + chapter link
+  16. Toolbar reorganization: toolchain info left, settings icon right, no center
+  17. Dynamic window title: App — Project — Playground
+  18. Minimum window width bumped 800→900px
+  19. Update checker via GitHub Releases API (startup banner + menu item)
+  20. Official language logos (SVG) replacing text badges across all components
+      (Sidebar, ProjectSwitcher, ToolchainWizard, toolbar — cargo logo for Rust toolchain)
+  21. Book auto-select when enabling a language, reactive book/books labels
+  22. Test log: 233 test cases across 42+ sections
+
   Remaining:
-  10. End-to-end testing: Rust Edition (priority) and Power Edition
-  11. Per-edition icons (art task — can ship with same icon initially)
-  12. Distribution: website + GitHub Releases (DMG for both editions)
+  23. End-to-end testing: Rust Edition (priority) and Power Edition
+  24. Per-edition icons (art task — can ship with same icon initially)
+  25. Distribution: website + GitHub Releases (DMG for both editions)
 
 
 v0.3.1 — Read-Only Book Projects, Copy to Project, Learn Menu

@@ -9,6 +9,10 @@ export interface BookConfig {
   menuEvent: string
   removeMenuEvent: string
   sourceTag: string
+  /** Base URL for the online book (omit trailing slash) */
+  bookUrl?: string
+  /** Map of project name → chapter URL path (appended to bookUrl) */
+  chapterUrls?: Record<string, string>
 }
 
 /** Frontend configuration for a supported language. */
@@ -56,6 +60,29 @@ const LANGUAGES: Record<ProjectType, LanguageConfig> = {
       menuEvent: 'menu:rust-book',
       removeMenuEvent: 'menu:remove-rust-book',
       sourceTag: 'rust_book',
+      bookUrl: 'https://doc.rust-lang.org/book',
+      chapterUrls: {
+        rust_ch01_getting_started: '/ch01-00-getting-started.html',
+        rust_ch02_guessing_game: '/ch02-00-programming-a-guessing-game.html',
+        rust_ch03_concepts: '/ch03-00-common-programming-concepts.html',
+        rust_ch04_ownership: '/ch04-00-understanding-ownership.html',
+        rust_ch05_structs: '/ch05-00-using-structs-to-structure-related-data.html',
+        rust_ch06_enums: '/ch06-00-enums-and-pattern-matching.html',
+        rust_ch07_modules: '/ch07-00-managing-growing-projects-with-packages-crates-and-modules.html',
+        rust_ch08_collections: '/ch08-00-common-collections.html',
+        rust_ch09_errors: '/ch09-00-error-handling.html',
+        rust_ch10_generics: '/ch10-00-generics.html',
+        rust_ch11_testing: '/ch11-00-testing.html',
+        rust_ch12_minigrep: '/ch12-00-an-io-project.html',
+        rust_ch13_closures: '/ch13-00-functional-language-features-iterators-and-closures.html',
+        rust_ch14_cargo: '/ch14-00-more-about-cargo-and-crates-io.html',
+        rust_ch15_smart_pointers: '/ch15-00-smart-pointers.html',
+        rust_ch16_concurrency: '/ch16-00-fearless-concurrency.html',
+        rust_ch17_oop: '/ch17-00-oop.html',
+        rust_ch18_patterns: '/ch18-00-patterns-and-matching.html',
+        rust_ch19_advanced: '/ch19-00-advanced-features.html',
+        rust_ch20_web_server: '/ch20-00-final-project-a-web-server.html',
+      },
     },
   },
   clang: {
@@ -129,6 +156,17 @@ const LANGUAGES: Record<ProjectType, LanguageConfig> = {
       menuEvent: 'menu:swift-book',
       removeMenuEvent: 'menu:remove-swift-book',
       sourceTag: 'swift_book',
+      bookUrl: 'https://docs.swift.org/swift-book/documentation/the-swift-programming-language',
+      chapterUrls: {
+        swift_ch01_basics: '/thebasics',
+        swift_ch02_control_flow: '/controlflow',
+        swift_ch03_functions: '/functions',
+        swift_ch04_collections: '/collectiontypes',
+        swift_ch05_structs_classes: '/classesandstructures',
+        swift_ch06_enums: '/enumerations',
+        swift_ch07_protocols: '/protocols',
+        swift_ch08_error_handling: '/errorhandling',
+      },
     },
   },
 }

@@ -212,19 +212,19 @@ See [GitHub release v0.1.6.1](https://github.com/jagmeetchawla/rustic-playground
 
 The active spec is [`specs/specifications.md`](specs/specifications.md). The roadmap is [`specs/roadmap.md`](specs/roadmap.md).
 
-### Remaining v0.1.6 features (not yet started)
-
-| Feature | Notes |
-|---------|-------|
-| **Live cargo check squiggles** | Run `cargo check --message-format json` in background, 500ms debounce after typing, push diagnostics to Monaco as red/yellow squiggles. Most complex feature — needs cancellable async process + Monaco marker API. Separate `--target-dir` to avoid lock conflicts with runs. |
-| **Toolchain setup wizard** | First-run screen when `cargo` is not found. Offer to run `rustup-init` or set a manual path. Stream install output. Store `cargo_path` and `wizard_completed` in `config.json`. |
-| **Settings panel (⌘,)** | Font size, font family, tab size, theme (system/light/dark), cargo path override. 280px slide-in panel from the right. Live preview for font/theme. `get_settings` / `save_settings` backend commands. |
-| **Window state persistence** | Save/restore window size, position, open tabs, active tab, sidebar width, output size, layout mode. New `window-state.json` in App Support. Debounced save on resize. |
-
-### v0.1.7 — candidates (not yet specced)
-- Dependency manager UI (add/remove crates from Cargo.toml without manual editing)
-- Playground templates (async, CLI, data, web starter)
-- Output improvements (copy button, ANSI colour support, timestamps per run)
+### v0.3.3 — Edition Builds + UI Polish (in progress)
+- Edition system: Rust Edition, C Edition, Power Edition from same codebase
+- Saved snapshots (.saved/) with revert and undo-revert
+- Run lifecycle: Saving → Compiling → Running in console + status bar
+- Close-dirty-tab dialog (Save / Don't Save / Cancel)
+- Book chapter "Read Online" links (Rust Book, Swift Book)
+- Status bar below Monaco editor (VS Code style)
+- Toolbar reorganization: toolchain info left, settings icon right
+- Dynamic window title: App — Project — Playground
+- Update checker via GitHub Releases API
+- Official language logos (SVG) replacing text badges
+- Book auto-select when enabling a language, reactive labels
+- Min window width 900px
 
 ### Parked — v2.0 native Swift rewrite
 Detailed proposal in [`specs/roadmap.md`](specs/roadmap.md). The motivation: Tauri's WKWebView layer creates recurring classes of hard-to-debug issues — native dialogs, keyboard capture, event propagation. The proposed architecture is a native SwiftUI app with WKWebView used *only* for the Monaco editor pane; everything else (sidebar, output, toolbar, menus) is native AppKit/SwiftUI. Trigger condition: when the Tauri version hits a genuine hard wall, or when the v0.1.x feature set is complete and a quality rewrite makes sense.
