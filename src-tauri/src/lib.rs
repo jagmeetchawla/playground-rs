@@ -543,6 +543,102 @@ async fn check_url(urls: Vec<String>) -> String {
     urls.last().cloned().unwrap_or_default()
 }
 
+// ── Toolchain installer / repair ──────────────────────────────────────────────
+//
+// In-app installer/repair flow for the Rust toolchain. Used by the Welcome
+// Wizard and Settings → Toolchains panel. The frontend reads `rust_state` from
+// check_toolchain() and dispatches the appropriate fix action below. Output
+// streams to a Tauri Channel using the same pattern as the playground runner.
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(tag = "type")]
+enum ToolchainFixAction {
+    /// Run the official sh.rustup.rs installer with -y for unattended install.
+    InstallRustup,
+    /// `rustup default stable` — fixes "no default toolchain" state.
+    SetDefaultStable,
+    /// `rustup component add <name>` — installs a missing component.
+    AddComponent { name: String },
+}
+
+#[tauri::command]
+async fn run_toolchain_fix(
+    action: ToolchainFixAction,
+    on_output: tauri::ipc::Channel<serde_json::Value>,
+) -> Result<i32, String> {
+    use std::process::Stdio;
+    use tokio::process::Command;
+
+    // Resolve absolute rustup path so PATH state doesn't matter.
+    let rustup_bin = dirs_next::home_dir()
+        .map(|h| h.join(".cargo/bin/rustup"))
+        .filter(|p| p.exists())
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| "rustup".to_string());
+
+    let mut cmd = match &action {
+        ToolchainFixAction::InstallRustup => {
+            // Pipe sh.rustup.rs through sh with -y for unattended install.
+            // --default-toolchain stable installs and sets the default in one step
+            // so the user doesn't have to run a second command afterward.
+            let mut c = Command::new("sh");
+            c.arg("-c").arg(
+                "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+                 | sh -s -- -y --default-toolchain stable",
+            );
+            c
+        }
+        ToolchainFixAction::SetDefaultStable => {
+            let mut c = Command::new(&rustup_bin);
+            c.args(["default", "stable"]);
+            c
+        }
+        ToolchainFixAction::AddComponent { name } => {
+            let mut c = Command::new(&rustup_bin);
+            c.args(["component", "add", name]);
+            c
+        }
+    };
+
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    on_output
+        .send(serde_json::json!({
+            "stream": "stdout",
+            "line": format!("→ Running fix: {:?}", action),
+        }))
+        .ok();
+
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to spawn fix command: {}", e))?;
+
+    let stdout = child.stdout.take().ok_or("missing stdout")?;
+    let stderr = child.stderr.take().ok_or("missing stderr")?;
+
+    let ch_out = on_output.clone();
+    let stdout_task = tokio::spawn(async move {
+        crate::playground_commands::stream_pipe(stdout, "stdout", ch_out).await;
+    });
+    let ch_err = on_output.clone();
+    let stderr_task = tokio::spawn(async move {
+        crate::playground_commands::stream_pipe(stderr, "stderr", ch_err).await;
+    });
+
+    let status = child.wait().await.map_err(|e| e.to_string())?;
+    let _ = tokio::join!(stdout_task, stderr_task);
+
+    let code = status.code().unwrap_or(-1);
+    on_output
+        .send(serde_json::json!({
+            "stream": "complete",
+            "code": code,
+        }))
+        .ok();
+
+    Ok(code)
+}
+
 // ── App entry ─────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -671,6 +767,7 @@ pub fn run() {
                 "show_settings" => Some("menu:settings"),
                 "show_help" => Some("menu:help"),
                 "show_about" => Some("menu:about"),
+                "rust_toolchain" => Some("menu:rust-toolchain"),
                 _ => {
                     // Dynamic book events from language modules
                     let mut book_event = None;
@@ -763,6 +860,7 @@ pub fn run() {
             rustic_manifest::save_build_flags,
             check_for_update,
             check_url,
+            run_toolchain_fix,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

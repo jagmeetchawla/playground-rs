@@ -40,17 +40,17 @@ v0.3 — Language Module Architecture + Zig & Swift Support
 NEXT UP
 ───────
 
-Distribution & Launch (post v0.3.3)
+Distribution & Launch (post v0.3.4)
   Status: not started — 2026-04-06
 
-  The code freeze for v0.3.3 is in. Next phase is shipping it to users.
+  The code freeze for v0.3.4 is in. Next phase is shipping it to users.
   See specs/release-plan.md for the full 16-step launch checklist.
 
   Tasks:
   - Per-edition icons (art task — can ship with same icon initially)
   - Build DMGs via scripts/build-editions.sh (Rust Edition + Power Edition)
   - Code-sign + notarize DMGs (macOS Gatekeeper requirement)
-  - GitHub Releases: upload DMGs as v0.3.3 release assets
+  - GitHub Releases: upload DMGs as v0.3.4 release assets
   - Website launch: rustic-playground.app on GitHub Pages
   - Wiki / FAQ pages (Zig 0.15 pinning, edition differences, install guide)
   - Staggered community announcements over 5 days
@@ -62,6 +62,51 @@ Distribution & Launch (post v0.3.3)
 
 RELEASED (continued)
 ───────────────────
+
+v0.3.4 — In-App Toolchain Installer & Repair
+  Status: complete — released 2026-04-06
+
+  Overview:
+  Users no longer need a terminal to get a working Rust toolchain. The app
+  detects what's broken (no rustup, no default toolchain, missing components),
+  shows a clear status card, and runs the right fix in-app — streaming the
+  installer output live in a modal. The toolbar pill becomes a one-click
+  entry point: ● green when healthy, ◐ yellow when components are missing,
+  ○ red when nothing is installed.
+
+  Completed:
+  1. ToolchainFixWizard.svelte — self-contained modal with status card,
+     fix actions, and live-streaming output panel (auto-scroll, fixed-height
+     log, hides detail grid during fix to free vertical space)
+  2. Backend run_toolchain_fix command with InstallRustup / SetDefaultStable /
+     AddComponent actions, streamed via Tauri Channel
+  3. rust_state cascade in check_toolchain: not_installed → no_default →
+     missing_components → healthy (mutually exclusive, ordered by severity)
+  4. Toolbar pill is now a button — opens fix wizard for Rust, opens Settings
+     → Toolchains for other languages. Status dot (●/◐/○) reflects full
+     rust_state, so missing rustfmt/clippy correctly shows yellow
+  5. "Install rustfmt & clippy" combined shortcut button when both are
+     missing — runs fixes sequentially, streams all output into one log
+  6. Per-language menu restructure: replaces old "Learn" menu. Single-language
+     editions get a top-level menu named after the language (e.g. "Rust");
+     Power Edition gets a "Languages" menu with per-language submenus. Each
+     language menu contains "Rust Toolchain…" (Rust only) plus a book
+     sub-submenu (Load / Remove / Read Online) for languages with books
+  7. Settings/Wizard "Repair Toolchain…" button reuses the same fix wizard,
+     z-indexed above Settings so it layers correctly. Settings auto-refreshes
+     after the fix completes via a refreshKey-driven silent re-check
+  8. RUSTUP_AUTO_INSTALL=0 on read-only probes (check_toolchain,
+     get_toolchain_info, check_playground) — rustup ≥1.28 silently
+     auto-installs the default toolchain when proxies are invoked, which
+     would mask broken state. The env var disables that behavior so users
+     see (and can fix) the actual state. Run command intentionally left
+     auto-install-enabled: explicit user action, implicit fix is welcome
+  9. Synced terminology across Settings, Wizard, and FixWizard:
+     "● Rust toolchain is healthy / Everything is installed and ready to use"
+
+  Tested branches: healthy, missing_components (rustfmt and/or clippy),
+  no_default (rustup default none), not_installed (rustup self uninstall).
+  All four verified end-to-end in the built .app.
 
 v0.3.2 — Welcome Wizard + Language Gating
   Status: complete — released 2026-04-04

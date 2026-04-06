@@ -9,26 +9,34 @@
   let {
     onclose,
     onapply,
+    onrepair,
     enabledLanguages = ['rust'],
     settings,
     projectSources = {},
     onthemechange,
     mode = 'wizard',
     edition,
+    refreshKey = 0,
   }: {
     onclose: (result: { enabledLanguages: string[]; booksToLoad: string[]; booksToRemove: string[]; settings?: Settings }) => void
     onapply?: (result: { enabledLanguages: string[]; booksToLoad: string[]; booksToRemove: string[]; settings: Settings }) => void
+    onrepair?: () => void
     enabledLanguages: string[]
     settings: Settings
     projectSources?: Record<string, string>
     onthemechange?: (theme: string) => void
     mode?: 'wizard' | 'settings'
     edition: EditionConfig
+    /** Bumped externally after an in-app toolchain fix to force a re-check. */
+    refreshKey?: number
   } = $props()
 
+  type RustState = 'not_installed' | 'no_default' | 'missing_components' | 'healthy'
   type ToolchainStatus = {
     wizard_completed: boolean
     all_good: boolean
+    rust_state: RustState
+    missing_components: string[]
     rustup: { installed: boolean; version: string | null }
     cargo: { installed: boolean; path: string; version: string | null }
     rustc: { installed: boolean; version: string | null }
@@ -108,6 +116,15 @@
     }
   })
 
+  // Re-run check when an in-app toolchain fix completes (refreshKey bumped).
+  // Skip the initial value (0) so we don't double-check on mount.
+  // Silent mode: keep the existing status card visible during the re-check.
+  $effect(() => {
+    if (refreshKey > 0) {
+      runCheck(true)
+    }
+  })
+
   // ── Language toggle ───────────────────────────────────────────────────��
   function toggleLang(type: string) {
     if (selectedLangs.includes(type)) {
@@ -129,12 +146,14 @@
   )
 
   // ── Toolchain check ───────────────────────────────────────────────────
-  async function runCheck() {
-    checking = true
+  // `silent` keeps the existing status card visible (no spinner) while a
+  // background re-check runs — used after an in-app fix completes.
+  async function runCheck(silent = false) {
+    if (!silent) checking = true
     try {
       status = await invoke<ToolchainStatus>('check_toolchain')
     } catch (_) { /* ignore */ }
-    finally { checking = false }
+    finally { if (!silent) checking = false }
   }
 
   function toolchainOk(type: string): boolean | null {
@@ -325,12 +344,12 @@
     {:else if currentPanel === 'toolchains'}
       <div class="step-content">
         <h2 class="step-heading">{edition.isSingleLanguage ? `${editionLang!.label} Toolchain` : 'Toolchain Check'}</h2>
-        <p class="step-desc">{edition.isSingleLanguage ? `Checking if ${editionLang!.label.toLowerCase()} is installed.` : 'Checking if the required compilers are installed.'}</p>
+        <p class="step-desc">{edition.isSingleLanguage ? `Status of your ${editionLang!.label} toolchain.` : 'Status of the required compilers and toolchains.'}</p>
 
         {#if checking}
           <div class="checking">
             <div class="spinner"></div>
-            <span>Detecting toolchains…</span>
+            <span>Detecting toolchain…</span>
           </div>
         {:else if status}
           <div class="toolchain-list">
@@ -340,12 +359,29 @@
                 <div class="tc-header">
                   <LanguageLogo type={lang.type} size={18} />
                   <span class="tc-name">{lang.label}</span>
-                  <span class="tc-status" class:ok={ok} class:missing={!ok}>
-                    {ok ? '● Ready' : '○ Not found'}
-                  </span>
+                  {#if lang.type !== 'rust'}
+                    <span class="tc-status" class:ok={ok} class:missing={!ok}>
+                      {ok ? '● Ready' : '○ Not found'}
+                    </span>
+                  {/if}
                 </div>
 
                 {#if lang.type === 'rust'}
+                  <div class="status-card" class:healthy={status.rust_state === 'healthy'} class:unhealthy={status.rust_state !== 'healthy'}>
+                    {#if status.rust_state === 'healthy'}
+                      <div class="status-headline ok">● Rust toolchain is healthy</div>
+                      <p class="status-sub">Everything is installed and ready to use.</p>
+                    {:else if status.rust_state === 'not_installed'}
+                      <div class="status-headline missing">○ Rust is not installed</div>
+                      <p class="status-sub">Install rustup, cargo, and the stable toolchain to start writing Rust.</p>
+                    {:else if status.rust_state === 'no_default'}
+                      <div class="status-headline missing">○ No default toolchain</div>
+                      <p class="status-sub">rustup is installed, but no default toolchain is selected. This often happens after moving <code>~/.rustup</code>.</p>
+                    {:else if status.rust_state === 'missing_components'}
+                      <div class="status-headline warn">◐ Missing components</div>
+                      <p class="status-sub">Rust is installed, but {status.missing_components.join(' and ')} {status.missing_components.length === 1 ? 'is' : 'are'} missing.</p>
+                    {/if}
+                  </div>
                   <div class="detail-grid">
                     <div class="detail-row">
                       <span class="detail-icon" class:ok={status.rustup.installed} class:missing={!status.rustup.installed}>{status.rustup.installed ? '●' : '○'}</span>
@@ -373,11 +409,9 @@
                       <span class="detail-value">{status.components.clippy ? 'installed' : 'not found'}</span>
                     </div>
                   </div>
-                  {#if !status.all_good}
+                  {#if status.rust_state !== 'healthy'}
                     <div class="install-section">
-                      <p class="install-text">Install Rust:</p>
-                      <code class="install-cmd">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code>
-                      <p class="install-hint">Or visit <button class="link-btn" onclick={() => shellOpen('https://rustup.rs')}>rustup.rs</button></p>
+                      <button class="btn btn-primary" onclick={() => onrepair?.()}>Repair Toolchain…</button>
                     </div>
                   {/if}
 
@@ -853,7 +887,32 @@
   .tc-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
   .tc-status { font-size: 11px; font-weight: 600; }
   .tc-status.ok { color: var(--green); }
+  .tc-status.warn { color: #e8a820; }
   .tc-status.missing { color: var(--red, #d42020); }
+
+  .status-card {
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: rgba(0,0,0,0.15);
+    display: flex; flex-direction: column; gap: 2px;
+    margin-bottom: 4px;
+  }
+  .status-card.healthy { border-color: rgba(46, 160, 67, 0.4); }
+  .status-card.unhealthy { border-color: rgba(212, 32, 32, 0.4); }
+  .status-headline { font-size: 12px; font-weight: 600; }
+  .status-headline.ok { color: var(--green); }
+  .status-headline.missing { color: var(--red, #d42020); }
+  .status-headline.warn { color: #e8a820; }
+  .status-sub {
+    font-size: 11px; color: var(--text-secondary);
+    margin: 2px 0 0 0; line-height: 1.4;
+  }
+  .status-sub code {
+    font-family: var(--font-mono); font-size: 10px;
+    background: rgba(0,0,0,0.25);
+    padding: 1px 4px; border-radius: 3px;
+  }
   .recheck-btn { align-self: flex-start; margin-top: 4px; }
 
   .cargo-path-row {

@@ -1,6 +1,6 @@
 {
   "productName": "Rustic Playground",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "identifier": "com.rustic-playground.app",
   "build": {
     "frontendDist": "../ui/dist",

@@ -16,6 +16,7 @@
   // SettingsModal.svelte is now type-only; ToolchainWizard handles settings UI
   import NewPlaygroundModal from './lib/NewPlaygroundModal.svelte'
   import ToolchainWizard from './lib/ToolchainWizard.svelte'
+  import ToolchainFixWizard from './lib/ToolchainFixWizard.svelte'
   import CopyToProjectModal from './lib/CopyToProjectModal.svelte'
   import type { Settings } from './lib/SettingsModal.svelte'
   import type { Template } from './lib/templates'
@@ -128,6 +129,8 @@
   let clangInfo:     { path: string; version: string } = $state({ path: '', version: '' })
   let zigInfo:       { path: string; version: string; version_ok: boolean } = $state({ path: '', version: '', version_ok: false })
   let swiftInfo:     { version: string }               = $state({ version: '' })
+  type RustState = 'not_installed' | 'no_default' | 'missing_components' | 'healthy'
+  let rustState: RustState = $state('healthy')
   let activeToolchain = $derived(
     projectType === 'clang' ? clangInfo
     : projectType === 'zig' ? zigInfo
@@ -144,8 +147,12 @@
   let pillStatus: 'not-enabled' | 'missing' | 'partial' | 'ok' = $derived.by(() => {
     if (!langEnabled) return 'not-enabled'
     if (!activeToolchain.version) return 'missing'
-    // Partial: Rust needs cargo+rustc+rustfmt+clippy; others just need version
     if (projectType === 'rust' && toolchainLabel === '…') return 'missing'
+    // Rust: honor the full rust_state from check_toolchain
+    if (projectType === 'rust') {
+      if (rustState === 'not_installed' || rustState === 'no_default') return 'missing'
+      if (rustState === 'missing_components') return 'partial'
+    }
     // Zig: warn if installed but not the supported 0.15.x version
     if (projectType === 'zig' && zigInfo && !zigInfo.version_ok) return 'partial'
     return 'ok'
@@ -156,6 +163,12 @@
     if (pillStatus === 'partial' && projectType === 'zig') return `${toolchainName} ${toolchainLabel} · requires 0.15.x`
     return `${toolchainName} ${toolchainLabel}${lang.experimental ? ' · experimental' : ''}`
   })
+  // Status dot — matches the ●/◐/○ vocabulary used in the toolchain status cards
+  let pillIcon = $derived.by(() => {
+    if (pillStatus === 'ok') return '●'
+    if (pillStatus === 'partial') return '◐'
+    return '○'
+  })
 
   // ── New playground binding ────────────────────────────────────────────────────
   let creatingNew: boolean = $state(false)
@@ -165,6 +178,10 @@
   let showAbout:       boolean       = $state(false)
   let showWizard:      boolean       = $state(false)
   let wizardMode:      'wizard' | 'settings' = $state('wizard')
+  let showFixWizard:   boolean       = $state(false)
+  // Bumped after a successful in-app toolchain fix so the underlying
+  // Settings/Wizard Toolchains panel re-runs check_toolchain.
+  let toolchainRefreshKey = $state(0)
   let showExportMenu:  boolean       = $state(false)
   let showCopyToProject: boolean     = $state(false)
   let copyToProjectPlayground: string | null = $state(null)
@@ -335,6 +352,7 @@
         wizardMode = 'wizard'
         showWizard = true
       }
+      if (tc.rust_state) rustState = tc.rust_state
       if (tc.clang) {
         clangInfo = { path: tc.clang.path ?? '', version: tc.clang.version ?? '' }
       }
@@ -413,6 +431,7 @@
         }),
         ...allLanguages().filter(l => l.book).map(l => listen(l.book!.menuEvent, () => seedBook(l.type))),
         ...allLanguages().filter(l => l.book).map(l => listen(l.book!.removeMenuEvent, () => removeBook(l.book!.sourceTag, l.book!.commandLabel))),
+        listen('menu:rust-toolchain',    () => { showFixWizard = true }),
         listen('menu:rename-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground' && !isReadOnly) renameTarget = activeTab }),
         listen('menu:delete-playground', () => { if (activeTab && tabMeta[activeTab]?.type === 'playground' && !isReadOnly) deletePending = activeTab }),
       ])
@@ -1224,10 +1243,24 @@
         bind:pendingMode={switcherPendingMode}
       />
 
-      <span class="toolchain-info" class:pill-red={pillStatus === 'not-enabled' || pillStatus === 'missing'} class:pill-yellow={pillStatus === 'partial'} title="{pillStatus === 'not-enabled' ? 'Language support not enabled in Settings' : activeToolchain.path ?? ''}">
+      <button
+        class="toolchain-info"
+        class:pill-red={pillStatus === 'not-enabled' || pillStatus === 'missing'}
+        class:pill-yellow={pillStatus === 'partial'}
+        title={projectType === 'rust' ? 'Check Rust toolchain status…' : (pillStatus === 'not-enabled' ? 'Language support not enabled in Settings' : (activeToolchain.path ?? ''))}
+        onclick={() => {
+          if (projectType === 'rust') {
+            showFixWizard = true
+          } else {
+            wizardMode = 'settings'
+            showWizard = true
+          }
+        }}
+      >
         <LanguageLogo type={projectType === 'rust' ? 'cargo' : projectType} size={16} />
+        <span class="pill-dot">{pillIcon}</span>
         <span class="toolchain-text">{pillText}</span>
-      </span>
+      </button>
     </div>
 
     <div class="toolbar-right">
@@ -1571,6 +1604,22 @@
   <AboutModal onclose={() => showAbout = false} edition={currentEdition()} />
 {/if}
 
+{#if showFixWizard}
+  <ToolchainFixWizard
+    onclose={() => showFixWizard = false}
+    onfixed={async () => {
+      // Refresh App-level toolchain state so the toolbar pill flips immediately.
+      try {
+        const tc = await invoke<any>('check_toolchain')
+        if (tc.rust_state) rustState = tc.rust_state
+        toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+      } catch {}
+      // Bump key so any open ToolchainWizard panel re-checks too.
+      toolchainRefreshKey++
+    }}
+  />
+{/if}
+
 {#if showWizard}
   <ToolchainWizard
     mode={wizardMode}
@@ -1578,7 +1627,9 @@
     {settings}
     {projectSources}
     edition={currentEdition()}
+    refreshKey={toolchainRefreshKey}
     onthemechange={(t) => { settings = { ...settings, theme: t } }}
+    onrepair={() => { showFixWizard = true }}
     onapply={async (result) => {
       enabledLangs = result.enabledLanguages
       await invoke('set_enabled_languages', { languages: result.enabledLanguages })
@@ -1874,16 +1925,31 @@
   }
 
   .toolchain-info {
-    display: flex; align-items: flex-end; gap: 5px;
+    display: flex; align-items: center; gap: 5px;
     font-size: 11px; font-family: var(--font-mono);
     color: var(--text-secondary);
     white-space: nowrap;
+    background: none; border: 1px solid transparent;
+    padding: 3px 8px; border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .toolchain-info:hover {
+    background: rgba(255,255,255,0.05);
+    border-color: var(--border);
   }
   .toolchain-text { line-height: 1; }
+  .pill-dot {
+    font-size: 8px; line-height: 1;
+    color: var(--green);
+    margin-bottom: 1px;
+  }
   .toolchain-info.pill-red { color: #f44; }
   .toolchain-info.pill-red .toolchain-text { color: #f44; }
+  .toolchain-info.pill-red .pill-dot { color: #f44; }
   .toolchain-info.pill-yellow { color: #e8a820; }
   .toolchain-info.pill-yellow .toolchain-text { color: #e8a820; }
+  .toolchain-info.pill-yellow .pill-dot { color: #e8a820; }
 
   /* ── Main layout ── */
   .main {

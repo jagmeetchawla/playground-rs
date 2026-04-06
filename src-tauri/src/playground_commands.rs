@@ -513,7 +513,7 @@ async fn stream_child_output(
 /// Read bytes from a pipe, split on newlines, and send each chunk immediately.
 /// Unlike BufReader::lines(), this also flushes partial lines (prompts without
 /// a trailing newline) so that `print!("name? ")` appears before stdin blocks.
-async fn stream_pipe<R: tokio::io::AsyncRead + Unpin>(
+pub(crate) async fn stream_pipe<R: tokio::io::AsyncRead + Unpin>(
     mut reader: R,
     stream: &str,
     channel: Channel<serde_json::Value>,
@@ -627,7 +627,13 @@ pub async fn check_playground(
     let cargo = crate::cargo_path();
     let check_target = workspace.join("target").join("check-runs");
 
+    // RUSTUP_AUTO_INSTALL=0 — live check runs automatically on every edit and
+    // on editor mount. We don't want it to silently re-download a missing
+    // default toolchain in the background; the user should see the broken
+    // state via the toolchain pill instead. The Run button (run_playground)
+    // intentionally omits this so an explicit run can still trigger install.
     let mut child = Command::new(&cargo)
+        .env("RUSTUP_AUTO_INSTALL", "0")
         .args([
             "check",
             "--bin",

@@ -132,7 +132,11 @@ pub fn remove_dependency(content: String, name: String, app: AppHandle) -> Resul
 #[tauri::command]
 pub fn get_toolchain_info() -> serde_json::Value {
     let path = cargo_path();
+    // RUSTUP_AUTO_INSTALL=0 — same reason as in check_toolchain: this is a
+    // read-only probe, we don't want the rustup proxy to silently re-install
+    // a missing default toolchain as a side effect.
     let version = std::process::Command::new(&path)
+        .env("RUSTUP_AUTO_INSTALL", "0")
         .arg("--version")
         .output()
         .ok()
@@ -203,8 +207,13 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         None
     };
 
-    // Check cargo
+    // Check cargo. RUSTUP_AUTO_INSTALL=0 prevents the rustup proxy from
+    // silently re-downloading a missing default toolchain just because we
+    // asked for its version — we want to *observe* the broken state, not heal
+    // it. Same flag applied to rustc, rustfmt, cargo-clippy, and rustup show
+    // below for the same reason.
     let cargo_output = std::process::Command::new(&cargo)
+        .env("RUSTUP_AUTO_INSTALL", "0")
         .arg("--version")
         .output()
         .ok();
@@ -219,6 +228,7 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
     // Check rustc
     let rustc_bin = tool_path("rustc");
     let rustc_output = std::process::Command::new(&rustc_bin)
+        .env("RUSTUP_AUTO_INSTALL", "0")
         .arg("--version")
         .output()
         .ok();
@@ -233,6 +243,7 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
     // Get active toolchain if rustup is available
     let active_toolchain = if rustup_installed {
         std::process::Command::new(&rustup_bin)
+            .env("RUSTUP_AUTO_INSTALL", "0")
             .args(["show", "active-toolchain"])
             .output()
             .ok()
@@ -262,6 +273,7 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
 
     // Check for essential components
     let has_rustfmt = std::process::Command::new(tool_path("rustfmt"))
+        .env("RUSTUP_AUTO_INSTALL", "0")
         .arg("--version")
         .output()
         .ok()
@@ -269,6 +281,7 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         .unwrap_or(false);
 
     let has_clippy = std::process::Command::new(tool_path("cargo-clippy"))
+        .env("RUSTUP_AUTO_INSTALL", "0")
         .arg("--version")
         .output()
         .ok()
@@ -336,9 +349,38 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
 
     let all_good = cargo_installed && rustc_installed;
 
+    // Derive Rust toolchain state for the installer/repair flow.
+    // States are mutually exclusive and ordered by severity:
+    //   not_installed     → no rustup binary at all → run sh.rustup.rs installer
+    //   no_default        → rustup present but no active toolchain → rustup default stable
+    //   missing_components → toolchain works but rustfmt/clippy missing → rustup component add
+    //   healthy           → everything works
+    let active_is_set = active_toolchain
+        .as_ref()
+        .map(|s| !s.is_empty() && !s.contains("no active toolchain"))
+        .unwrap_or(false);
+    let mut missing_components: Vec<&str> = Vec::new();
+    if !has_rustfmt {
+        missing_components.push("rustfmt");
+    }
+    if !has_clippy {
+        missing_components.push("clippy");
+    }
+    let rust_state = if !rustup_installed {
+        "not_installed"
+    } else if !cargo_installed || !rustc_installed || !active_is_set {
+        "no_default"
+    } else if !missing_components.is_empty() {
+        "missing_components"
+    } else {
+        "healthy"
+    };
+
     serde_json::json!({
         "wizard_completed": config.wizard_completed,
         "all_good": all_good,
+        "rust_state": rust_state,
+        "missing_components": missing_components,
         "rustup": {
             "installed": rustup_installed,
             "version": rustup_version,

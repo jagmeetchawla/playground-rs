@@ -194,13 +194,55 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .select_all()
         .build()?;
 
-    // ── Learn menu — book examples for each enabled language ──
-    let mut learn_builder = SubmenuBuilder::new(handle, "Learn");
-    for lang_variant in Lang::all() {
-        if !enabled_languages.iter().any(|l| l == lang_variant.project_type()) {
-            continue;
+    // ── Per-language menus (replaces old "Learn" menu) ──
+    // Single-language editions: one top-level menu named after the language
+    //   (e.g. "Rust") with toolchain + book actions inline.
+    // Power Edition (multi-language): one top-level "Languages" menu containing
+    //   per-language submenus.
+    //
+    // Each language menu contains (when applicable):
+    //   • Check Toolchain Status…   (Rust only — opens fix wizard)
+    //   • Repair Toolchain…         (Rust only — opens fix wizard)
+    //   • ─────
+    //   • Load Examples…            (book languages)
+    //   • Remove Examples           (book languages)
+    //   • Read Online…              (book languages with URL)
+    let single_language = enabled_languages.len() == 1;
+
+    fn lang_display_name(lang: &Lang) -> &'static str {
+        match lang {
+            Lang::Rust => "Rust",
+            Lang::Clang => "C/C++",
+            Lang::Zig => "Zig",
+            Lang::Swift => "Swift",
         }
+    }
+
+    /// Build a single language's submenu. Returns None if there's nothing to show.
+    fn build_lang_submenu<R: tauri::Runtime>(
+        handle: &impl tauri::Manager<R>,
+        lang_variant: &Lang,
+        project_sources: &HashMap<String, String>,
+    ) -> tauri::Result<Option<tauri::menu::Submenu<R>>> {
+        let mut sub = SubmenuBuilder::new(handle, lang_display_name(lang_variant));
+        let mut has_items = false;
+
+        // Toolchain item — Rust only for v0.3.4. Single entry that opens the
+        // status/repair modal (the modal self-describes healthy vs needs-fix).
+        if matches!(lang_variant, Lang::Rust) {
+            sub = sub.item(
+                &MenuItemBuilder::with_id("rust_toolchain", "Rust Toolchain…")
+                    .build(handle)?,
+            );
+            has_items = true;
+        }
+
+        // Book items grouped under a sub-submenu named after the book
+        // (matches the structure of the old "Learn" menu).
         if let Some(book) = lang_variant.book_info() {
+            if has_items {
+                sub = sub.separator();
+            }
             let already_loaded = project_sources.values().any(|s| s == book.source_tag);
             let book_submenu = SubmenuBuilder::new(handle, book.book_name)
                 .item(
@@ -222,10 +264,40 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
                     .build(handle)?,
                 )
                 .build()?;
-            learn_builder = learn_builder.item(&book_submenu);
+            sub = sub.item(&book_submenu);
+            has_items = true;
+        }
+
+        if has_items {
+            Ok(Some(sub.build()?))
+        } else {
+            Ok(None)
         }
     }
-    let learn_menu = learn_builder.build()?;
+
+    // Collect submenus for every enabled language that has content.
+    let mut lang_submenus: Vec<(&Lang, tauri::menu::Submenu<R>)> = Vec::new();
+    for lang_variant in Lang::all() {
+        if !enabled_languages.iter().any(|l| l == lang_variant.project_type()) {
+            continue;
+        }
+        if let Some(sm) = build_lang_submenu(handle, lang_variant, project_sources)? {
+            lang_submenus.push((lang_variant, sm));
+        }
+    }
+
+    // Build the top-level language menu (single or grouped under "Languages").
+    let language_menu: Option<tauri::menu::Submenu<R>> = if single_language {
+        lang_submenus.into_iter().next().map(|(_, sm)| sm)
+    } else if lang_submenus.is_empty() {
+        None
+    } else {
+        let mut langs_builder = SubmenuBuilder::new(handle, "Languages");
+        for (_, sm) in &lang_submenus {
+            langs_builder = langs_builder.item(sm);
+        }
+        Some(langs_builder.build()?)
+    };
 
     let help_menu = SubmenuBuilder::new(handle, "Help")
         .item(
@@ -237,15 +309,16 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .item(&MenuItemBuilder::with_id("show_about", "About Rustic Playground").build(handle)?)
         .build()?;
 
-    MenuBuilder::new(handle)
+    let mut menu_builder = MenuBuilder::new(handle)
         .item(&app_submenu)
         .item(&project_menu)
         .item(&playground_menu)
         .item(&run_menu)
-        .item(&edit_menu)
-        .item(&learn_menu)
-        .item(&help_menu)
-        .build()
+        .item(&edit_menu);
+    if let Some(ref lm) = language_menu {
+        menu_builder = menu_builder.item(lm);
+    }
+    menu_builder.item(&help_menu).build()
 }
 
 #[allow(clippy::too_many_arguments)]
