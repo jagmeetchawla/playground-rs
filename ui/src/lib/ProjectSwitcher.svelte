@@ -343,7 +343,7 @@
             {/each}
           </div>
           <span class="type-hint">
-            {newProjectType === 'rust' ? 'Cargo workspace with deps and live checking'
+            {newProjectType === 'rust' ? 'Cargo package with deps and live checking'
               : newProjectType === 'clang' ? 'C/C++ with clang — compiler flags in rustic.toml'
               : newProjectType === 'zig' ? 'Zig playground (experimental) — zig run with flags in rustic.toml'
               : 'Swift playground — swiftc compile & run'}

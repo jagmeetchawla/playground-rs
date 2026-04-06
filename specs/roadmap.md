@@ -133,10 +133,47 @@ v0.3.3 — Edition Builds
   21. Book auto-select when enabling a language, reactive book/books labels
   22. Test log: 233 test cases across 42+ sections
 
+  Known Issues:
+  - Enter key does not trigger primary action in Settings modal or confirm dialogs
+    (Escape works; Enter works in NewPlaygroundModal and CopyToProjectModal).
+    Probable cause: Enter was wired to apply() which applies but doesn't close —
+    may just need to wire to done/cancel instead. Track via GitHub issue.
+  - ⌘⇧/ (Help) shortcut doesn't trigger — macOS intercepts it for system Help Search.
+    May need a different accelerator or workaround.
+  - Cargo.toml: "Add Dependency" button doesn't focus crate name input after click.
+    Also needs: crate search (crates.io API), full CRUD (add/delete/update),
+    validate crate name + version against crates.io before adding.
+  - About modal icon shows macOS padding (black corners around squircle).
+    Source images have padding baked in — need unpadded artwork or CSS crop.
+
   Remaining:
   23. End-to-end testing: Rust Edition (priority) and Power Edition
   24. Per-edition icons (art task — can ship with same icon initially)
   25. Distribution: website + GitHub Releases (DMG for both editions)
+
+  Post v0.3.3 Ideas:
+  - "Build failed" status bar should show the line number where the build failed
+  - App quit with dirty tabs: prompt "Save & Exit / Discard & Exit / Cancel" listing dirty playgrounds
+  - (done) Lock icon moved to status bar below editor
+  - Status bar contextual labels: "Read Only", "Editing Locked", file type, line/col position, etc. Lock icon: red tint when locked, green when editable.
+  - New Project type selector: expand to fill tab bar width, no text wrapping for "Zig (0.15)", move Zig to end
+  - Automated UI testing (e.g. Playwright/WebdriverIO + Tauri driver) to reduce manual regression testing
+  - Unit test playground template (Rust #[test] scaffold)
+  - Enable RUST_BACKTRACE for detailed panic traces in console output
+  - Embedded real terminal/console (like VS Code integrated terminal) replacing current output panel
+  - Run timeout guard: auto-kill playgrounds after configurable duration (e.g. 60s) to catch infinite loops
+  - Console: show elapsed run time (ms/s) alongside timestamp when run completes
+  - Book chapter URLs: fetch from rust-lang/book SUMMARY.md at build time or validate on app startup to handle future book restructures
+  - (done) Rust Book 2024 Edition update: added ch17 async/await, renumbered ch17-20→ch18-21, 21 chapters total
+  - Refactor: Book chapters driven by data files (JSON/TOML) instead of hardcoded Rust source (~2700 lines per book)
+  - Refactor: Templates driven by data files instead of hardcoded TypeScript arrays
+  - Refactor: HelpModal content driven by data files instead of inline HTML
+  - Sidebar: sort playgrounds by creation order (or configurable) instead of alphabetical, so book chapters display in sequence
+  - Toolchain installer/repair flow: Wizard guides new users through step-by-step
+    rustup install when no toolchain is detected. Settings detects broken toolchains
+    (e.g. rustup present but no default channel set, missing components) and offers
+    a guided fix — "Run `rustup default stable`", "Install missing component X",
+    etc. — instead of just showing "not found".
 
 
 v0.3.1 — Read-Only Book Projects, Copy to Project, Learn Menu

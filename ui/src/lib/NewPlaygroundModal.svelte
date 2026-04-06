@@ -23,7 +23,7 @@
   let clangSelectedId = $state('c_blank')
   let zigSelectedId = $state('zig_blank')
   let swiftSelectedId = $state('swift_blank')
-  let name = $state('')
+  let name = $state('my_playground')
   let nameError = $state('')
   let nameInput = $state<HTMLInputElement | null>(null)
   let clangLang: 'c' | 'cpp' = $state('c')
@@ -53,6 +53,7 @@
     else if (projectType === 'zig') zigSelectedId = id
     else if (projectType === 'swift') swiftSelectedId = id
     else selectedId = id
+    tick().then(() => nameInput?.focus())
   }
 
   // Reset clang template selection when switching language

@@ -15,12 +15,19 @@
   // Derive book label from actual book count for enabled languages
   const enabledBooks = allLanguages().filter(l => enabledLanguages.includes(l.type) && l.book)
   const bookCount = enabledBooks.length
-  const singleBookName = bookCount === 1 ? enabledBooks[0].book!.commandLabel : null
+  const bookShortNames: Record<string, string> = {
+    rust: 'The Rust Book',
+    clang: 'K&R C Book',
+    swift: 'The Swift Book',
+  }
+  const singleBookName = bookCount === 1 ? (bookShortNames[enabledBooks[0].type] ?? enabledBooks[0].book!.commandLabel) : null
   const booksLabel = singleBookName ?? 'Book Examples'
 
   const allSections = [
     { id: 'overview', label: 'Overview' },
-    ...(!edition.isSingleLanguage ? [{ id: 'languages', label: 'Languages' }] : []),
+    { id: 'languages', label: edition.isSingleLanguage ? ({
+      rust: 'Rust / Cargo', clang: 'C / Clang', zig: 'Zig', swift: 'Swift'
+    }[edition.defaultProjectType] ?? 'Language') : 'Languages' },
     { id: 'playgrounds', label: 'Playgrounds' },
     { id: 'projects', label: 'Projects' },
     { id: 'console', label: 'Console' },
@@ -105,10 +112,14 @@
       </ol>
 
     {:else if activeSection === 'languages'}
-      <h1>Supported Languages</h1>
+      <h1>{edition.isSingleLanguage ? sections.find(s => s.id === 'languages')?.label : 'Supported Languages'}</h1>
       <p class="lead">
-        {edition.displayName} supports {edition.isSingleLanguage ? 'one language' : 'four languages'}. {!edition.isSingleLanguage ? 'Enable or disable them in Settings.' : ''}
-        Each language uses your locally installed toolchain.
+        {#if edition.isSingleLanguage}
+          Your locally installed toolchain powers all compilation and execution.
+        {:else}
+          {edition.displayName} supports four languages. Enable or disable them in Settings.
+          Each language uses your locally installed toolchain.
+        {/if}
       </p>
 
       <div class="lang-cards">
@@ -119,7 +130,7 @@
             <h3>Rust</h3>
           </div>
           <p>
-            First-class support. Each project is a Cargo workspace.
+            First-class support. Each project is a Cargo package.
             Playgrounds are binary targets in <code>src/bin/</code>.
             Live error checking via <code>cargo check</code>.
             Dependencies managed via <code>Cargo.toml</code>.
@@ -339,15 +350,15 @@ fn main() &#123;
       <h1>{booksLabel}</h1>
       <p class="lead">
         {edition.isSingleLanguage
-          ? `Learn from curated example projects based on ${editionBookName}. Load from the Learn menu or the Welcome Wizard.`
+          ? `Learn from curated example projects based on ${singleBookName}. Load from the Learn menu or the Welcome Wizard.`
           : 'Learn from curated example projects based on popular programming books. Load them from the Learn menu or the Welcome Wizard.'}
       </p>
 
       <div class="book-list">
         {#if enabledLanguages.includes('rust')}
         <div class="book-item">
-          <h3>The Rust Programming Language (2021 Edition)</h3>
-          <p>20 chapters covering the full curriculum of <em>The Rust Programming Language</em>
+          <h3><button class="link-btn" onclick={() => shellOpen('https://doc.rust-lang.org/book/')}>The Rust Programming Language (2024 Edition)</button></h3>
+          <p>21 chapters covering the full curriculum of <em>The Rust Programming Language</em>
             by Steve Klabnik and Carol Nichols.</p>
           <div class="book-meta">
             <span>License: MIT / Apache-2.0</span>
@@ -363,7 +374,7 @@ fn main() &#123;
         {/if}
         {#if enabledLanguages.includes('swift')}
         <div class="book-item">
-          <h3>The Swift Programming Language (Swift 6.1)</h3>
+          <h3><button class="link-btn" onclick={() => shellOpen('https://docs.swift.org/swift-book/')}>The Swift Programming Language (Swift 6.1)</button></h3>
           <p>8 chapters based on <em>The Swift Programming Language</em> by Apple Inc.</p>
           <div class="book-meta">
             <span><button class="link-btn" onclick={() => shellOpen('https://docs.swift.org/swift-book/')}>Read online</button></span>
@@ -474,6 +485,8 @@ fn main() &#123;
     padding: 6px 14px;
     font-size: 12px; font-weight: 500; color: var(--text-secondary);
     text-align: left;
+    background: none; border: none; cursor: pointer;
+    font-family: inherit;
     border-radius: 0;
     transition: background 0.1s, color 0.1s;
   }
@@ -650,6 +663,8 @@ fn main() &#123;
   .link-btn {
     color: var(--accent); font-size: inherit;
     text-decoration: none; cursor: pointer;
+    background: none; border: none; padding: 0;
+    font-family: inherit; font-weight: inherit;
   }
   .link-btn:hover { text-decoration: underline; }
 </style>

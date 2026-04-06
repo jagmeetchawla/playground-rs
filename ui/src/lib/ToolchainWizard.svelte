@@ -51,9 +51,9 @@
   let applied = $state(false)
   const loadedSourceTags = new Set(Object.values(projectSources))
   let booksChecked: string[] = $state(
-    allLanguages()
-      .filter(l => l.book && loadedSourceTags.has(l.book.sourceTag))
-      .map(l => l.type)
+    mode === 'wizard'
+      ? allLanguages().filter(l => l.book && enabledLanguages.includes(l.type)).map(l => l.type)
+      : allLanguages().filter(l => l.book && loadedSourceTags.has(l.book.sourceTag)).map(l => l.type)
   )
 
   // Edition-aware: single-language edition's language config (for toolchain labels)

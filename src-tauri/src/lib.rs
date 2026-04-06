@@ -167,7 +167,7 @@ pub(crate) fn save_config(app: &AppHandle, active_project: &str) -> Result<(), S
 
 pub(crate) fn project_cargo_toml(name: &str) -> String {
     format!(
-        "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n# Add dependencies here — every playground can use them.\n[dependencies]\n",
+        "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n# Add dependencies here — every playground can use them.\n[dependencies]\n",
         name
     )
 }
@@ -524,6 +524,25 @@ async fn check_for_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> 
     }
 }
 
+/// Check a URL chain: try each in order, return the first that doesn't 404.
+#[tauri::command]
+async fn check_url(urls: Vec<String>) -> String {
+    let client = reqwest::Client::builder()
+        .user_agent("rustic-playground")
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .unwrap_or_default();
+    for url in &urls {
+        if let Ok(resp) = client.head(url).send().await {
+            if resp.status().is_success() || resp.status().is_redirection() {
+                return url.clone();
+            }
+        }
+    }
+    // All failed — return last URL as fallback
+    urls.last().cloned().unwrap_or_default()
+}
+
 // ── App entry ─────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -743,6 +762,7 @@ pub fn run() {
             rustic_manifest::get_build_flags,
             rustic_manifest::save_build_flags,
             check_for_update,
+            check_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

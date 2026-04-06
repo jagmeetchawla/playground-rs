@@ -1,4 +1,4 @@
-//! Rust language module — Cargo workspace with src/bin/ playgrounds.
+//! Rust language module — Cargo package with src/bin/ playgrounds.
 
 use std::path::{Path, PathBuf};
 

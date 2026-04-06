@@ -9,7 +9,7 @@
 
 **Rustic Playground** — a macOS desktop app for running Rust experiments, inspired by Swift Playgrounds. Write code, press ⌘R, see output stream live. No terminal required.
 
-- Each **project** is a Cargo workspace with its own `Cargo.toml`
+- Each **project** is a Cargo package with its own `Cargo.toml`
 - Each **playground** is a `.rs` file in `src/bin/` — a standalone `fn main()` binary
 - The app compiles with `cargo run --bin <name>` and streams stdout/stderr in real time
 

@@ -17,7 +17,7 @@ src-tauri/src/
 ├── lib.rs                   — app state, paths, validation, config, settings, window state, run()
 ├── languages/               — per-language modules (v0.3)
 │   ├── mod.rs               — Lang enum, RunConfig enum, shared FileLanguage helpers
-│   ├── rust.rs              — Cargo workspace: scaffold, run, check, export
+│   ├── rust.rs              — Cargo package: scaffold, run, check, export
 │   ├── clang.rs             — C/C++ with clang: scaffold, compile+run, export
 │   ├── zig.rs               — Zig: scaffold, zig run (direct), export
 │   └── swift.rs             — Swift: scaffold, swiftc compile+run, export

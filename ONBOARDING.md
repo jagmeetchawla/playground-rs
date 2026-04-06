@@ -10,7 +10,7 @@
 
 You write a `.rs` file, hit **Run** (`⌘R`), and see live compiler output and program output stream into the console panel below the editor. No terminal, no project setup, no context switching.
 
-Each experiment is called a **playground** — a standalone Rust `fn main()` binary target. Related playgrounds are grouped into a **project** — its own Cargo workspace with its own `Cargo.toml` and dependency set. You can have multiple projects (e.g. one for algorithms, one for async experiments) and switch between them instantly.
+Each experiment is called a **playground** — a standalone Rust `fn main()` binary target. Related playgrounds are grouped into a **project** — its own Cargo package with its own `Cargo.toml` and dependency set. You can have multiple projects (e.g. one for algorithms, one for async experiments) and switch between them instantly.
 
 **Target user:** A developer learning Rust, prototyping ideas, or working through a book/course — someone who wants the speed and convenience of a REPL-like environment without leaving a GUI.
 

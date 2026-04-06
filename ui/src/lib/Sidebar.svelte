@@ -12,6 +12,7 @@
     cargoToml = '',
     projectType = 'rust',
     readOnly = false,
+    lockedPlaygrounds = [] as string[],
     onNewPlayground = () => {},
     renameTarget = $bindable(null),
   }: {
@@ -21,6 +22,7 @@
     cargoToml: string
     projectType?: import('./languages').ProjectType
     readOnly?: boolean
+    lockedPlaygrounds?: string[]
     onNewPlayground?: () => void
     renameTarget?: string | null
   } = $props()
@@ -366,7 +368,7 @@
             <span class="file-icon-logo">
               <LanguageLogo type={badgeType === 'rs' ? 'rust' : badgeType} size={14} />
             </span>
-            {#if readOnly}
+            {#if readOnly || lockedPlaygrounds.includes(name)}
               <svg class="lock-icon" width="9" height="10" viewBox="0 0 10 11" fill="none">
                 <rect x="1" y="5" width="8" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.1" fill="none"/>
                 <path d="M3 5V3.5a2 2 0 0 1 4 0V5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" fill="none"/>

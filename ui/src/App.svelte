@@ -46,14 +46,16 @@
   let isBookProject        = $derived(!!projectSources[activeProject])
   let isPlaygroundLocked   = $derived(activeTab ? lockedPlaygrounds.includes(activeTab) : false)
   let isReadOnly           = $derived(isBookProject || isPlaygroundLocked)
-  let chapterUrl           = $derived.by(() => {
+  let chapterUrlInfo        = $derived.by(() => {
     if (!isBookProject) return null
     const sourceTag = projectSources[activeProject]
     const bookLang = allLanguages().find(l => l.book?.sourceTag === sourceTag)
     if (!bookLang?.book?.bookUrl || !bookLang.book.chapterUrls) return null
     const path = bookLang.book.chapterUrls[activeProject]
-    return path ? bookLang.book.bookUrl + path : null
+    if (!path) return null
+    return { chapterUrl: bookLang.book.bookUrl + path, bookUrl: bookLang.book.bookUrl }
   })
+  let chapterUrl = $derived(chapterUrlInfo?.chapterUrl ?? null)
 
   // ── Playground list ──────────────────────────────────────────────────────────
   let playgrounds: string[] = $state([])
@@ -713,7 +715,7 @@
   // ── File operations ──────────────────────────────────────────────────────────
 
   async function save() {
-    if (!activeTab || isReadOnly) return
+    if (!activeTab || isBookProject) return
     const meta = tabMeta[activeTab] ?? { type: 'playground' }
 
     if (meta.type === 'content') {
@@ -1051,8 +1053,8 @@
     deletePending = null
     await invoke('delete_playground', { name })
     playgrounds = await invoke<string[]>('list_playgrounds')
-    closeTab(name)
     dirtyTabs = dirtyTabs.filter(n => n !== name)
+    doCloseTab(name)
   }
 
   async function onDuplicate(e: CustomEvent<string>) {
@@ -1229,25 +1231,6 @@
     </div>
 
     <div class="toolbar-right">
-      <button
-        class="lock-btn {isReadOnly ? 'lock-btn-locked' : 'lock-btn-unlocked'}"
-        onclick={toggleReadOnly}
-        disabled={isBookProject || !activeTab}
-        title={isBookProject ? 'Book project — always read-only' : !activeTab ? 'No playground open' : isReadOnly ? 'Unlock this playground' : 'Lock this playground'}
-      >
-        {#if isReadOnly}
-          <svg width="12" height="13" viewBox="0 0 12 13" fill="none">
-            <rect x="1.5" y="6" width="9" height="6" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
-            <path d="M3.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
-          </svg>
-        {:else}
-          <svg width="12" height="13" viewBox="0 0 12 13" fill="none">
-            <rect x="1.5" y="6" width="9" height="6" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
-            <path d="M8.5 6V4.5a2.5 2.5 0 0 0-5 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
-          </svg>
-        {/if}
-      </button>
-
       <div class="export-wrap">
         <button class="btn btn-export" onclick={() => showExportMenu = !showExportMenu} title="Export / Share">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -1285,8 +1268,8 @@
         <button
           class="btn btn-save"
           onclick={save}
-          disabled={isReadOnly || !dirtyTabs.includes(activeTab)}
-          title={isReadOnly ? 'Save disabled — project is read-only' : 'Save (⌘S)'}
+          disabled={isBookProject || !dirtyTabs.includes(activeTab)}
+          title={isBookProject ? 'Save disabled — book project is read-only' : 'Save (⌘S)'}
         >
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
             <path d="M2 1h7l2 2v8H2V1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" fill="none"/>
@@ -1379,7 +1362,8 @@
           {dirtyTabs}
           {cargoToml}
           {projectType}
-          readOnly={isReadOnly}
+          readOnly={isBookProject}
+          {lockedPlaygrounds}
           onNewPlayground={requestNewPlayground}
           bind:renameTarget
           on:select={(e) => openTab(e.detail, { type: 'playground' })}
@@ -1499,7 +1483,7 @@
               {/each}
             </div>
           {/if}
-          {#if currentStatus !== 'idle' || chapterUrl}
+          {#if activeTab}
             <div class="status-bar">
               <span class="status-bar-left">
                 {#if currentStatus === 'saving'}
@@ -1514,7 +1498,11 @@
               </span>
               <span class="status-bar-right">
                 {#if chapterUrl}
-                  <button class="chapter-link" onclick={() => shellOpen(chapterUrl)} title="Open this chapter in your browser">
+                  <button class="chapter-link" onclick={async () => {
+                    const urls = [chapterUrlInfo!.chapterUrl, chapterUrlInfo!.bookUrl, 'https://www.rust-lang.org']
+                    const best = await invoke<string>('check_url', { urls })
+                    shellOpen(best)
+                  }} title="Open this chapter in your browser">
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
                       <path d="M5 1H2.5A1.5 1.5 0 0 0 1 2.5v7A1.5 1.5 0 0 0 2.5 11h7A1.5 1.5 0 0 0 11 9.5V7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
                       <path d="M7 1h4v4M11 1 5.5 6.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1522,6 +1510,24 @@
                     Read Online
                   </button>
                 {/if}
+                <button
+                  class="lock-btn-status {isReadOnly ? 'locked' : 'unlocked'}"
+                  onclick={toggleReadOnly}
+                  disabled={isBookProject}
+                  title={isBookProject ? 'Book project — always read-only' : isReadOnly ? 'Unlock this playground' : 'Lock this playground'}
+                >
+                  {#if isReadOnly}
+                    <svg width="10" height="11" viewBox="0 0 12 13" fill="none">
+                      <rect x="1.5" y="6" width="9" height="6" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
+                      <path d="M3.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+                    </svg>
+                  {:else}
+                    <svg width="10" height="11" viewBox="0 0 12 13" fill="none">
+                      <rect x="1.5" y="6" width="9" height="6" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
+                      <path d="M8.5 6V4.5a2.5 2.5 0 0 0-5 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+                    </svg>
+                  {/if}
+                </button>
               </span>
             </div>
           {/if}
@@ -1691,6 +1697,7 @@
   </div>
 {/if}
 
+
 <style>
   .app {
     display: flex;
@@ -1783,36 +1790,15 @@
     opacity: 0.8; transition: opacity 0.15s; padding: 0;
   }
   .chapter-link:hover { opacity: 1; }
-  .lock-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+  .lock-btn-status {
+    background: none; border: none; cursor: pointer; padding: 2px;
+    color: var(--text-tertiary); display: flex; align-items: center;
+    opacity: 0.7; transition: opacity 0.15s;
   }
-  .lock-btn-locked {
-    background: transparent;
-    color: #d44;
-  }
-  .lock-btn-locked:hover:not(:disabled) {
-    background: rgba(220, 60, 60, 0.12);
-  }
-  .lock-btn-unlocked {
-    background: transparent;
-    color: #2ea043;
-  }
-  .lock-btn-unlocked:hover:not(:disabled) {
-    background: rgba(45, 160, 65, 0.12);
-  }
-  .lock-btn:disabled {
-    background: transparent;
-    color: var(--text-tertiary);
-    cursor: default;
-  }
+  .lock-btn-status:hover { opacity: 1; }
+  .lock-btn-status.locked { color: #d44; opacity: 0.9; }
+  .lock-btn-status.unlocked { color: #2ea043; }
+  .lock-btn-status:disabled { color: #d44; opacity: 0.3; cursor: default; }
 
   .btn {
     display: flex; align-items: center; gap: 5px;

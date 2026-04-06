@@ -74,7 +74,7 @@ impl Lang {
     pub fn book_info(&self) -> Option<BookInfo> {
         match self {
             Lang::Rust => Some(BookInfo {
-                book_name: "The Rust Programming Language (2021 Edition)",
+                book_name: "The Rust Programming Language (2024 Edition)",
                 menu_id: "seed_rust_book",
                 remove_menu_id: "remove_rust_book",
                 event_name: "menu:rust-book",

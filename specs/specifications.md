@@ -33,7 +33,7 @@ Design Principle
   language-specific behavior. A central Lang enum dispatches to the right
   module. Shared helpers (flat-directory listing, shell export) serve
   file-based languages (clang, zig, swift). Rust is the outlier with its
-  Cargo workspace structure.
+  Cargo package structure.
 
 ---
 
@@ -81,7 +81,7 @@ Shared FileLanguage helpers
 Module structure
   src-tauri/src/languages/
   ├── mod.rs       — Lang enum, RunConfig, ToolInfo, shared helpers
-  ├── rust.rs      — Cargo workspace, cargo run, live check, clap export
+  ├── rust.rs      — Cargo package, cargo run, live check, clap export
   ├── clang.rs     — C/C++ with clang, compile+run, Makefile export
   ├── zig.rs       — zig run (direct), zig flags
   └── swift.rs     — swiftc compile+run, swift flags
