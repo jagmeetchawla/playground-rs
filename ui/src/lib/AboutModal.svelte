@@ -1,7 +1,15 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
+  import { getVersion } from '@tauri-apps/api/app'
   import appIcon from './app-icon.png'
+  import type { EditionConfig } from './editions'
 
-  let { onclose }: { onclose: () => void } = $props()
+  let { onclose, edition }: { onclose: () => void; edition: EditionConfig } = $props()
+  let version = $state('')
+
+  onMount(async () => {
+    version = await getVersion()
+  })
 
   function handleKey(e: KeyboardEvent) {
     if (e.key === 'Escape') onclose()
@@ -27,13 +35,10 @@
   </div>
 
   <div class="about-body">
-    <h1 class="app-name">Rustic Playground</h1>
-    <p class="app-version">Version 0.1.0</p>
+    <h1 class="app-name">{edition.displayName}</h1>
+    <p class="app-version">Version {version}</p>
 
-    <p class="app-desc">
-      A macOS desktop app for Rust experiments,<br/>
-      inspired by Swift Playgrounds.
-    </p>
+    <p class="app-desc">{edition.tagline}</p>
 
     <div class="divider"></div>
 
@@ -117,14 +122,14 @@
   }
 
   .app-name {
-    font-size: 18px; font-weight: 700; color: var(--text);
+    font-size: 18px; font-weight: 600; color: var(--text);
     margin: 0 0 4px;
   }
   .app-version {
     font-size: 12px; color: var(--text-tertiary); margin: 0 0 12px;
   }
   .app-desc {
-    font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;
+    font-size: 13px; color: var(--text-secondary); line-height: 1.6;
     margin: 0 0 16px;
   }
 
@@ -146,13 +151,13 @@
   .stack-label { color: var(--text-tertiary); flex-shrink: 0; }
   .stack-value { color: var(--text-secondary); }
   .stack-link {
-    color: var(--accent); font-size: 11.5px;
+    color: var(--accent); font-size: 12px;
     text-decoration: none; word-break: break-all;
   }
   .stack-link:hover { text-decoration: underline; }
 
   .disclaimer {
-    font-size: 10.5px; color: var(--text-tertiary);
+    font-size: 11px; color: var(--text-tertiary);
     line-height: 1.55; margin: 0; text-align: center;
   }
 </style>

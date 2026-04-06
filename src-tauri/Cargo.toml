@@ -1,6 +1,6 @@
 [package]
 name = "rustic-playground"
-version = "0.1.0"
+version = "0.3.3"
 edition = "2021"
 
 [lib]
@@ -18,7 +18,9 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 dirs-next = "2"
 toml_edit = "0.25.10"
+toml = "0.8"
 tauri-plugin-dialog = "2.6.0"
+reqwest = { version = "0.12", features = ["json"] }
 
 [dev-dependencies]
 tempfile = "3"

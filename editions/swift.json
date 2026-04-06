@@ -1,0 +1,19 @@
+{
+  "productName": "Rustic Swift",
+  "identifier": "com.rustic-playground.swift",
+  "app": {
+    "windows": [
+      {
+        "title": "Rustic Swift",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true,
+        "dragDropEnabled": true,
+        "visible": false
+      }
+    ]
+  }
+}

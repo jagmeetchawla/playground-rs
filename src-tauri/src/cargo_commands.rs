@@ -275,6 +275,65 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         .map(|o| o.status.success())
         .unwrap_or(false);
 
+    // Check clang (C/C++ toolchain via Xcode Command Line Tools)
+    let clang_path = std::process::Command::new("xcrun")
+        .args(["--find", "clang"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/usr/bin/clang".to_string());
+
+    let clang_output = std::process::Command::new(&clang_path)
+        .arg("--version")
+        .output()
+        .ok();
+    let clang_installed = clang_output
+        .as_ref()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let clang_version = clang_output
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
+
+    // Check zig
+    let zig_output = std::process::Command::new("zig")
+        .arg("version")
+        .output()
+        .ok();
+    let zig_installed = zig_output
+        .as_ref()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let zig_version = zig_output
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string());
+    let zig_path = if zig_installed {
+        std::process::Command::new("which")
+            .arg("zig")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+    } else {
+        None
+    };
+
+    // Check swiftc (ships with Xcode CLI tools, same install as clang)
+    let swiftc_output = std::process::Command::new("swiftc")
+        .arg("--version")
+        .output()
+        .ok();
+    let swiftc_installed = swiftc_output
+        .as_ref()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let swiftc_version = swiftc_output
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
+
     let all_good = cargo_installed && rustc_installed;
 
     serde_json::json!({
@@ -298,6 +357,30 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         "components": {
             "rustfmt": has_rustfmt,
             "clippy": has_clippy,
+        },
+        "clang": {
+            "installed": clang_installed,
+            "path": clang_path,
+            "version": clang_version,
+        },
+        "zig": {
+            "installed": zig_installed,
+            "path": zig_path,
+            "version": zig_version,
+            "version_ok": zig_version.as_ref().map(|v| v.starts_with("0.15")).unwrap_or(false),
+        },
+        "swiftc": {
+            "installed": swiftc_installed,
+            "path": if swiftc_installed {
+                std::process::Command::new("xcrun")
+                    .args(["--find", "swiftc"])
+                    .output()
+                    .ok()
+                    .and_then(|o| String::from_utf8(o.stdout).ok())
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default()
+            } else { String::new() },
+            "version": swiftc_version,
         }
     })
 }
@@ -433,13 +516,17 @@ mod tests {
     }
 }
 
-/// Mark the toolchain wizard as completed so it doesn't show again.
+/// Mark the toolchain wizard as completed and persist enabled languages.
 #[tauri::command]
-pub fn complete_wizard(app: AppHandle) -> Result<(), String> {
+pub fn complete_wizard(
+    enabled_languages: Vec<String>,
+    app: AppHandle,
+) -> Result<(), String> {
     let existing = load_config(&app);
     let config = Config {
         active_project: existing.active_project,
         wizard_completed: true,
+        enabled_languages,
     };
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialise config: {}", e))?;

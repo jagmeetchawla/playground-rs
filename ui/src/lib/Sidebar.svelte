@@ -10,6 +10,9 @@
     selected,
     dirtyTabs,
     cargoToml = '',
+    projectType = 'rust',
+    readOnly = false,
+    lockedPlaygrounds = [] as string[],
     onNewPlayground = () => {},
     renameTarget = $bindable(null),
   }: {
@@ -17,9 +20,16 @@
     selected: string | null
     dirtyTabs: string[]
     cargoToml: string
+    projectType?: import('./languages').ProjectType
+    readOnly?: boolean
+    lockedPlaygrounds?: string[]
     onNewPlayground?: () => void
     renameTarget?: string | null
   } = $props()
+
+  import { getLang } from './languages'
+  import LanguageLogo from './LanguageLogo.svelte'
+  let lang = $derived(getLang(projectType))
 
   // ── Sidebar tab ───────────────────────────────────────────────────────────────
   let sidebarTab: 'playgrounds' | 'content' = $state('playgrounds')
@@ -76,6 +86,35 @@
 
   let cargoExpanded: boolean = $state(false)
 
+  // ── Compiler flags state (file-based projects with build flags) ────────────────
+  let flagsExpanded: boolean = $state(false)
+  let cflagsText: string = $state('')
+  let cxxflagsText: string = $state('')
+  let zigflagsText: string = $state('')
+  let swiftflagsText: string = $state('')
+
+  // Load build flags when switching to a project with build flags
+  $effect(() => {
+    if (lang.hasBuildFlags) {
+      invoke<any>('get_build_flags')
+        .then(flags => {
+          cflagsText = (flags.cflags ?? []).join(' ')
+          cxxflagsText = (flags.cxxflags ?? []).join(' ')
+          zigflagsText = (flags.zigflags ?? []).join(' ')
+          swiftflagsText = (flags.swiftflags ?? []).join(' ')
+        })
+        .catch(() => {})
+    }
+  })
+
+  function saveBuildFlags() {
+    const cflags = cflagsText.trim().split(/\s+/).filter(Boolean)
+    const cxxflags = cxxflagsText.trim().split(/\s+/).filter(Boolean)
+    const zigflags = zigflagsText.trim().split(/\s+/).filter(Boolean)
+    const swiftflags = swiftflagsText.trim().split(/\s+/).filter(Boolean)
+    invoke('save_build_flags', { cflags, cxxflags, zigflags, swiftflags }).catch(console.error)
+  }
+
   // ── Content tab state ─────────────────────────────────────────────────────────
   export type ContentFile = { filename: string; size_bytes: number; is_text: boolean }
 
@@ -131,6 +170,7 @@
   }
 
   function fileIcon(filename: string): string {
+    if (!filename.includes('.')) return '📦'
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
     if (['png','jpg','jpeg','gif','webp','svg'].includes(ext)) return '🖼'
     const textExts = ['txt','md','rs','toml','yaml','yml','json','xml','html','htm',
@@ -140,6 +180,7 @@
   }
 
   function isTextFile(filename: string): boolean {
+    if (!filename.includes('.')) return false
     const ext = filename.split('.').pop()?.toLowerCase() ?? ''
     const textExts = ['txt','md','rs','toml','yaml','yml','json','xml','html','htm',
                       'css','js','ts','csv','log','sh','bash','zsh','conf','ini','env']
@@ -286,7 +327,7 @@
 
     <div class="sidebar-header">
       <span class="sidebar-title">Playgrounds</span>
-      <button class="icon-btn" title="New playground (⌘N)" onclick={onNewPlayground}>
+      <button class="icon-btn" title="New playground (⌘N)" onclick={onNewPlayground} disabled={readOnly}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
@@ -323,7 +364,16 @@
               onclick={(e) => e.stopPropagation()} autofocus
             />
           {:else}
-            <span class="file-icon">RS</span>
+            {@const badgeType = lang.needsExtension ? (name.split('.').pop()?.toLowerCase() ?? '') : 'rs'}
+            <span class="file-icon-logo">
+              <LanguageLogo type={badgeType === 'rs' ? 'rust' : badgeType} size={14} />
+            </span>
+            {#if readOnly || lockedPlaygrounds.includes(name)}
+              <svg class="lock-icon" width="9" height="10" viewBox="0 0 10 11" fill="none">
+                <rect x="1" y="5" width="8" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.1" fill="none"/>
+                <path d="M3 5V3.5a2 2 0 0 1 4 0V5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+              </svg>
+            {/if}
             <span class="name">{name}</span>
             {#if isDirty}<span class="dirty-dot" title="Unsaved changes">●</span>{/if}
           {/if}
@@ -337,7 +387,8 @@
       {/if}
     </ul>
 
-    <!-- Cargo.toml panel -->
+    <!-- Cargo.toml panel (Rust projects only) -->
+    {#if lang.hasCargoToml}
     <div class="cargo-section">
       <div
         class="cargo-header"
@@ -348,6 +399,7 @@
         <svg width="10" height="10" viewBox="0 0 10 10" class="chevron" class:open={cargoExpanded}>
           <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
         </svg>
+        <span class="file-icon-logo"><LanguageLogo type="cargo" size={14} /></span>
         <span class="cargo-label">Cargo.toml</span>
         <button
           class="cargo-edit-btn"
@@ -365,6 +417,45 @@
         </div>
       {/if}
     </div>
+    {/if}
+
+    <!-- Build Flags panel (projects with build flags) -->
+    {#if lang.hasBuildFlags}
+    <div class="cargo-section">
+      <div
+        class="cargo-header"
+        role="button" tabindex="0"
+        onclick={() => flagsExpanded = !flagsExpanded}
+        onkeydown={(e) => e.key === 'Enter' && (flagsExpanded = !flagsExpanded)}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" class="chevron" class:open={flagsExpanded}>
+          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+        </svg>
+        <span class="cargo-label">Build Flags</span>
+      </div>
+      {#if flagsExpanded}
+        <div class="flags-body">
+          {#if projectType === 'clang'}
+            <label class="flags-label">C flags</label>
+            <input class="flags-input" type="text" value={cflagsText} placeholder="-lsqlite3" spellcheck="false"
+              onchange={(e) => { cflagsText = e.currentTarget.value; saveBuildFlags() }} />
+            <label class="flags-label">C++ flags</label>
+            <input class="flags-input" type="text" value={cxxflagsText} placeholder="-std=c++17 -lsqlite3" spellcheck="false"
+              onchange={(e) => { cxxflagsText = e.currentTarget.value; saveBuildFlags() }} />
+          {:else if projectType === 'zig'}
+            <label class="flags-label">Zig flags</label>
+            <input class="flags-input" type="text" value={zigflagsText} placeholder="-O ReleaseSafe" spellcheck="false"
+              onchange={(e) => { zigflagsText = e.currentTarget.value; saveBuildFlags() }} />
+          {:else if projectType === 'swift'}
+            <label class="flags-label">Swift flags</label>
+            <input class="flags-input" type="text" value={swiftflagsText} placeholder="-O" spellcheck="false"
+              onchange={(e) => { swiftflagsText = e.currentTarget.value; saveBuildFlags() }} />
+          {/if}
+          <span class="flags-hint">Space-separated. Saved to rustic.toml.</span>
+        </div>
+      {/if}
+    </div>
+    {/if}
 
   <!-- ════════════════════════════════════════ -->
   <!-- CONTENT TAB                             -->
@@ -501,10 +592,14 @@
     onclick={(e) => e.stopPropagation()}
     onkeydown={(e) => e.key === 'Escape' && closeContext()}
   >
-    <button onclick={() => startRename(contextMenu!.name)}>Rename</button>
-    <button onclick={() => { dispatch('duplicate', contextMenu!.name); contextMenu = null }}>Duplicate</button>
-    <hr />
-    <button class="danger" onclick={() => { dispatch('delete', contextMenu!.name); contextMenu = null }}>Delete</button>
+    {#if readOnly}
+      <button onclick={() => { dispatch('copyToProject', contextMenu!.name); contextMenu = null }}>Copy to Project…</button>
+    {:else}
+      <button onclick={() => startRename(contextMenu!.name)}>Rename</button>
+      <button onclick={() => { dispatch('duplicate', contextMenu!.name); contextMenu = null }}>Duplicate</button>
+      <hr />
+      <button class="danger" onclick={() => { dispatch('delete', contextMenu!.name); contextMenu = null }}>Delete</button>
+    {/if}
   </div>
 {/if}
 
@@ -676,6 +771,11 @@
   .playground-item.active .file-icon { background: rgba(255,255,255,0.25); color: #fff; }
   .playground-item.active .dirty-dot { color: rgba(255,255,255,0.7); }
 
+  .file-icon-logo {
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px;
+  }
   .file-icon {
     font-size: 7px; font-weight: 800; letter-spacing: 0.03em;
     background: var(--rust-orange); color: #fff;
@@ -683,6 +783,11 @@
     flex-shrink: 0; line-height: 1.3;
     min-width: 18px; text-align: center;
   }
+  .file-icon--toml {
+    background: #6b7280; letter-spacing: 0; font-size: 6px;
+  }
+
+  .lock-icon { flex-shrink: 0; color: var(--text-tertiary); }
 
   .name {
     flex: 1; font-size: 13px;
@@ -719,10 +824,33 @@
   .cargo-body { overflow-y: auto; flex: 1; min-height: 0; }
   .cargo-pre {
     margin: 0; padding: 8px 10px;
-    font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6;
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.6;
     color: var(--text-secondary); white-space: pre-wrap; word-break: break-word;
   }
   .cargo-empty { display: block; padding: 8px 10px; font-size: 11px; color: var(--text-tertiary); font-style: italic; }
+
+  /* ── Compiler flags panel ── */
+  .flags-body {
+    padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .flags-label {
+    font-size: 10px; font-weight: 600; color: var(--text-tertiary);
+    letter-spacing: 0.03em; text-transform: uppercase;
+  }
+  .flags-input {
+    font-family: var(--font-mono); font-size: 11px;
+    padding: 4px 8px;
+    background: rgba(0,0,0,0.2); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-xs);
+    outline: none; width: 100%; box-sizing: border-box;
+  }
+  .flags-input:focus { border-color: var(--accent); }
+  .flags-input::placeholder { color: var(--text-tertiary); opacity: 0.5; }
+  .flags-hint {
+    font-size: 9px; color: var(--text-tertiary);
+    margin-top: 2px;
+  }
 
   /* ── Content tab ── */
   .content-empty-state {
@@ -781,7 +909,7 @@
 
   .file-type-icon { font-size: 13px; flex-shrink: 0; line-height: 1; }
   .file-name {
-    flex: 1; font-size: 12.5px; color: var(--text-secondary);
+    flex: 1; font-size: 13px; color: var(--text-secondary);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 

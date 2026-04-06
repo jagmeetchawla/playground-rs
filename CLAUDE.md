@@ -9,7 +9,7 @@
 
 **Rustic Playground** — a macOS desktop app for running Rust experiments, inspired by Swift Playgrounds. Write code, press ⌘R, see output stream live. No terminal required.
 
-- Each **project** is a Cargo workspace with its own `Cargo.toml`
+- Each **project** is a Cargo package with its own `Cargo.toml`
 - Each **playground** is a `.rs` file in `src/bin/` — a standalone `fn main()` binary
 - The app compiles with `cargo run --bin <name>` and streams stdout/stderr in real time
 
@@ -54,10 +54,10 @@ cd ui && pnpm build        # production bundle
 
 ## Data Storage
 
-All runtime data lives under:
+Each edition stores data under its own bundle identifier:
 ```
-~/Library/Application Support/com.rustic-playground.app/
-├── config.json              ← active_project, cargo_path, wizard_completed
+~/Library/Application Support/com.rustic-playground.<edition>/
+├── config.json              ← active_project, cargo_path, wizard_completed, enabled_languages
 ├── window-state.json        ← window geometry, panel sizes, open tabs
 └── projects/
     └── <project-name>/
@@ -66,6 +66,7 @@ All runtime data lives under:
         │   └── <playground>.rs
         └── content/         ← runtime assets (PLAYGROUND_CONTENT env var)
 ```
+Edition identifiers: `.rust`, `.power`, `.app` (dev builds without flag).
 
 ---
 
@@ -74,28 +75,46 @@ All runtime data lives under:
 | Path | Purpose |
 |---|---|
 | `src-tauri/src/lib.rs` | App state, paths, validation, config/settings, window state, run() entry (~550 lines) |
-| `src-tauri/src/playground_commands.rs` | Project CRUD + playground CRUD + run/kill/check/cancel/stdin (~450 lines) |
+| `src-tauri/src/languages/mod.rs` | Lang enum, RunConfig enum, shared FileLanguage helpers (v0.3) |
+| `src-tauri/src/languages/rust.rs` | Rust: Cargo scaffold, cargo run, live check, clap export (v0.3) |
+| `src-tauri/src/languages/clang.rs` | C/C++: clang scaffold, compile+run, Makefile export (v0.3) |
+| `src-tauri/src/languages/zig.rs` | Zig: scaffold, zig run, shell export (v0.3) |
+| `src-tauri/src/languages/swift.rs` | Swift: scaffold, swiftc compile+run, shell export (v0.3) |
+| `src-tauri/src/playground_commands.rs` | Thin dispatchers: CRUD + run/kill/check via Lang enum (~450 lines) |
 | `src-tauri/src/cargo_commands.rs` | Cargo.toml management, toolchain checks, setup wizard (~300 lines) |
 | `src-tauri/src/content_commands.rs` | Content file CRUD commands (~120 lines) |
-| `src-tauri/src/export.rs` | CLI_MAIN_RS const + export_project command (~230 lines) |
+| `src-tauri/src/export.rs` | Project export: Rust (CLI runner) and Clang (shell runner + Makefile) (~400 lines) |
 | `src-tauri/src/menu.rs` | macOS menu bar builder + rebuild_menu command (~150 lines) |
-| `src-tauri/src/book_chapters.rs` | `seed_rust_book` command — all 20 Rust Book chapter data (~2,700 lines) |
-| `src-tauri/tauri.conf.json` | App config: identifier, window defaults, bundle settings |
+| `src-tauri/src/languages/rust_book.rs` | Rust Book chapter data — 20 chapters (~2,700 lines) |
+| `src-tauri/src/languages/knr_book.rs` | K&R C Book chapter data — 8 chapters (~1,200 lines) |
+| `src-tauri/src/languages/swift_book.rs` | Swift Book chapter data — 8 chapters (~400 lines) |
+| `src-tauri/tauri.conf.json` | Base app config: identifier, window defaults, bundle settings |
 | `src-tauri/capabilities/default.json` | Tauri 2 IPC permissions — every API call needs an entry here |
+| `editions/*.json` | Per-edition Tauri config overrides (productName, identifier, window title) |
+| `VERSION` | Single source of truth for app version — synced to Cargo.toml, tauri.conf.json, package.json |
+| `scripts/sync-version.sh` | Reads VERSION file and updates all three version locations (hooked into Tauri build) |
+| `scripts/build-editions.sh` | Multi-edition build pipeline — builds DMGs for specified editions |
 | `ui/src/App.svelte` | Root layout, all global state, menu event listeners, window state persistence |
+| `ui/src/lib/editions.ts` | Edition registry: EditionConfig, currentEdition(), VITE_EDITION detection (v0.3.3) |
+| `ui/src/lib/languages.ts` | Language registry: LanguageConfig, BookConfig, book URLs, LANGUAGES map (v0.3) |
+| `ui/src/lib/LanguageLogo.svelte` | Official language/toolchain SVG logos with dark-mode invert (v0.3.3) |
 | `ui/src/lib/Sidebar.svelte` | Project/playground/file tree, drag-drop, context menus |
 | `ui/src/lib/Editor.svelte` | Monaco wrapper, theme sync, diagnostics markers |
 | `ui/src/lib/Output.svelte` | Console panel, run blocks, streaming output |
-| `ui/src/lib/SettingsModal.svelte` | Settings panel (editor, appearance, toolchain) |
+| `ui/src/lib/ProjectSwitcher.svelte` | Project dropdown with search, book flyout submenus, CRUD actions |
+| `ui/src/lib/CopyToProjectModal.svelte` | Copy book playground to user project modal |
+| `ui/src/lib/SettingsModal.svelte` | Settings panel (editor, appearance) |
+| `ui/src/lib/ToolchainWizard.svelte` | Dual-mode: 5-step Welcome Wizard (first launch) + Settings panel (⌘,) |
 | `ui/src/lib/NewPlaygroundModal.svelte` | New playground dialog with template picker |
 | `ui/src/lib/templates.ts` | 11 starter templates with auto-deps |
-| `ui/src/lib/HelpModal.svelte` | Help overlay (⌘⇧/) |
+| `ui/src/lib/HelpModal.svelte` | Apple-style user guide with sidebar navigation (⌘⇧/) — source of truth for website/wiki |
 | `ui/src/lib/AboutModal.svelte` | About dialog |
 | `ui/src/app.css` | Global CSS variables (dark/light theme definitions) |
 | `specs/specifications.md` | Active spec — read before any feature work |
 | `specs/roadmap.md` | Released / in-progress / next-up / parked ideas |
 | `specs/conventions.md` | Naming rules, code style |
 | `specs/workflow.md` | Workflow steps, spec lifecycle, change checklist |
+| `specs/build-helper.md` | Build/run/distribution guide — editions, versions, icons, troubleshooting |
 | `specs/archive/` | Historical specs — read-only context |
 | `ONBOARDING.md` | Project history, data model deep-dive, known gotchas table |
 
@@ -103,11 +122,21 @@ All runtime data lives under:
 
 ## Current Version Status
 
-**v0.1.8.1** — shipped (production testing fixes: toolchain detection on app bundles, serde_json template dep, stop-and-run confirmation dialog, menu items for Copy Code/Export Project/Rename Playground, menu sync with active tab, rustup.rs link in wizard).
+**v0.3.2** — shipped (Welcome Wizard + Language Gating: 5-step first-launch wizard, language enable/disable, per-language hello projects, book management via explicit checkboxes, toolchain pill status, dual-mode ToolchainWizard/Settings component, native→clang rename, Apple HIG styling).
 
-**v0.1.8** — shipped (new app icon, Rust theme, live error checking, dark/light/system themes, export, Rust Book polish, backend modularization, 70 unit tests, stdin fix, light theme readability, live theme preview).
+**v0.3.1** — shipped (read-only book projects, per-playground locking, "Copy to Project" action, "Learn" menu, grouped project list with flyout submenus, empty-state book loading, Zig/Swift themes, auto theme matching, theme dropdown).
 
-After v0.1.8.1: pause features, ship website, DMG distribution, wiki, announcements.
+**v0.3** — shipped (language module architecture: Lang enum dispatch, per-language modules, shared FileLanguage helpers. Zig and Swift project types. Frontend language registry. Book system modularization with Swift Book examples).
+
+**v0.2** — shipped (Clang C/C++ projects: rustic.toml manifest, C/C++ templates, Clang export with POSIX shell runner + Makefile, K&R C Book examples, sea green theme, compiler flags UI, project-type badges).
+
+**v0.1.9** — shipped (renamed from playground-rs to rustic-playground, cleaned up src/bin).
+
+**v0.3.3** — in progress (Edition Builds + UI polish: Rust/C/Power Edition from same codebase via Tauri --config + VITE_EDITION. editions.ts registry, single-language editions skip language picker, filter themes/help/books. Saved snapshots (.saved/) with revert + undo-revert. Run lifecycle: Saving→Compiling→Running in console + status bar. Close-dirty-tab dialog. Book chapter "Read Online" links. Status bar below editor. Toolbar reorganization. Dynamic window title. Min width 900px. Update checker via GitHub Releases API. Official language logos (SVG) replacing text badges. Book auto-select + reactive labels. Build script: `scripts/build-editions.sh`).
+
+After v0.3.3: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
+
+**Parked:** Linux Port (Rust Edition, low ROI for target audience), Windows Port (Rust Edition, high effort). See roadmap.md.
 
 ---
 

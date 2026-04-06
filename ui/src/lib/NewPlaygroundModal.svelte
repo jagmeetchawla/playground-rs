@@ -1,23 +1,65 @@
 <script lang="ts">
   import { tick } from 'svelte'
-  import { TEMPLATES, type Template } from './templates'
+  import { TEMPLATES, C_TEMPLATES, CPP_TEMPLATES, type Template } from './templates'
+  import { ZIG_TEMPLATES } from './zig_templates'
+  import { SWIFT_TEMPLATES } from './swift_templates'
+  import { getLang, type ProjectType } from './languages'
 
   let {
     existingNames,
+    projectType = 'rust',
     onclose,
     oncreate,
   }: {
     existingNames: string[]
+    projectType?: ProjectType
     onclose: () => void
     oncreate: (name: string, template: Template) => void
   } = $props()
 
+  let lang = $derived(getLang(projectType))
+
   let selectedId = $state('blank')
-  let name = $state('')
+  let clangSelectedId = $state('c_blank')
+  let zigSelectedId = $state('zig_blank')
+  let swiftSelectedId = $state('swift_blank')
+  let name = $state('my_playground')
   let nameError = $state('')
   let nameInput = $state<HTMLInputElement | null>(null)
+  let clangLang: 'c' | 'cpp' = $state('c')
 
-  let selected = $derived(TEMPLATES.find(t => t.id === selectedId) ?? TEMPLATES[0])
+  let clangTemplates = $derived(clangLang === 'cpp' ? CPP_TEMPLATES : C_TEMPLATES)
+
+  let activeTemplates = $derived(
+    projectType === 'clang' ? clangTemplates
+    : projectType === 'zig' ? ZIG_TEMPLATES
+    : projectType === 'swift' ? SWIFT_TEMPLATES
+    : TEMPLATES
+  )
+
+  let activeSelectedId = $derived(
+    projectType === 'clang' ? clangSelectedId
+    : projectType === 'zig' ? zigSelectedId
+    : projectType === 'swift' ? swiftSelectedId
+    : selectedId
+  )
+
+  let selected = $derived(
+    activeTemplates.find(t => t.id === activeSelectedId) ?? activeTemplates[0]
+  )
+
+  function setSelectedId(id: string) {
+    if (projectType === 'clang') clangSelectedId = id
+    else if (projectType === 'zig') zigSelectedId = id
+    else if (projectType === 'swift') swiftSelectedId = id
+    else selectedId = id
+    tick().then(() => nameInput?.focus())
+  }
+
+  // Reset clang template selection when switching language
+  $effect(() => {
+    clangSelectedId = clangLang === 'cpp' ? 'cpp_blank' : 'c_blank'
+  })
 
   $effect(() => {
     if (nameInput) {
@@ -29,6 +71,14 @@
     if (e.key === 'Escape') onclose()
   }
 
+  /** Get the file extension to append for file-based languages. */
+  function getExtension(): string {
+    if (projectType === 'clang') return clangLang === 'cpp' ? '.cpp' : '.c'
+    if (projectType === 'zig') return '.zig'
+    if (projectType === 'swift') return '.swift'
+    return ''
+  }
+
   function validateAndCreate() {
     const trimmed = name.trim()
     if (!trimmed) { nameError = 'Name is required'; return }
@@ -37,9 +87,18 @@
       return
     }
     if (trimmed.length > 64) { nameError = 'Max 64 characters'; return }
-    if (existingNames.includes(trimmed)) { nameError = 'Already exists'; return }
-    nameError = ''
-    oncreate(trimmed, selected)
+
+    if (lang.needsExtension) {
+      const ext = getExtension()
+      const fullName = `${trimmed}${ext}`
+      if (existingNames.includes(fullName)) { nameError = 'Already exists'; return }
+      nameError = ''
+      oncreate(fullName, selected)
+    } else {
+      if (existingNames.includes(trimmed)) { nameError = 'Already exists'; return }
+      nameError = ''
+      oncreate(trimmed, selected)
+    }
   }
 </script>
 
@@ -50,7 +109,7 @@
 <div class="modal" role="dialog" aria-modal="true" aria-label="New Playground">
   <div class="modal-header">
     <div class="header-left">
-      <span class="rs-badge">RS</span>
+      <span class="lang-badge" class:badge-rust={projectType === 'rust'} class:badge-clang={projectType === 'clang'} class:badge-zig={projectType === 'zig'} class:badge-swift={projectType === 'swift'}>{lang.badge}</span>
       <span class="modal-title">New Playground</span>
     </div>
     <button class="close-btn" onclick={onclose} aria-label="Close">
@@ -61,19 +120,35 @@
   </div>
 
   <div class="modal-body">
+    {#if lang.subLanguages}
+      <!-- Sub-language tabs (e.g. C / C++) -->
+      <div class="lang-tabs">
+        {#each lang.subLanguages as sub (sub.id)}
+          <button class="lang-tab" class:active={clangLang === sub.id} onclick={() => clangLang = sub.id as any}>
+            <span class="lang-tab-badge">{sub.label}</span> {sub.label}
+          </button>
+        {/each}
+      </div>
+    {/if}
+
     <!-- Name input -->
     <div class="name-section">
       <label for="pg-name">Name</label>
-      <input
-        id="pg-name"
-        type="text"
-        bind:this={nameInput}
-        bind:value={name}
-        placeholder="my_playground"
-        spellcheck="false"
-        autocomplete="off"
-        onkeydown={(e) => { if (e.key === 'Enter') validateAndCreate() }}
-      />
+      <div class="name-input-row">
+        <input
+          id="pg-name"
+          type="text"
+          bind:this={nameInput}
+          bind:value={name}
+          placeholder="my_playground"
+          spellcheck="false"
+          autocomplete="off"
+          onkeydown={(e) => { if (e.key === 'Enter') validateAndCreate() }}
+        />
+        {#if lang.needsExtension}
+          <span class="ext-suffix">{getExtension()}</span>
+        {/if}
+      </div>
       {#if nameError}
         <span class="name-error">{nameError}</span>
       {/if}
@@ -83,11 +158,11 @@
     <div class="template-section">
       <label>Template</label>
       <div class="template-grid">
-        {#each TEMPLATES as tmpl (tmpl.id)}
+        {#each activeTemplates as tmpl (tmpl.id)}
           <button
             class="template-card"
-            class:selected={selectedId === tmpl.id}
-            onclick={() => selectedId = tmpl.id}
+            class:selected={activeSelectedId === tmpl.id}
+            onclick={() => setSelectedId(tmpl.id)}
           >
             <span class="tmpl-name">{tmpl.name}</span>
             <span class="tmpl-desc">{tmpl.description}</span>
@@ -126,7 +201,7 @@
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
     z-index: 300;
-    width: min(560px, calc(100vw - 40px));
+    width: min(720px, calc(100vw - 40px));
     max-height: calc(100vh - 80px);
     display: flex; flex-direction: column;
     background: var(--bg-elevated);
@@ -143,12 +218,15 @@
     flex-shrink: 0;
   }
   .header-left { display: flex; align-items: center; gap: 8px; }
-  .rs-badge {
+  .lang-badge {
     font-size: 8px; font-weight: 800; letter-spacing: 0.04em;
-    background: var(--rust-orange); color: #fff;
-    border-radius: 3px; padding: 2px 4px; line-height: 1.3;
+    color: #fff; border-radius: 3px; padding: 2px 4px; line-height: 1.3;
   }
-  .modal-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .lang-badge.badge-rust { background: var(--rust-orange); }
+  .lang-badge.badge-clang { background: #4a9; font-size: 7px; }
+  .lang-badge.badge-zig { background: #f7a41d; font-size: 7px; }
+  .lang-badge.badge-swift { background: #f05138; font-size: 7.5px; }
+  .modal-title { font-size: 14px; font-weight: 600; color: var(--text); }
   .close-btn {
     width: 24px; height: 24px;
     display: flex; align-items: center; justify-content: center;
@@ -170,20 +248,58 @@
   }
 
   /* Name input */
-  .name-section input {
-    width: 100%; box-sizing: border-box;
+  .name-input-row {
+    display: flex; align-items: center; gap: 0;
+  }
+  .name-input-row input {
+    flex: 1; box-sizing: border-box;
     font-family: var(--font-mono); font-size: 13px;
     background: rgba(0,0,0,0.25); color: var(--text);
     border: 1px solid var(--border); border-radius: var(--radius-xs);
     padding: 6px 10px; outline: none;
   }
-  .name-section input:focus { border-color: var(--accent); }
-  .name-section input::placeholder { color: var(--text-tertiary); opacity: 0.5; }
+  .name-input-row input:focus { border-color: var(--accent); }
+  .name-input-row input::placeholder { color: var(--text-tertiary); opacity: 0.5; }
+  .ext-suffix {
+    font-family: var(--font-mono); font-size: 13px;
+    color: var(--text-tertiary); padding: 6px 8px;
+    background: rgba(0,0,0,0.15); border: 1px solid var(--border);
+    border-left: none; border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  }
+  .ext-suffix ~ input,
+  .name-input-row:has(.ext-suffix) input {
+    border-radius: var(--radius-xs) 0 0 var(--radius-xs);
+  }
   .name-error { font-size: 11px; color: var(--red); margin-top: 4px; display: block; }
+
+  /* Language tabs for clang projects */
+  .lang-tabs {
+    display: flex; gap: 0;
+    border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden;
+  }
+  .lang-tab {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 6px 10px;
+    font-size: 12px; font-weight: 600;
+    color: var(--text-tertiary);
+    background: none; border: none;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+  .lang-tab:first-child { border-right: 1px solid var(--border); }
+  .lang-tab:hover { color: var(--text-secondary); background: rgba(255,255,255,0.03); }
+  .lang-tab.active { color: var(--text); background: rgba(68,170,153,0.12); }
+  .lang-tab-badge {
+    font-size: 7px; font-weight: 800;
+    background: #4a9; color: #fff;
+    border-radius: 3px; padding: 1.5px 3px; line-height: 1.3;
+  }
 
   /* Template grid */
   .template-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
   }
   .template-card {
     display: flex; flex-direction: column; gap: 2px;

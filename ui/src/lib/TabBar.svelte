@@ -8,7 +8,7 @@
     active: string | null
     dirtyTabs: string[]
     tabLabels?: Record<string, string>
-    tabTypes?: Record<string, 'rs' | 'content' | 'cargo'>
+    tabTypes?: Record<string, 'rs' | 'content' | 'cargo' | 'c' | 'cpp' | 'zig' | 'swift'>
   } = $props()
 </script>
 
@@ -29,7 +29,15 @@
       {#if tabType === 'content'}
         <span class="file-badge file-badge--content">📄</span>
       {:else if tabType === 'cargo'}
-        <span class="file-badge file-badge--cargo">CT</span>
+        <span class="file-badge file-badge--cargo">TOML</span>
+      {:else if tabType === 'c'}
+        <span class="file-badge file-badge--clang">C</span>
+      {:else if tabType === 'cpp'}
+        <span class="file-badge file-badge--clang">C++</span>
+      {:else if tabType === 'zig'}
+        <span class="file-badge file-badge--zig">ZIG</span>
+      {:else if tabType === 'swift'}
+        <span class="file-badge file-badge--swift">SW</span>
       {:else}
         <span class="file-badge">RS</span>
       {/if}
@@ -125,7 +133,20 @@
     line-height: 1;
   }
   .file-badge--cargo {
-    background: #5a4a3a;
+    background: #6b7280;
+    letter-spacing: 0;
+    font-size: 7px;
+  }
+  .file-badge--clang {
+    background: #4a9;
+    letter-spacing: 0;
+  }
+  .file-badge--zig {
+    background: #f7a41d;
+    letter-spacing: 0;
+  }
+  .file-badge--swift {
+    background: #f05138;
     letter-spacing: 0;
   }
 

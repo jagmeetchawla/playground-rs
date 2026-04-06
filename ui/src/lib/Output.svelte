@@ -8,7 +8,7 @@
     runNum: number
     command: string
     startedAt: string
-    status: 'compiling' | 'running' | 'success' | 'error'
+    status: 'saving' | 'compiling' | 'running' | 'success' | 'error'
     exitCode: number | null
     compilerLines: OutputLine[]
     programLines: OutputLine[]
@@ -165,7 +165,7 @@
   <div class="output-header">
     <div class="header-left">
       <span class="panel-title">Console</span>
-      {#if status === 'compiling' || status === 'running'}
+      {#if status === 'saving' || status === 'compiling' || status === 'running'}
         <span class="spinner" title="Running…"></span>
       {/if}
     </div>
@@ -240,7 +240,12 @@
             {/if}
 
             <!-- Running indicator inside the block -->
-            {#if block.status === 'compiling'}
+            {#if block.status === 'saving'}
+              <div class="run-in-progress">
+                <span class="spinner-sm"></span>
+                <span class="dim">Saving…</span>
+              </div>
+            {:else if block.status === 'compiling'}
               <div class="run-in-progress">
                 <span class="spinner-sm"></span>
                 <span class="dim">Compiling…</span>
@@ -405,7 +410,7 @@
   }
 
   .line {
-    font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65;
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.65;
     white-space: pre-wrap; word-break: break-all;
     padding: 0 8px; border-radius: var(--radius-xs);
   }
@@ -442,7 +447,7 @@
     color: var(--accent); flex-shrink: 0; opacity: 0.7;
   }
   .stdin-input {
-    flex: 1; font-family: var(--font-mono); font-size: 11.5px;
+    flex: 1; font-family: var(--font-mono); font-size: 12px;
     background: rgba(0, 0, 0, 0.2); color: var(--text);
     border: 1px solid var(--border); border-radius: var(--radius-xs);
     padding: 3px 6px; outline: none;

@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rustic Playground — The Rust Edition</title>
+  <meta name="description" content="A macOS desktop app for learning Rust. Write code, press ⌘R, see output stream live. Inspired by Swift Playgrounds.">
+  <meta name="theme-color" content="#1a1410">
+  <link rel="icon" type="image/png" href="images/app-icon.png">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Rustic Playground — The Rust Edition">
+  <meta property="og:description" content="A macOS desktop app for learning Rust. Write code, press ⌘R, see output stream live.">
+  <meta property="og:image" content="images/screenshot-themes.png">
+  <meta property="og:type" content="website">
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens ── */
+    :root {
+      --bg: #111;
+      --bg-card: #1a1a1a;
+      --bg-code: #0d0d0d;
+      --text: #e8e4df;
+      --text-secondary: #9a9590;
+      --text-tertiary: #6b6560;
+      --accent: #c45a2d;
+      --accent-light: #e07040;
+      --accent-glow: rgba(196, 90, 45, 0.15);
+      --border: #2a2520;
+      --border-light: #3a3530;
+      --radius: 12px;
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", Menlo, monospace;
+      --max-width: 1080px;
+    }
+
+    /* ── Base ── */
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent-light); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { max-width: 100%; height: auto; display: block; }
+
+    /* ── Layout ── */
+    .container { max-width: var(--max-width); margin: 0 auto; padding: 0 24px; }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(17, 17, 17, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: var(--max-width); margin: 0 auto; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 52px;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 600; font-size: 15px; color: var(--text);
+      text-decoration: none;
+    }
+    .nav-brand img { width: 28px; height: 28px; border-radius: 6px; }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a {
+      font-size: 13px; font-weight: 500; color: var(--text-secondary);
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-cta {
+      font-size: 13px; font-weight: 600;
+      color: var(--bg) !important;
+      background: var(--accent);
+      padding: 6px 16px;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+    .nav-cta:hover { background: var(--accent-light); text-decoration: none !important; }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 80px 24px 60px;
+    }
+    .hero-icon {
+      width: 120px; height: 120px;
+      border-radius: 24px;
+      margin: 0 auto 28px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    }
+    .hero h1 {
+      font-size: 44px; font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 8px;
+    }
+    .hero h1 span { color: var(--accent-light); }
+    .hero .edition-badge {
+      display: inline-block;
+      font-size: 12px; font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      background: var(--accent-glow);
+      border: 1px solid rgba(196, 90, 45, 0.25);
+      border-radius: 4px;
+      padding: 3px 10px;
+      margin-bottom: 20px;
+    }
+    .hero .tagline {
+      font-size: 19px; color: var(--text-secondary);
+      max-width: 560px; margin: 0 auto 32px;
+      line-height: 1.55;
+    }
+    .hero-actions {
+      display: flex; gap: 12px;
+      justify-content: center; flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 15px; font-weight: 600;
+      padding: 12px 28px;
+      border-radius: 8px;
+      transition: all 0.15s;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+    }
+    .btn-primary:hover { background: var(--accent-light); text-decoration: none; }
+    .btn-secondary {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border-light);
+    }
+    .btn-secondary:hover {
+      border-color: var(--text-tertiary);
+      text-decoration: none;
+    }
+    .btn svg { width: 16px; height: 16px; }
+
+    .hero-screenshot {
+      max-width: 900px; margin: 0 auto;
+      border-radius: 12px;
+      box-shadow: 0 16px 80px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .hero-caption {
+      font-size: 13px; color: var(--text-tertiary);
+      margin-top: 16px;
+    }
+
+    /* ── Section ── */
+    section { padding: 80px 0; }
+    .section-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .section-header h2 {
+      font-size: 32px; font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 12px;
+    }
+    .section-header p {
+      font-size: 16px; color: var(--text-secondary);
+      max-width: 520px; margin: 0 auto;
+    }
+
+    /* ── Feature grid ── */
+    .features { border-top: 1px solid var(--border); }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      transition: border-color 0.2s;
+    }
+    .feature-card:hover { border-color: var(--border-light); }
+    .feature-icon {
+      font-size: 24px;
+      margin-bottom: 14px;
+    }
+    .feature-card h3 {
+      font-size: 15px; font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      font-size: 13px; color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ── How it works ── */
+    .how-it-works { border-top: 1px solid var(--border); }
+    .steps-list {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      counter-reset: step;
+    }
+    .step {
+      position: relative;
+      counter-increment: step;
+    }
+    .step::before {
+      content: counter(step);
+      display: flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--accent-glow);
+      border: 1px solid rgba(196, 90, 45, 0.3);
+      color: var(--accent-light);
+      font-size: 15px; font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .step h3 {
+      font-size: 14px; font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .step p {
+      font-size: 13px; color: var(--text-secondary);
+      line-height: 1.55;
+    }
+
+    /* ── Book section ── */
+    .book-section { border-top: 1px solid var(--border); }
+    .book-card {
+      display: flex; gap: 40px;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px;
+    }
+    .book-info { flex: 1; }
+    .book-info h3 {
+      font-size: 20px; font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .book-info p {
+      font-size: 14px; color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .book-meta {
+      font-size: 12px; color: var(--text-tertiary);
+    }
+    .book-meta a { color: var(--accent-light); }
+    .book-screenshot {
+      width: 380px; flex-shrink: 0;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    /* ── Themes showcase ── */
+    .themes-section { border-top: 1px solid var(--border); }
+    .themes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .theme-card {
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      transition: border-color 0.2s;
+    }
+    .theme-card:hover { border-color: var(--border-light); }
+    .theme-card img { width: 100%; }
+    .theme-label {
+      padding: 10px 14px;
+      font-size: 13px; font-weight: 500;
+      color: var(--text-secondary);
+      background: var(--bg-card);
+      text-align: center;
+    }
+
+    /* ── Shortcuts table ── */
+    .shortcuts-section { border-top: 1px solid var(--border); }
+    .shortcuts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    .shortcut-group h3 {
+      font-size: 12px; font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-tertiary);
+      margin-bottom: 12px;
+    }
+    .shortcut-row {
+      display: flex; justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .shortcut-row:last-child { border-bottom: none; }
+    kbd {
+      display: inline-block;
+      font-family: var(--font);
+      font-size: 12px; font-weight: 600;
+      color: var(--text);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border-light);
+      border-radius: 4px;
+      padding: 2px 8px;
+      line-height: 1.5;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.4);
+    }
+    .shortcut-label { color: var(--text-secondary); }
+
+    /* ── Requirements ── */
+    .requirements { border-top: 1px solid var(--border); }
+    .req-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    .req-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .req-row:last-child { border-bottom: none; }
+    .req-name { font-weight: 500; }
+    .req-value { color: var(--text-secondary); font-size: 13px; }
+    .req-value code {
+      font-family: var(--font-mono); font-size: 12px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 2px 6px;
+    }
+
+    /* ── Security banner ── */
+    .security { border-top: 1px solid var(--border); }
+    .security-banner {
+      background: rgba(255, 80, 60, 0.04);
+      border: 1px solid rgba(255, 80, 60, 0.15);
+      border-radius: var(--radius);
+      padding: 32px;
+      max-width: 720px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .security-banner h3 {
+      font-size: 16px; font-weight: 600;
+      color: #e05040;
+      margin-bottom: 12px;
+    }
+    .security-banner p {
+      font-size: 14px; color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .security-banner p:last-child { margin-bottom: 0; }
+
+    /* ── Support ── */
+    .support-section { border-top: 1px solid var(--border); }
+    .support-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .support-card {
+      display: flex; flex-direction: column;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      text-decoration: none;
+      transition: border-color 0.2s;
+    }
+    .support-card:hover { border-color: var(--border-light); text-decoration: none; }
+    .support-icon {
+      color: var(--accent-light);
+      margin-bottom: 14px;
+    }
+    .support-card h3 {
+      font-size: 15px; font-weight: 600; color: var(--text);
+      margin-bottom: 8px;
+    }
+    .support-card p {
+      font-size: 13px; color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ── CTA ── */
+    .cta-section {
+      border-top: 1px solid var(--border);
+      text-align: center;
+      padding: 80px 0;
+    }
+    .cta-section h2 {
+      font-size: 32px; font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .cta-section p {
+      font-size: 16px; color: var(--text-secondary);
+      margin-bottom: 28px;
+    }
+
+    /* ── Community ── */
+    .community-links {
+      margin-top: 20px;
+    }
+    .community-links p {
+      font-size: 14px; color: var(--text-tertiary);
+    }
+    .community-links a { color: var(--accent-light); }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 0;
+      text-align: center;
+    }
+    .footer-inner {
+      max-width: var(--max-width); margin: 0 auto; padding: 0 24px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .footer-left {
+      font-size: 13px; color: var(--text-tertiary);
+    }
+    .footer-links {
+      display: flex; gap: 20px;
+    }
+    .footer-links a {
+      font-size: 13px; color: var(--text-tertiary);
+      transition: color 0.15s;
+    }
+    .footer-links a:hover { color: var(--text-secondary); }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .hero { padding: 48px 20px 40px; }
+      .hero h1 { font-size: 30px; }
+      .hero .tagline { font-size: 16px; }
+      .hero-icon { width: 88px; height: 88px; border-radius: 18px; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .steps-list { grid-template-columns: 1fr 1fr; }
+      .book-card { flex-direction: column; padding: 24px; }
+      .book-screenshot { width: 100%; }
+      .themes-grid { grid-template-columns: 1fr; }
+      .shortcuts-grid { grid-template-columns: 1fr; }
+      .support-grid { grid-template-columns: 1fr; }
+      .section-header h2 { font-size: 24px; }
+      .nav-links .nav-link-text { display: none; }
+      .footer-inner { flex-direction: column; gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Navigation ── -->
+  <nav>
+    <div class="nav-inner">
+      <a href="#" class="nav-brand">
+        <img src="images/app-icon.png" alt="">
+        Rustic Playground
+      </a>
+      <div class="nav-links">
+        <a href="#features" class="nav-link-text">Features</a>
+        <a href="#how-it-works" class="nav-link-text">How It Works</a>
+        <a href="#themes" class="nav-link-text">Themes</a>
+        <a href="#support" class="nav-link-text">Support</a>
+        <a href="https://github.com/jagmeetchawla/rustic-playground" class="nav-link-text">GitHub</a>
+        <a href="https://github.com/jagmeetchawla/rustic-playground/releases" class="nav-cta">
+          Download
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Hero ── -->
+  <section class="hero">
+    <img class="hero-icon" src="images/app-icon.png" alt="Rustic Playground icon">
+    <div class="edition-badge">The Rust Edition</div>
+    <h1>A playground for<br>learning <span>Rust</span></h1>
+    <p class="tagline">
+      A macOS desktop app inspired by Swift Playgrounds.
+      Write code, press <kbd>&#8984;R</kbd>, see output stream live. No terminal required.
+    </p>
+    <div class="hero-actions">
+      <a href="https://github.com/jagmeetchawla/rustic-playground/releases" class="btn btn-primary">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 12l-4-4h2.5V3h3v5H12L8 12zM3 14h10v-1H3v1z"/></svg>
+        Download for macOS
+      </a>
+      <a href="https://github.com/jagmeetchawla/rustic-playground" class="btn btn-secondary">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View Source
+      </a>
+    </div>
+    <img class="hero-screenshot" src="images/screenshot-dark.png" alt="Rustic Playground — Dark theme showing a Rust playground with live output">
+    <p class="hero-caption">Dark theme &mdash; writing and running Rust code with live console output</p>
+  </section>
+
+  <!-- ── Features ── -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Everything you need to learn Rust</h2>
+        <p>A focused environment for writing, running, and experimenting with Rust code.</p>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">&#9654;</div>
+          <h3>Live Execution</h3>
+          <p>Press <kbd>&#8984;R</kbd> to compile and run. Stdout and stderr stream in real time to the Console panel. No terminal switching.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128221;</div>
+          <h3>Monaco Editor</h3>
+          <p>Full-featured code editor with syntax highlighting, live error checking via <code>cargo check</code>, and inline diagnostics.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128218;</div>
+          <h3>Rust Book Examples</h3>
+          <p>20 chapters of curated examples based on <em>The Rust Programming Language</em>. Read-only reference material you can copy and modify.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128230;</div>
+          <h3>Project Workspaces</h3>
+          <p>Each project is an isolated Cargo package. Multiple playgrounds per project, shared dependencies via <code>Cargo.toml</code>.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#127912;</div>
+          <h3>Themes</h3>
+          <p>Dark, Light, Rust, and System themes. Both the editor and app chrome switch together for a cohesive look.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128196;</div>
+          <h3>Starter Templates</h3>
+          <p>Hello World, CLI Input, Structs, Error Handling, and more. Templates auto-add required dependencies.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#9000;</div>
+          <h3>Interactive Console</h3>
+          <p>Programs that read from stdin get a live input field. Prompts without trailing newlines appear immediately.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128203;</div>
+          <h3>Content Files</h3>
+          <p>Attach CSV, JSON, or any file to a project. Access at runtime via the <code>PLAYGROUND_CONTENT</code> environment variable.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128295;</div>
+          <h3>Welcome Wizard</h3>
+          <p>Guided first-launch setup. Check your Rust toolchain, choose a theme, and optionally load the Rust Book examples.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── How It Works ── -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <div class="section-header">
+        <h2>How it works</h2>
+        <p>Four steps from launch to running code.</p>
+      </div>
+      <div class="steps-list">
+        <div class="step">
+          <h3>Create a project</h3>
+          <p>An isolated Cargo package for your experiments. Its own config, dependencies, and playgrounds.</p>
+        </div>
+        <div class="step">
+          <h3>Write a playground</h3>
+          <p>Each playground is a <code>.rs</code> file with a <code>fn main()</code>. Pick a template or start blank.</p>
+        </div>
+        <div class="step">
+          <h3>Press &#8984;R</h3>
+          <p>The app compiles with <code>cargo run</code> and streams output live. Errors show inline in the editor.</p>
+        </div>
+        <div class="step">
+          <h3>Iterate</h3>
+          <p>Edit, run, repeat. Save with &#8984;S. Add dependencies from the toolbar. Export when you're ready.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Book ── -->
+  <section class="book-section" id="book">
+    <div class="container">
+      <div class="section-header">
+        <h2>Learn from The Rust Book</h2>
+        <p>20 chapters of runnable examples, built right into the app.</p>
+      </div>
+      <div class="book-card">
+        <div class="book-info">
+          <h3>The Rust Programming Language (2021 Edition)</h3>
+          <p>
+            Curated examples covering ownership, borrowing, structs, enums, pattern matching,
+            error handling, generics, traits, lifetimes, closures, iterators, smart pointers,
+            concurrency, and more.
+          </p>
+          <p>
+            Book projects are read-only reference material. Right-click any example and choose
+            "Copy to Project" to create an editable copy in your own workspace.
+          </p>
+          <p class="book-meta">
+            Based on <em>The Rust Programming Language</em> by Steve Klabnik &amp; Carol Nichols.
+            License: MIT / Apache-2.0.
+            <a href="https://doc.rust-lang.org/book/">Read online</a>
+          </p>
+        </div>
+        <img class="book-screenshot" src="images/screenshot-rust.png" alt="Rust theme showing book examples">
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Themes ── -->
+  <section class="themes-section" id="themes">
+    <div class="container">
+      <div class="section-header">
+        <h2>Themes that match your style</h2>
+        <p>Editor and app chrome switch together. Choose Dark, Light, Rust, or follow your system setting.</p>
+      </div>
+      <div class="themes-grid">
+        <div class="theme-card">
+          <img src="images/screenshot-dark.png" alt="Dark theme">
+          <div class="theme-label">Dark</div>
+        </div>
+        <div class="theme-card">
+          <img src="images/screenshot-rust.png" alt="Rust theme">
+          <div class="theme-label">Rust</div>
+        </div>
+        <div class="theme-card">
+          <img src="images/screenshot-light.png" alt="Light theme">
+          <div class="theme-label">Light</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Keyboard Shortcuts ── -->
+  <section class="shortcuts-section" id="shortcuts">
+    <div class="container">
+      <div class="section-header">
+        <h2>Keyboard-first workflow</h2>
+        <p>Familiar macOS shortcuts. No menus required.</p>
+      </div>
+      <div class="shortcuts-grid">
+        <div class="shortcut-group">
+          <h3>Run &amp; Edit</h3>
+          <div class="shortcut-row"><kbd>&#8984;R</kbd> <span class="shortcut-label">Run playground</span></div>
+          <div class="shortcut-row"><kbd>&#8984;.</kbd> <span class="shortcut-label">Stop process</span></div>
+          <div class="shortcut-row"><kbd>&#8984;S</kbd> <span class="shortcut-label">Save file</span></div>
+          <div class="shortcut-row"><kbd>&#8984;N</kbd> <span class="shortcut-label">New playground</span></div>
+          <div class="shortcut-row"><kbd>&#8984;W</kbd> <span class="shortcut-label">Close tab</span></div>
+        </div>
+        <div class="shortcut-group">
+          <h3>Project &amp; Window</h3>
+          <div class="shortcut-row"><kbd>&#8984;&#8679;N</kbd> <span class="shortcut-label">New project</span></div>
+          <div class="shortcut-row"><kbd>&#8984;,</kbd> <span class="shortcut-label">Settings</span></div>
+          <div class="shortcut-row"><kbd>&#8984;&#8679;/</kbd> <span class="shortcut-label">Help</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Requirements ── -->
+  <section class="requirements" id="requirements">
+    <div class="container">
+      <div class="section-header">
+        <h2>Requirements</h2>
+        <p>Runs on any modern Mac with the Rust toolchain installed.</p>
+      </div>
+      <div class="req-card">
+        <div class="req-row">
+          <span class="req-name">macOS</span>
+          <span class="req-value">13 Ventura or later</span>
+        </div>
+        <div class="req-row">
+          <span class="req-name">Rust toolchain</span>
+          <span class="req-value">stable &mdash; install via <a href="https://rustup.rs">rustup.rs</a></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Security ── -->
+  <section class="security">
+    <div class="container">
+      <div class="security-banner">
+        <h3>This app is intentionally not sandboxed</h3>
+        <p>
+          Like Xcode, VS Code, and Terminal, Rustic Playground compiles and executes
+          arbitrary code using your local <code>cargo</code> toolchain. Any playground you run
+          has full access to your filesystem, network, and processes.
+        </p>
+        <p>
+          Playground names are validated to prevent path traversal. Toolchains are invoked
+          via absolute paths. Only run code you wrote or fully understand.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Support ── -->
+  <section class="support-section" id="support">
+    <div class="container">
+      <div class="section-header">
+        <h2>Support</h2>
+        <p>Found a bug, have a question, or want to suggest a feature?</p>
+      </div>
+      <div class="support-grid">
+        <a href="https://github.com/jagmeetchawla/rustic-playground/issues" class="support-card">
+          <div class="support-icon">
+            <svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/><path fill-rule="evenodd" d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z"/></svg>
+          </div>
+          <h3>Report a Bug</h3>
+          <p>Open an issue on GitHub with steps to reproduce.</p>
+        </a>
+        <a href="https://github.com/jagmeetchawla/rustic-playground/discussions" class="support-card">
+          <div class="support-icon">
+            <svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1.5 2.75a.25.25 0 01.25-.25h8.5a.25.25 0 01.25.25v5.5a.25.25 0 01-.25.25h-3.5a.75.75 0 00-.53.22L3.5 11.44V9.25a.75.75 0 00-.75-.75h-1a.25.25 0 01-.25-.25v-5.5zM1.75 1A1.75 1.75 0 000 2.75v5.5C0 9.216.784 10 1.75 10H2v1.543a1.457 1.457 0 002.487 1.03L7.061 10h3.189A1.75 1.75 0 0012 8.25v-5.5A1.75 1.75 0 0010.25 1h-8.5zM14.5 4.75a.25.25 0 00-.25-.25h-.5a.75.75 0 110-1.5h.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0114.25 12H14v1.543a1.457 1.457 0 01-2.487 1.03L9.22 12.28a.75.75 0 111.06-1.06l2.22 2.22v-2.19a.75.75 0 01.75-.75h1a.25.25 0 00.25-.25v-5.5z"/></svg>
+          </div>
+          <h3>Ask a Question</h3>
+          <p>Start a discussion for help, ideas, or feedback.</p>
+        </a>
+        <a href="https://github.com/jagmeetchawla/rustic-playground/issues/new?labels=enhancement&template=feature_request.md" class="support-card">
+          <div class="support-icon">
+            <svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M7.998 14.5c2.832 0 5-1.98 5-4.5 0-1.463-.68-2.19-1.879-3.383l-.036-.037C9.865 5.344 8.998 4.4 8.998 2.5c0-.482.062-.964.17-1.432a.75.75 0 00-1.254-.672C5.846 2.399 2.998 5.508 2.998 10c0 2.52 2.168 4.5 5 4.5zm1.22-12.432a3.532 3.532 0 00-.22.932c0 2.58 1.203 3.803 2.354 4.964l.026.026C12.399 8.999 12.998 9.677 12.998 11c0 1.658-1.494 3-3.5 3s-3.5-1.342-3.5-3c0-3.596 2.105-6.087 3.22-7.432z"/></svg>
+          </div>
+          <h3>Request a Feature</h3>
+          <p>Suggest improvements or new capabilities.</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CTA ── -->
+  <section class="cta-section">
+    <div class="container">
+      <h2>Start learning Rust today</h2>
+      <p>Download Rustic Playground and write your first program in under a minute.</p>
+      <div class="hero-actions">
+        <a href="https://github.com/jagmeetchawla/rustic-playground/releases" class="btn btn-primary">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 12l-4-4h2.5V3h3v5H12L8 12zM3 14h10v-1H3v1z"/></svg>
+          Download for macOS
+        </a>
+        <a href="https://github.com/jagmeetchawla/rustic-playground" class="btn btn-secondary">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          View Source
+        </a>
+      </div>
+      <div class="community-links">
+        <p>Enjoy Rustic Playground? <a href="https://github.com/jagmeetchawla/rustic-playground">Star it on GitHub</a> and join the conversation on <a href="https://www.reddit.com/r/rust/">r/rust</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-left">
+        Rustic Playground &mdash; MIT License
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/jagmeetchawla/rustic-playground">GitHub</a>
+        <a href="https://github.com/jagmeetchawla/rustic-playground/releases">Releases</a>
+        <a href="https://github.com/jagmeetchawla/rustic-playground/issues">Issues</a>
+        <a href="https://github.com/jagmeetchawla/rustic-playground/discussions">Discussions</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

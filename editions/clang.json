@@ -1,0 +1,19 @@
+{
+  "productName": "Rustic C",
+  "identifier": "com.rustic-playground.clang",
+  "app": {
+    "windows": [
+      {
+        "title": "Rustic C",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true,
+        "dragDropEnabled": true,
+        "visible": false
+      }
+    ]
+  }
+}

@@ -1,8 +1,8 @@
-use tauri::AppHandle;
+use std::path::Path;
 
-#[tauri::command]
-pub fn seed_rust_book(app: AppHandle) -> Result<Vec<String>, String> {
-    let pdir = crate::projects_dir(&app);
+/// Seed Rust Book chapter projects into the given projects directory.
+/// Returns the list of newly created project names.
+pub fn seed_book(pdir: &Path) -> Result<Vec<String>, String> {
     let mut created: Vec<String> = Vec::new();
 
     // Attribution text placed in every chapter's content/ folder.
@@ -37,7 +37,7 @@ Project or its contributors.
     let chapters: Vec<(&str, &str, Vec<(&str, &str)>)> = vec![
         // ── Chapter 1: Getting Started ────────────────────────────────────────
         (
-            "ch01_getting_started",
+            "rust_ch01_getting_started",
             "",
             vec![
                 (
@@ -108,7 +108,7 @@ fn main() {
         ),
         // ── Chapter 2: Guessing Game ──────────────────────────────────────────
         (
-            "ch02_guessing_game",
+            "rust_ch02_guessing_game",
             "rand = \"0.8\"\n",
             vec![(
                 "guessing_game",
@@ -152,7 +152,7 @@ fn main() {
         ),
         // ── Chapter 3: Common Programming Concepts ────────────────────────────
         (
-            "ch03_concepts",
+            "rust_ch03_concepts",
             "",
             vec![
                 (
@@ -301,7 +301,7 @@ fn main() {
         ),
         // ── Chapter 4: Ownership ──────────────────────────────────────────────
         (
-            "ch04_ownership",
+            "rust_ch04_ownership",
             "",
             vec![
                 (
@@ -430,7 +430,7 @@ fn main() {
         ),
         // ── Chapter 5: Structs ────────────────────────────────────────────────
         (
-            "ch05_structs",
+            "rust_ch05_structs",
             "",
             vec![
                 (
@@ -578,7 +578,7 @@ fn main() {
         ),
         // ── Chapter 6: Enums and Pattern Matching ─────────────────────────────
         (
-            "ch06_enums",
+            "rust_ch06_enums",
             "",
             vec![
                 (
@@ -738,7 +738,7 @@ fn main() {
         ),
         // ── Chapter 7: Packages, Crates, Modules ─────────────────────────────
         (
-            "ch07_modules",
+            "rust_ch07_modules",
             "",
             vec![
                 (
@@ -893,7 +893,7 @@ fn main() {
         ),
         // ── Chapter 8: Collections ────────────────────────────────────────────
         (
-            "ch08_collections",
+            "rust_ch08_collections",
             "",
             vec![
                 (
@@ -1035,7 +1035,7 @@ fn main() {
         ),
         // ── Chapter 9: Error Handling ─────────────────────────────────────────
         (
-            "ch09_errors",
+            "rust_ch09_errors",
             "",
             vec![
                 (
@@ -1169,7 +1169,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
         // ── Chapter 10: Generics, Traits, Lifetimes ───────────────────────────
         (
-            "ch10_generics",
+            "rust_ch10_generics",
             "",
             vec![
                 (
@@ -1335,7 +1335,7 @@ fn main() {
         ),
         // ── Chapter 11: Writing Automated Tests ──────────────────────────────
         (
-            "ch11_testing",
+            "rust_ch11_testing",
             "",
             vec![
                 (
@@ -1487,7 +1487,7 @@ fn main() {
         ),
         // ── Chapter 12: An I/O Project ────────────────────────────────────────
         (
-            "ch12_minigrep",
+            "rust_ch12_minigrep",
             "",
             vec![
                 (
@@ -1594,7 +1594,7 @@ fn main() {
         ),
         // ── Chapter 13: Closures and Iterators ────────────────────────────────
         (
-            "ch13_closures",
+            "rust_ch13_closures",
             "",
             vec![
                 (
@@ -1738,7 +1738,7 @@ fn main() {
         ),
         // ── Chapter 14: More About Cargo ──────────────────────────────────────
         (
-            "ch14_cargo",
+            "rust_ch14_cargo",
             "",
             vec![
                 (
@@ -1764,7 +1764,7 @@ fn main() {
 
     // Build metadata injected by Cargo via env! macro
     println!("Package:  {} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-    println!("Edition:  Rust 2021");
+    println!("Edition:  Rust 2024");
 
     // #[cfg(...)] conditionally compiles a block
     #[cfg(debug_assertions)]
@@ -1839,7 +1839,7 @@ fn main() {
         ),
         // ── Chapter 15: Smart Pointers ────────────────────────────────────────
         (
-            "ch15_smart_pointers",
+            "rust_ch15_smart_pointers",
             "",
             vec![
                 (
@@ -1986,7 +1986,7 @@ fn main() {
         ),
         // ── Chapter 16: Fearless Concurrency ──────────────────────────────────
         (
-            "ch16_concurrency",
+            "rust_ch16_concurrency",
             "",
             vec![
                 (
@@ -2119,14 +2119,105 @@ fn main() {
                 ),
             ],
         ),
-        // ── Chapter 17: OOP Features of Rust ──────────────────────────────────
+        // ── Chapter 17: Async/Await ──────────────────────────────────────────
         (
-            "ch17_oop",
+            "rust_ch17_async",
+            "tokio = { version = \"1\", features = [\"full\"] }\ntokio-stream = \"0.1\"",
+            vec![
+                (
+                    "basics",
+                    r#"// Ch 17 – Async/Await Basics
+// Rust's async model uses futures — values that represent work that
+// hasn't completed yet.  `async fn` returns a future; `.await` drives
+// it to completion.  Unlike threads, futures are cooperatively scheduled.
+
+async fn fetch_data(id: u32) -> String {
+    // Simulate an async operation (network call, file read, etc.)
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    format!("Data for id={id}")
+}
+
+async fn process() {
+    println!("Fetching data...");
+    let result = fetch_data(42).await;
+    println!("Got: {result}");
+}
+
+#[tokio::main]
+async fn main() {
+    process().await;
+    println!("Done!");
+}
+"#,
+                ),
+                (
+                    "concurrency",
+                    r#"// Ch 17 – Applying Concurrency with Async
+// `tokio::join!` runs multiple futures concurrently on the same thread.
+// Unlike threads, async tasks yield at .await points, so they can share
+// a single OS thread efficiently.
+
+use std::time::Instant;
+
+async fn task(name: &str, ms: u64) -> String {
+    tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+    format!("{name} done ({ms}ms)")
+}
+
+#[tokio::main]
+async fn main() {
+    let start = Instant::now();
+
+    // Run three tasks concurrently — total time ≈ max(200, 150, 100) = 200ms
+    let (a, b, c) = tokio::join!(
+        task("Alpha", 200),
+        task("Beta",  150),
+        task("Gamma", 100),
+    );
+
+    println!("{a}");
+    println!("{b}");
+    println!("{c}");
+    println!("All done in {:?}", start.elapsed());
+}
+"#,
+                ),
+                (
+                    "streams",
+                    r#"// Ch 17 – Streams: Futures in Sequence
+// A Stream is like an async Iterator — it yields a sequence of values
+// over time.  tokio_stream provides adapters for working with them.
+
+use tokio_stream::StreamExt;
+
+fn countdown(from: u32) -> impl tokio_stream::Stream<Item = u32> {
+    tokio_stream::iter((0..=from).rev())
+}
+
+#[tokio::main]
+async fn main() {
+    let mut stream = countdown(5);
+
+    while let Some(n) = stream.next().await {
+        if n == 0 {
+            println!("Liftoff! 🚀");
+        } else {
+            println!("{n}...");
+        }
+    }
+}
+"#,
+                ),
+            ],
+        ),
+        // ── Chapter 18: OOP Features of Rust ──────────────────────────────────
+        (
+            "rust_ch18_oop",
             "",
             vec![
                 (
                     "encapsulation",
-                    r#"// Ch 17 – Encapsulation
+                    r#"// Ch 18 – Encapsulation
 // Rust achieves encapsulation through private fields and public methods —
 // the same goal as OOP, without inheritance.
 
@@ -2175,7 +2266,7 @@ fn main() {
                 ),
                 (
                     "trait_objects",
-                    r#"// Ch 17 – Trait Objects (Dynamic Dispatch)
+                    r#"// Ch 18 – Trait Objects (Dynamic Dispatch)
 // Box<dyn Trait> stores values of any type that implements the trait.
 // The concrete type is unknown at compile time — dispatch happens at runtime.
 
@@ -2221,7 +2312,7 @@ fn main() {
                 ),
                 (
                     "state_pattern",
-                    r#"// Ch 17 – State Pattern (type-state idiom)
+                    r#"// Ch 18 – State Pattern (type-state idiom)
 // The book shows the classic OOP state pattern, then refactors to idiomatic Rust.
 // Here we show the type-state version: each state is a *type*, so invalid
 // transitions are compile errors rather than runtime panics.
@@ -2269,14 +2360,14 @@ fn main() {
                 ),
             ],
         ),
-        // ── Chapter 18: Patterns and Matching ─────────────────────────────────
+        // ── Chapter 19: Patterns and Matching ─────────────────────────────────
         (
-            "ch18_patterns",
+            "rust_ch19_patterns",
             "",
             vec![
                 (
                     "pattern_syntax",
-                    r#"// Ch 18 – Pattern Syntax
+                    r#"// Ch 19 – Pattern Syntax
 // Patterns appear everywhere: match, if let, while let, for, let, fn params.
 
 fn coordinate(point: (i32, i32, i32)) {
@@ -2348,7 +2439,7 @@ fn main() {
                 (
                     "bindings_and_guards",
                     r#"#![allow(dead_code)]
-// Ch 18 – Match Guards, @ Bindings, Refutability
+// Ch 19 – Match Guards, @ Bindings, Refutability
 
 #[derive(Debug)]
 enum Msg { Hello { id: i32 }, Quit }
@@ -2400,15 +2491,15 @@ fn main() {
                 ),
             ],
         ),
-        // ── Chapter 19: Advanced Features ─────────────────────────────────────
+        // ── Chapter 20: Advanced Features ─────────────────────────────────────
         (
-            "ch19_advanced",
+            "rust_ch20_advanced",
             "",
             vec![
                 (
                     "unsafe_rust",
                     r#"#![allow(dead_code)]
-// Ch 19 – Unsafe Rust
+// Ch 20 – Unsafe Rust
 // unsafe { } unlocks five additional powers:
 //   1. Dereference raw pointers
 //   2. Call unsafe functions
@@ -2463,7 +2554,7 @@ fn main() {
                 ),
                 (
                     "advanced_traits",
-                    r#"// Ch 19 – Advanced Traits
+                    r#"// Ch 20 – Advanced Traits
 // Associated types, operator overloading (default type params), newtype pattern.
 
 use std::fmt;
@@ -2522,7 +2613,7 @@ fn main() {
                 (
                     "macros",
                     r#"#![allow(dead_code)]
-// Ch 19 – Macros
+// Ch 20 – Macros
 // macro_rules! defines declarative macros via pattern matching on token trees.
 // They expand at compile time — zero runtime cost, can be variadic.
 
@@ -2577,16 +2668,16 @@ fn main() {
                 ),
             ],
         ),
-        // ── Chapter 20: Final Project – Web Server ─────────────────────────────
+        // ── Chapter 21: Final Project – Web Server ─────────────────────────────
         (
-            "ch20_web_server",
+            "rust_ch21_web_server",
             "",
             vec![
                 (
                     "threadpool",
                     r#"#![allow(dead_code)]
-// Ch 20 – Thread Pool (the heart of the final project)
-// The web server in Ch 20 is built around a ThreadPool that dispatches
+// Ch 21 – Thread Pool (the heart of the final project)
+// The web server in Ch 21 is built around a ThreadPool that dispatches
 // incoming HTTP connections to a fixed pool of worker threads.
 // Here we implement and exercise the ThreadPool without the HTTP layer.
 // See cli_guide.rs to build and run the full web server.
@@ -2657,9 +2748,9 @@ fn main() {
                 ),
                 (
                     "cli_guide",
-                    r#"// Ch 20 – Multithreaded Web Server: CLI Guide
+                    r#"// Ch 21 – Multithreaded Web Server: CLI Guide
 // ══════════════════════════════════════════════════════════════════
-//  Chapter 20 builds a real HTTP server that listens on a TCP port.
+//  Chapter 21 builds a real HTTP server that listens on a TCP port.
 //  A TcpListener that actually accepts connections would block this
 //  playground forever — run it in a terminal instead.
 //
@@ -2668,7 +2759,7 @@ fn main() {
 //  $ cargo new hello_server
 //  $ cd hello_server
 //  # Copy the final src/main.rs and src/lib.rs from the book:
-//  # https://doc.rust-lang.org/book/ch20-02-multithreaded.html
+//  # https://doc.rust-lang.org/book/ch21-02-multithreaded.html
 //
 //  Create two response files:
 //  $ echo "<h1>Hello!</h1>"         > hello.html
@@ -2691,17 +2782,17 @@ fn main() {
 //  • Graceful shutdown via Drop
 //
 //  ── READ MORE ──────────────────────────────────────────────────
-//  https://doc.rust-lang.org/book/ch20-00-final-project-a-web-server.html
+//  https://doc.rust-lang.org/book/ch21-00-final-project-a-web-server.html
 // ══════════════════════════════════════════════════════════════════
 
 fn main() {
-    println!("Ch 20 – Multithreaded Web Server");
+    println!("Ch 21 – Multithreaded Web Server");
     println!();
     println!("The thread pool implementation is in threadpool.rs — run that with ⌘R.");
     println!("For the full HTTP server, jump to your terminal:");
     println!();
     println!("  cargo new hello_server && cd hello_server");
-    println!("  # follow https://doc.rust-lang.org/book/ch20-01-single-threaded.html");
+    println!("  # follow https://doc.rust-lang.org/book/ch21-01-single-threaded.html");
     println!("  cargo run");
     println!("  # then visit http://127.0.0.1:7878 in your browser");
 }
@@ -2721,10 +2812,17 @@ fn main() {
         std::fs::create_dir_all(&bin).map_err(|e| format!("seed {chapter}: {e}"))?;
 
         let cargo = format!(
-            "[package]\nname = \"{chapter}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n# Add dependencies here — every playground can use them.\n[dependencies]\n{extra_deps}",
+            "[package]\nname = \"{chapter}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n# Add dependencies here — every playground can use them.\n[dependencies]\n{extra_deps}",
         );
         std::fs::write(project_path.join("Cargo.toml"), &cargo)
             .map_err(|e| format!("seed {chapter} Cargo.toml: {e}"))?;
+
+        // Write rustic.toml with source = "rust_book"
+        let mut manifest = crate::rustic_manifest::new_rust_manifest();
+        manifest.project.source = "rust_book".to_string();
+        manifest.project.readonly = true;
+        crate::rustic_manifest::write_manifest(&project_path, &manifest)?;
+
         let content_dir = project_path.join("content");
         std::fs::create_dir_all(&content_dir)
             .map_err(|e| format!("seed {chapter} content/: {e}"))?;

@@ -2,12 +2,13 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
-mod book_chapters;
 mod cargo_commands;
 mod content_commands;
 mod export;
+pub(crate) mod languages;
 mod menu;
 mod playground_commands;
+pub(crate) mod rustic_manifest;
 
 // ── App state ─────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,12 @@ pub(crate) struct Config {
     pub(crate) active_project: String,
     #[serde(default)]
     pub(crate) wizard_completed: bool,
+    #[serde(default = "default_enabled_languages")]
+    pub(crate) enabled_languages: Vec<String>,
+}
+
+fn default_enabled_languages() -> Vec<String> {
+    vec!["rust".to_string()]
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -59,7 +66,7 @@ impl Default for Settings {
         Self {
             font_size: 13,
             font_family: "Menlo".to_string(),
-            tab_size: 4,
+            tab_size: 0,
             cargo_path: default_cargo_path(),
             theme: default_theme(),
         }
@@ -82,12 +89,25 @@ pub(crate) fn workspace_dir(app: &AppHandle) -> PathBuf {
     projects_dir(app).join(name)
 }
 
-pub(crate) fn bin_dir(app: &AppHandle) -> PathBuf {
-    workspace_dir(app).join("src").join("bin")
+/// Source directory for the active project, read from rustic.toml [paths].src.
+/// Falls back to src/bin for Rust projects without a manifest.
+pub(crate) fn src_dir(app: &AppHandle) -> PathBuf {
+    let workspace = workspace_dir(app);
+    if let Some(manifest) = rustic_manifest::read_manifest(&workspace) {
+        workspace.join(&manifest.paths.src)
+    } else {
+        workspace.join("src").join("bin")
+    }
 }
 
 pub(crate) fn content_dir(app: &AppHandle) -> PathBuf {
     workspace_dir(app).join("content")
+}
+
+/// Get the active project's type from rustic.toml.
+pub(crate) fn active_project_type(app: &AppHandle) -> String {
+    let workspace = workspace_dir(app);
+    rustic_manifest::detect_project_type(&workspace)
 }
 
 pub(crate) fn config_path(app: &AppHandle) -> PathBuf {
@@ -123,17 +143,19 @@ pub(crate) fn load_config(app: &AppHandle) -> Config {
         }
     }
     Config {
-        active_project: "default".to_string(),
+        active_project: "hello_rust".to_string(),
         wizard_completed: false,
+        enabled_languages: default_enabled_languages(),
     }
 }
 
 pub(crate) fn save_config(app: &AppHandle, active_project: &str) -> Result<(), String> {
-    // Preserve wizard_completed from existing config
+    // Preserve wizard_completed and enabled_languages from existing config
     let existing = load_config(app);
     let config = Config {
         active_project: active_project.to_string(),
         wizard_completed: existing.wizard_completed,
+        enabled_languages: existing.enabled_languages,
     };
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialise config: {}", e))?;
@@ -145,7 +167,7 @@ pub(crate) fn save_config(app: &AppHandle, active_project: &str) -> Result<(), S
 
 pub(crate) fn project_cargo_toml(name: &str) -> String {
     format!(
-        "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n# Add dependencies here — every playground can use them.\n[dependencies]\n",
+        "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n# Add dependencies here — every playground can use them.\n[dependencies]\n",
         name
     )
 }
@@ -161,24 +183,52 @@ pub(crate) fn playground_template(name: &str) -> String {
 // ── Project bootstrap ─────────────────────────────────────────────────────────
 
 /// Ensures the active project has the required directory structure.
-/// Creates Cargo.toml + src/bin/hello.rs + content/ if they don't exist yet.
+/// Creates Cargo.toml + src/bin/hello.rs + content/ if they don't exist yet (for Rust projects).
+/// Also ensures a rustic.toml manifest exists (auto-generates for legacy projects).
 fn ensure_project(app: &AppHandle) -> Result<(), String> {
     let workspace = workspace_dir(app);
-    let bin = bin_dir(app);
-    let content = content_dir(app);
 
-    if !bin.exists() {
+    // Ensure the project directory itself exists
+    if !workspace.exists() {
+        std::fs::create_dir_all(&workspace)
+            .map_err(|e| format!("Failed to create project directory: {}", e))?;
+    }
+
+    // For brand-new projects: scaffold only if the wizard has been completed
+    // (on first launch the wizard creates hello projects for selected languages).
+    let cargo_toml = workspace.join("Cargo.toml");
+    let bin = workspace.join("src").join("bin");
+    let config = load_config(app);
+    if config.wizard_completed
+        && !cargo_toml.exists()
+        && !workspace.join("rustic.toml").exists()
+    {
+        // Post-wizard new Rust project — scaffold Cargo.toml + hello.rs
         std::fs::create_dir_all(&bin)
             .map_err(|e| format!("Failed to create project dirs: {}", e))?;
         let project_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
-        std::fs::write(
-            workspace.join("Cargo.toml"),
-            project_cargo_toml(&project_name),
-        )
-        .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
+        std::fs::write(&cargo_toml, project_cargo_toml(&project_name))
+            .map_err(|e| format!("Failed to write Cargo.toml: {}", e))?;
         std::fs::write(bin.join("hello.rs"), playground_template("hello"))
             .map_err(|e| format!("Failed to seed hello.rs: {}", e))?;
     }
+
+    // If project isn't scaffolded yet (first launch before wizard), just return OK
+    if !cargo_toml.exists() && !workspace.join("rustic.toml").exists() {
+        return Ok(());
+    }
+
+    // Ensure rustic.toml exists (auto-generates for legacy projects)
+    let mut manifest = rustic_manifest::ensure_manifest(&workspace)?;
+
+    // Repair: if Cargo.toml exists but rustic.toml was incorrectly generated as "clang"
+    // (e.g. from a startup race), fix it.
+    if cargo_toml.exists() && manifest.project.project_type == "clang" {
+        manifest.project.project_type = "rust".to_string();
+        rustic_manifest::write_manifest(&workspace, &manifest)?;
+    }
+
+    let content = workspace.join(&manifest.paths.content);
     if !content.exists() {
         std::fs::create_dir_all(&content)
             .map_err(|e| format!("Failed to create content dir: {}", e))?;
@@ -223,21 +273,6 @@ pub(crate) fn validate_filename(filename: &str) -> Result<(), String> {
         return Err("'.' and '..' are not valid filenames".into());
     }
     Ok(())
-}
-
-pub(crate) fn safe_playground_path(name: &str, app: &AppHandle) -> Result<PathBuf, String> {
-    validate_name(name)?;
-    let dir = bin_dir(app);
-    let path = dir.join(format!("{}.rs", name));
-    let resolved_dir = dir.canonicalize().map_err(|e| e.to_string())?;
-    let resolved_parent = path
-        .parent()
-        .and_then(|p| p.canonicalize().ok())
-        .unwrap_or_else(|| resolved_dir.clone());
-    if resolved_parent != resolved_dir {
-        return Err(format!("Path traversal detected for name '{}'", name));
-    }
-    Ok(path)
 }
 
 pub(crate) fn safe_content_path(filename: &str, app: &AppHandle) -> Result<PathBuf, String> {
@@ -337,6 +372,10 @@ struct WindowState {
     active_tab: Option<String>,
     window_width: u32,
     window_height: u32,
+    #[serde(default)]
+    window_x: Option<i32>,
+    #[serde(default)]
+    window_y: Option<i32>,
 }
 
 impl Default for WindowState {
@@ -351,6 +390,8 @@ impl Default for WindowState {
             active_tab: None,
             window_width: 1280,
             window_height: 800,
+            window_x: None,
+            window_y: None,
         }
     }
 }
@@ -399,6 +440,109 @@ fn save_settings(settings: Settings, app: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to write settings.json: {}", e))
 }
 
+// ── Language gating ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn get_enabled_languages(app: AppHandle) -> Vec<String> {
+    load_config(&app).enabled_languages
+}
+
+#[tauri::command]
+fn set_enabled_languages(languages: Vec<String>, app: AppHandle) -> Result<(), String> {
+    let existing = load_config(&app);
+    if languages.is_empty() {
+        return Err("At least one language must be enabled".to_string());
+    }
+    let langs = languages;
+    let config = Config {
+        active_project: existing.active_project,
+        wizard_completed: existing.wizard_completed,
+        enabled_languages: langs,
+    };
+    let json = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialise config: {}", e))?;
+    std::fs::write(config_path(&app), json)
+        .map_err(|e| format!("Failed to write config.json: {}", e))
+}
+
+// ── Book seeding ─────────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn seed_book(project_type: String, app: AppHandle) -> Result<Vec<String>, String> {
+    let lang = languages::Lang::from_str(&project_type);
+    lang.seed_book(&projects_dir(&app))
+}
+
+// ── Update check ─────────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+struct UpdateInfo {
+    version: String,
+    url: String,
+}
+
+#[tauri::command]
+async fn check_for_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
+    let current = app.config().version.clone().unwrap_or_default();
+
+    let client = reqwest::Client::builder()
+        .user_agent("rustic-playground")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .get("https://api.github.com/repos/jagmeetchawla/rustic-playground/releases/latest")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Ok(None); // silently skip if API unreachable
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let tag = json["tag_name"].as_str().unwrap_or("");
+    let latest = tag.trim_start_matches('v');
+    let html_url = json["html_url"].as_str().unwrap_or("").to_string();
+
+    if latest.is_empty() || latest == current {
+        return Ok(None);
+    }
+
+    // Simple semver comparison: split on '.', compare each part
+    let cur_parts: Vec<u32> = current.split('.').filter_map(|s| s.parse().ok()).collect();
+    let new_parts: Vec<u32> = latest.split('.').filter_map(|s| s.parse().ok()).collect();
+    let is_newer = new_parts > cur_parts;
+
+    if is_newer {
+        Ok(Some(UpdateInfo {
+            version: latest.to_string(),
+            url: html_url,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Check a URL chain: try each in order, return the first that doesn't 404.
+#[tauri::command]
+async fn check_url(urls: Vec<String>) -> String {
+    let client = reqwest::Client::builder()
+        .user_agent("rustic-playground")
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .unwrap_or_default();
+    for url in &urls {
+        if let Ok(resp) = client.head(url).send().await {
+            if resp.status().is_success() || resp.status().is_redirection() {
+                return url.clone();
+            }
+        }
+    }
+    // All failed — return last URL as fallback
+    urls.last().cloned().unwrap_or_default()
+}
+
 // ── App entry ─────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -422,7 +566,9 @@ pub fn run() {
             std::fs::create_dir_all(&proj_dir).expect("Cannot create projects dir");
 
             // Resolve active project: use config value if its dir exists,
-            // otherwise fall back to the first existing project or "default"
+            // otherwise fall back to the first existing project.
+            // On first launch (wizard not completed), use a placeholder —
+            // the wizard will create the real projects.
             let active = if proj_dir.join(&config.active_project).exists() {
                 config.active_project.clone()
             } else {
@@ -433,7 +579,7 @@ pub fn run() {
                     })
                     .and_then(|e| e.ok())
                     .and_then(|e| e.file_name().into_string().ok())
-                    .unwrap_or_else(|| "default".to_string())
+                    .unwrap_or_else(|| config.active_project.clone())
             };
 
             // Register active project in app state BEFORE calling ensure_project
@@ -443,7 +589,10 @@ pub fn run() {
             app.manage(CheckProcess(Mutex::new(None)));
 
             // Bootstrap the active project's directory structure if needed
-            ensure_project(app.handle()).expect("Failed to initialise project");
+            // (skip on first launch — the wizard creates projects)
+            if config.wizard_completed {
+                ensure_project(app.handle()).expect("Failed to initialise project");
+            }
 
             // ── Native macOS menu ─────────────────────────────────────────────
             // Read the initial project list so the Project menu is populated.
@@ -461,7 +610,38 @@ pub fn run() {
             };
             let active_name = app.state::<ActiveProject>().0.lock().unwrap().clone();
             // On startup we don't know playground count yet; frontend will call rebuild_menu shortly
-            let menu = menu::build_menu(app.handle(), &initial_projects, &active_name, usize::MAX, false)?;
+            let ptype = rustic_manifest::detect_project_type(
+                &projects_dir(app.handle()).join(&active_name),
+            );
+            let is_book = !rustic_manifest::get_project_source(
+                &projects_dir(app.handle()).join(&active_name),
+            )
+            .is_empty();
+            // Collect project sources for menu grouping
+            let pdir = projects_dir(app.handle());
+            let sources: std::collections::HashMap<String, String> = initial_projects
+                .iter()
+                .filter_map(|name| {
+                    let src = rustic_manifest::get_project_source(&pdir.join(name));
+                    if src.is_empty() {
+                        None
+                    } else {
+                        Some((name.clone(), src))
+                    }
+                })
+                .collect();
+            let menu = menu::build_menu(
+                app.handle(),
+                &initial_projects,
+                &active_name,
+                usize::MAX,
+                false,
+                false,
+                &ptype,
+                is_book,
+                &sources,
+                &config.enabled_languages,
+            )?;
             app.set_menu(menu)?;
             Ok(())
         })
@@ -474,10 +654,12 @@ pub fn run() {
             }
             let event_name = match id {
                 "new_project" => Some("menu:new-project"),
+                "duplicate_project" => Some("menu:duplicate-project"),
                 "rename_project" => Some("menu:rename-project"),
                 "delete_project" => Some("menu:delete-project"),
                 "new_playground" => Some("menu:new"),
                 "save" => Some("menu:save"),
+                "revert" => Some("menu:revert"),
                 "close_tab" => Some("menu:close-tab"),
                 "run_playground" => Some("menu:run"),
                 "stop_playground" => Some("menu:stop"),
@@ -485,11 +667,31 @@ pub fn run() {
                 "menu_delete_playground" => Some("menu:delete-playground"),
                 "copy_code" => Some("menu:copy-code"),
                 "export_project" => Some("menu:export-project"),
+                "check_update" => Some("menu:check-update"),
                 "show_settings" => Some("menu:settings"),
                 "show_help" => Some("menu:help"),
                 "show_about" => Some("menu:about"),
-                "seed_rust_book" => Some("menu:rust-book"),
-                _ => None,
+                _ => {
+                    // Dynamic book events from language modules
+                    let mut book_event = None;
+                    for lang in languages::Lang::all() {
+                        if let Some(book) = lang.book_info() {
+                            if id == book.menu_id {
+                                book_event = Some(book.event_name);
+                                break;
+                            }
+                            if id == book.remove_menu_id {
+                                book_event = Some(book.remove_event_name);
+                                break;
+                            }
+                            if id == format!("open_book_{}", book.source_tag) {
+                                let _ = std::process::Command::new("open").arg(book.url).spawn();
+                                break;
+                            }
+                        }
+                    }
+                    book_event
+                }
             };
             if let Some(name) = event_name {
                 app.emit(name, ()).ok();
@@ -503,17 +705,22 @@ pub fn run() {
             playground_commands::switch_project,
             playground_commands::rename_project,
             playground_commands::delete_project,
+            playground_commands::remove_book,
             playground_commands::duplicate_project,
             menu::rebuild_menu,
-            book_chapters::seed_rust_book,
+            seed_book,
             get_window_state,
             save_window_state,
             get_settings,
             save_settings,
+            get_enabled_languages,
+            set_enabled_languages,
             // Playground management
             playground_commands::list_playgrounds,
             playground_commands::load_playground,
             playground_commands::save_playground,
+            playground_commands::snapshot_playground,
+            playground_commands::revert_playground,
             playground_commands::new_playground,
             playground_commands::rename_playground,
             playground_commands::delete_playground,
@@ -524,6 +731,7 @@ pub fn run() {
             playground_commands::check_playground,
             playground_commands::cancel_check,
             playground_commands::workspace_path,
+            playground_commands::copy_playground_to_project,
             // Cargo / toolchain
             cargo_commands::get_cargo_toml,
             cargo_commands::save_cargo_toml,
@@ -544,6 +752,17 @@ pub fn run() {
             content_commands::get_content_file_path,
             // Export
             export::export_project,
+            // Manifest
+            rustic_manifest::get_project_type,
+            rustic_manifest::get_project_manifest,
+            rustic_manifest::get_project_sources,
+            rustic_manifest::get_project_readonly_map,
+            rustic_manifest::get_locked_playgrounds,
+            rustic_manifest::set_playground_locked,
+            rustic_manifest::get_build_flags,
+            rustic_manifest::save_build_flags,
+            check_for_update,
+            check_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -607,7 +826,11 @@ mod tests {
     fn validate_name_rejects_too_long() {
         let long = "a".repeat(65);
         let err = validate_name(&long).unwrap_err();
-        assert!(err.contains("too long") || err.contains("64"), "got: {}", err);
+        assert!(
+            err.contains("too long") || err.contains("64"),
+            "got: {}",
+            err
+        );
     }
 
     #[test]
@@ -666,6 +889,49 @@ mod tests {
     fn validate_filename_accepts_dotfiles() {
         assert!(validate_filename(".gitignore").is_ok());
         assert!(validate_filename("..hidden").is_ok());
+    }
+
+    // ── file_validate_name (clang) ─────────────────────────────────────────
+
+    #[test]
+    fn file_validate_name_accepts_valid_c() {
+        let (stem, ext) = languages::file_validate_name("hello.c", &["c", "cpp"]).unwrap();
+        assert_eq!(stem, "hello");
+        assert_eq!(ext, "c");
+    }
+
+    #[test]
+    fn file_validate_name_accepts_valid_cpp() {
+        let (stem, ext) = languages::file_validate_name("vectors.cpp", &["c", "cpp"]).unwrap();
+        assert_eq!(stem, "vectors");
+        assert_eq!(ext, "cpp");
+    }
+
+    #[test]
+    fn file_validate_name_rejects_no_extension() {
+        assert!(languages::file_validate_name("hello", &["c", "cpp"]).is_err());
+    }
+
+    #[test]
+    fn file_validate_name_rejects_unsupported_extension() {
+        assert!(languages::file_validate_name("hello.py", &["c", "cpp"]).is_err());
+        assert!(languages::file_validate_name("hello.go", &["c", "cpp"]).is_err());
+        assert!(languages::file_validate_name("hello.zig", &["c", "cpp"]).is_err());
+        assert!(languages::file_validate_name("hello.rs", &["c", "cpp"]).is_err());
+    }
+
+    #[test]
+    fn file_validate_name_rejects_bad_stem() {
+        assert!(languages::file_validate_name("Hello.c", &["c", "cpp"]).is_err());
+        assert!(languages::file_validate_name("2fast.c", &["c", "cpp"]).is_err());
+        assert!(languages::file_validate_name("my-file.c", &["c", "cpp"]).is_err());
+    }
+
+    #[test]
+    fn file_validate_name_accepts_underscores_and_digits_in_stem() {
+        let (stem, ext) = languages::file_validate_name("my_test_2.cpp", &["c", "cpp"]).unwrap();
+        assert_eq!(stem, "my_test_2");
+        assert_eq!(ext, "cpp");
     }
 
     // ── is_text_file ─────────────────────────────────────────────────────
@@ -757,7 +1023,7 @@ mod tests {
         let s = Settings::default();
         assert_eq!(s.font_size, 13);
         assert_eq!(s.font_family, "Menlo");
-        assert_eq!(s.tab_size, 4);
+        assert_eq!(s.tab_size, 0);
         assert_eq!(s.theme, "system");
         assert!(!s.cargo_path.is_empty());
     }
@@ -782,7 +1048,8 @@ mod tests {
 
     #[test]
     fn settings_deserialize_with_missing_theme_gets_default() {
-        let json = r#"{"font_size":13,"font_family":"Menlo","tab_size":4,"cargo_path":"/usr/bin/cargo"}"#;
+        let json =
+            r#"{"font_size":13,"font_family":"Menlo","tab_size":4,"cargo_path":"/usr/bin/cargo"}"#;
         let s: Settings = serde_json::from_str(json).unwrap();
         assert_eq!(s.theme, "system");
     }
@@ -802,11 +1069,13 @@ mod tests {
         let c = Config {
             active_project: "my_project".to_string(),
             wizard_completed: true,
+            enabled_languages: vec!["rust".to_string(), "clang".to_string()],
         };
         let json = serde_json::to_string(&c).unwrap();
         let c2: Config = serde_json::from_str(&json).unwrap();
         assert_eq!(c2.active_project, "my_project");
         assert!(c2.wizard_completed);
+        assert_eq!(c2.enabled_languages, vec!["rust", "clang"]);
     }
 
     #[test]
@@ -814,6 +1083,7 @@ mod tests {
         let json = r#"{"active_project":"default"}"#;
         let c: Config = serde_json::from_str(json).unwrap();
         assert!(!c.wizard_completed);
+        assert_eq!(c.enabled_languages, vec!["rust"]);
     }
 
     // ── WindowState ──────────────────────────────────────────────────────
@@ -846,6 +1116,8 @@ mod tests {
             active_tab: Some("pg:hello".to_string()),
             window_width: 1920,
             window_height: 1080,
+            window_x: Some(100),
+            window_y: Some(50),
         };
         let json = serde_json::to_string(&ws).unwrap();
         let ws2: WindowState = serde_json::from_str(&json).unwrap();
@@ -854,6 +1126,8 @@ mod tests {
         assert_eq!(ws2.open_tabs.len(), 1);
         assert_eq!(ws2.open_tabs[0].id, "pg:hello");
         assert_eq!(ws2.active_tab, Some("pg:hello".to_string()));
+        assert_eq!(ws2.window_x, Some(100));
+        assert_eq!(ws2.window_y, Some(50));
     }
 
     // ── ContentFile ──────────────────────────────────────────────────────
