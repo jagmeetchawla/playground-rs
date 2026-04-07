@@ -1,7 +1,7 @@
 <script lang="ts">
   // Self-contained Rust toolchain status + repair modal.
-  // Reachable from: Settings/Wizard "Repair Toolchain…" button, and the
-  // Rust menu's "Check Toolchain Status" / "Repair Toolchain…" items.
+  // Reachable from: Settings/Wizard "Install/Repair Toolchain…" button, and
+  // the Rust menu's "Rust Toolchain…" item.
   // Detects rustup state, lets the user run install / set-default / add-component
   // fixes in-app, and streams the output via a Tauri Channel.
   import { invoke, Channel } from '@tauri-apps/api/core'

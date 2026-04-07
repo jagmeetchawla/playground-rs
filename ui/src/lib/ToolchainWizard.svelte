@@ -411,7 +411,7 @@
                   </div>
                   {#if status.rust_state !== 'healthy'}
                     <div class="install-section">
-                      <button class="btn btn-primary" onclick={() => onrepair?.()}>Repair Toolchain…</button>
+                      <button class="btn btn-primary" onclick={() => onrepair?.()}>Install/Repair Toolchain…</button>
                     </div>
                   {/if}
 

@@ -201,8 +201,9 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     //   per-language submenus.
     //
     // Each language menu contains (when applicable):
-    //   • Check Toolchain Status…   (Rust only — opens fix wizard)
-    //   • Repair Toolchain…         (Rust only — opens fix wizard)
+    //   • Rust Toolchain…           (Rust only — opens install/repair wizard)
+    //   • rust-lang.org…            (Rust only — opens website)
+    //   • rustup.rs…                (Rust only — opens website)
     //   • ─────
     //   • Load Examples…            (book languages)
     //   • Remove Examples           (book languages)
@@ -230,10 +231,20 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         // Toolchain item — Rust only for v0.3.4. Single entry that opens the
         // status/repair modal (the modal self-describes healthy vs needs-fix).
         if matches!(lang_variant, Lang::Rust) {
-            sub = sub.item(
-                &MenuItemBuilder::with_id("rust_toolchain", "Rust Toolchain…")
-                    .build(handle)?,
-            );
+            sub = sub
+                .item(
+                    &MenuItemBuilder::with_id("rust_toolchain", "Rust Toolchain…")
+                        .build(handle)?,
+                )
+                .separator()
+                .item(
+                    &MenuItemBuilder::with_id("open_rust_lang", "rust-lang.org…")
+                        .build(handle)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("open_rustup", "rustup.rs…")
+                        .build(handle)?,
+                );
             has_items = true;
         }
 

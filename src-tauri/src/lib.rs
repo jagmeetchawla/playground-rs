@@ -768,6 +768,18 @@ pub fn run() {
                 "show_help" => Some("menu:help"),
                 "show_about" => Some("menu:about"),
                 "rust_toolchain" => Some("menu:rust-toolchain"),
+                "open_rust_lang" => {
+                    let _ = std::process::Command::new("open")
+                        .arg("https://www.rust-lang.org")
+                        .spawn();
+                    None
+                }
+                "open_rustup" => {
+                    let _ = std::process::Command::new("open")
+                        .arg("https://rustup.rs")
+                        .spawn();
+                    None
+                }
                 _ => {
                     // Dynamic book events from language modules
                     let mut book_event = None;

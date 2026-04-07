@@ -1606,7 +1606,18 @@
 
 {#if showFixWizard}
   <ToolchainFixWizard
-    onclose={() => showFixWizard = false}
+    onclose={async () => {
+      showFixWizard = false
+      // Re-check on close too: covers the case where the toolchain changed
+      // out from under us (e.g. user nuked rustup while the app was running)
+      // and the user dismisses without running an in-app fix.
+      try {
+        const tc = await invoke<any>('check_toolchain')
+        if (tc.rust_state) rustState = tc.rust_state
+        toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+      } catch {}
+      toolchainRefreshKey++
+    }}
     onfixed={async () => {
       // Refresh App-level toolchain state so the toolbar pill flips immediately.
       try {
