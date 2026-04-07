@@ -62,7 +62,7 @@
 
 | Tool | Version |
 |---|---|
-| macOS | 26 Tahoe or later |
+| macOS | 14 Sonoma or later |
 | Rust toolchain | stable — install via [rustup.rs](https://rustup.rs) |
 | Node.js | 18+ |
 | pnpm | 8+ |

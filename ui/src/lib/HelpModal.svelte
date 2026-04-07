@@ -84,7 +84,7 @@
         by Swift Playgrounds. Write code, press <kbd>⌘R</kbd>, see output stream live.
       </p>
       <p class="lead-meta">
-        Requires <strong>macOS 26 Tahoe or later</strong>.
+        Requires <strong>macOS 14 Sonoma or later</strong>.
       </p>
 
       <div class="card-grid">
