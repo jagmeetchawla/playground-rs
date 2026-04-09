@@ -42,6 +42,7 @@
 
 - **Multi-language** — Rust, C/C++ (Clang), Zig, and Swift project types
 - **Welcome Wizard** — 5-step first-launch setup: choose languages, check toolchains, set theme, load books
+- **Guided toolchain install & repair** — detects Xcode CLT + Rust toolchain state on launch; two paths: "Help Me Install" (guided, in-app) or "I'll Do It Myself" (Terminal commands with copy-to-clipboard). No terminal needed for a complete Rust setup from scratch.
 - **Language gating** — only enabled languages appear in menus, project switcher, and settings
 - **Live execution** — ⌘R compiles and runs; stdout/stderr streams in real time
 - **Interactive console** — playgrounds that use `stdin` get a live input field in the Console panel
