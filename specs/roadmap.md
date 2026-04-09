@@ -532,6 +532,17 @@ v0.3.4 — In-App Toolchain Installer & Repair
         and could cause unexpected state changes behind the modal.
         Discovered: 2026-04-09 during testing.
 
+      • Book projects: Cargo.toml "Add Dependency" button is still
+        enabled. The editor tab is correctly read-only (locked for
+        write), but the dependency manager toolbar action bypasses the
+        read-only check and writes to the book project's Cargo.toml.
+        Fix: gate add_dependency/remove_dependency backend commands
+        on !is_book_project, AND disable the toolbar dependency
+        buttons in the frontend when the active project is read-only.
+        Priority: Low. Doesn't corrupt anything (the book project
+        can be re-loaded to reset), but violates the "book projects
+        are read-only" contract. Discovered: 2026-04-09.
+
       • Copy to Project — two issues (2026-04-09):
         1. Only available for book project playgrounds. Should work for
            ANY playground → copy from any project to any other project.
