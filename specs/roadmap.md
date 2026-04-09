@@ -568,6 +568,58 @@ v0.3.4 — In-App Toolchain Installer & Repair
         Priority: Low. Not a data issue — just UX polish. Fix together
         in v0.3.5 or the next feature release.
 
+      • ARCHITECTURE: State-driven UI refactor.
+        Current state: UI behavior is spread across dozens of
+        independent $state variables, ad-hoc `if` checks, and
+        implicit assumptions. Examples of what breaks:
+          - Menus stay enabled when modals are open (logged above)
+          - Book project read-only bypassed by dep manager + drag-drop
+          - Pill status computed separately from wizard status
+          - Menu rebuild doesn't know about modal state
+          - Editor read-only check is separate from toolbar button
+            enable/disable logic
+        Root cause: no single source of truth for "what can the user
+        do right now." Each component independently decides its own
+        enabled/disabled state based on partial information.
+        Proposed fix: introduce a centralized UI state model that
+        ALL components derive from. Two levels:
+          (a) AppMode enum — what "screen" is active:
+              Normal, Wizard, Settings, FixWizard, Help, About,
+              NewPlayground, CopyToProject, Export
+              → drives: which menus are enabled, which shortcuts work,
+              whether backdrop blocks interaction
+          (b) ProjectContext struct — what the active project allows:
+              { isBookProject, isReadOnly, isLocked, hasPlayground,
+                hasActiveTab, isDirty, toolchainState, projectType }
+              → drives: which toolbar buttons are enabled, which
+              context menu items appear, whether drag-drop is accepted,
+              whether dep manager works, whether save/run/export are
+              available
+        Implementation:
+          - AppMode lives in App.svelte as a single $state
+          - ProjectContext is $derived from existing state variables
+          - Every component reads from these two sources instead of
+            checking raw booleans independently
+          - Menu rebuild takes AppMode + ProjectContext as inputs
+          - Toolbar, sidebar, editor all derive enabled states from
+            ProjectContext
+          - Modal open/close transitions update AppMode atomically
+        Benefits:
+          - One place to audit "what can the user do in state X"
+          - New features automatically get correct enable/disable
+            behavior by declaring their AppMode requirements
+          - Menu-modal sync fixed as a side effect
+          - Book project read-only enforced uniformly
+          - Easier to test (check state → check derived permissions)
+        This is the single most impactful refactor for long-term
+        maintainability. Every UI bug we logged in this session
+        (menu-modal, book deps, book drag-drop, copy-to-project
+        enable state) traces back to the same root cause: no
+        centralized state model.
+        Priority: HIGH for refactor sprint. Do before Power Edition.
+        Discuss design in detail before implementing — this touches
+        every component.
+
     Code review findings (specs/code-review-v0.3.4.md, 2026-04-09):
     Top 5 by impact — address before Power Edition ships:
       • Fix unbounded output buffer in stream_pipe
