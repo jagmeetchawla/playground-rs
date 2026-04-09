@@ -653,6 +653,27 @@
     </div>
   </section>
 
+  <!-- ── Welcome Wizard Slideshow ── -->
+  <section class="slideshow-section" id="wizard">
+    <div class="container">
+      <div class="section-header">
+        <h2>Zero to running Rust in minutes</h2>
+        <p>The Welcome Wizard handles everything &mdash; Xcode CLT, Rust toolchain, theme, and book examples. No terminal needed.</p>
+      </div>
+      <div class="slideshow" id="wizard-slideshow">
+        <div class="slide-container" id="wizard-slide-container">
+          <button class="slide-arrow prev" onclick="wizardPrev()">&#8249;</button>
+          <div class="slide-wrapper">
+            <img id="wizard-slide-img" src="images/welcome/1-welcome-entire-toolchain-missing.png" alt="Welcome Wizard screenshot">
+          </div>
+          <button class="slide-arrow next" onclick="wizardNext()">&#8250;</button>
+        </div>
+        <p class="slide-caption" id="wizard-slide-caption">Toolchain missing? The wizard detects it automatically.</p>
+        <div class="slide-dots" id="wizard-slide-dots"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- ── How It Works ── -->
   <section class="how-it-works" id="how-it-works">
     <div class="container">
@@ -936,6 +957,51 @@
     // Init
     renderDots();
     startAuto();
+
+    // ── Wizard Slideshow (single-theme, story-driven) ──
+    const wizardSlides = [
+      { src: 'images/welcome/1-welcome-entire-toolchain-missing.png',              caption: 'Toolchain missing? The wizard detects it automatically.' },
+      { src: 'images/welcome/2-toolchain-install-repair.png',                      caption: 'Two paths: guided in-app install or Terminal commands with Copy buttons.' },
+      { src: 'images/welcome/3-xcode-developer-tools-install.png',                 caption: '"Help Me Install" \u2014 click to trigger Apple\u2019s Xcode CLT installer.' },
+      { src: 'images/welcome/4-xcode-developer-tools-installing.png',              caption: 'Apple\u2019s installer runs in the background. The app watches for completion.' },
+      { src: 'images/welcome/5-xcode-dev-tools-installed-rust-toolchain-missing.png', caption: 'CLT installed. Now the wizard shows "Install Rust" as the next step.' },
+      { src: 'images/welcome/6-rust-toolchain-installing.png',                     caption: 'Rust installs via rustup \u2014 progress streams live in the console.' },
+      { src: 'images/welcome/7-entire-toolchain-installed.png',                    caption: 'Everything installed. Toolchain is healthy \u2014 all green.' },
+      { src: 'images/welcome/8-welcome-toolchain-healthy.png',                     caption: 'Back in the wizard \u2014 toolchain step shows healthy status.' },
+      { src: 'images/welcome/9-welcome-appearance.png',                            caption: 'Choose your theme, font, and editor settings.' },
+      { src: 'images/welcome/10-welcome-rust-book.png',                            caption: 'Optionally load 20 chapters of The Rust Programming Language.' },
+      { src: 'images/welcome/11-welcome-summary.png',                              caption: 'You\u2019re all set! Click Get Started to begin coding.' },
+    ];
+    let wizardCurrent = 0;
+    let wizardTimer;
+
+    function wizardRenderDots() {
+      const dots = document.getElementById('wizard-slide-dots');
+      dots.innerHTML = wizardSlides.map((_, i) =>
+        `<button class="slide-dot${i === wizardCurrent ? ' active' : ''}" onclick="wizardGo(${i})"></button>`
+      ).join('');
+    }
+
+    function wizardShow(index) {
+      wizardCurrent = index;
+      document.getElementById('wizard-slide-img').src = wizardSlides[index].src;
+      document.getElementById('wizard-slide-img').alt = wizardSlides[index].caption;
+      document.getElementById('wizard-slide-caption').textContent = wizardSlides[index].caption;
+      wizardRenderDots();
+    }
+
+    function wizardNext() { wizardShow((wizardCurrent + 1) % wizardSlides.length); }
+    function wizardPrev() { wizardShow((wizardCurrent - 1 + wizardSlides.length) % wizardSlides.length); }
+    function wizardGo(i) { wizardShow(i); }
+
+    function wizardStartAuto() { wizardTimer = setInterval(wizardNext, 5000); }
+    function wizardStopAuto() { clearInterval(wizardTimer); }
+    const wizContainer = document.getElementById('wizard-slide-container');
+    wizContainer.addEventListener('mouseenter', wizardStopAuto);
+    wizContainer.addEventListener('mouseleave', wizardStartAuto);
+
+    wizardRenderDots();
+    wizardStartAuto();
   </script>
 </body>
 </html>
