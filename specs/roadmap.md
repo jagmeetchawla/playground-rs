@@ -432,6 +432,26 @@ v0.3.4 — In-App Toolchain Installer & Repair
         and could cause unexpected state changes behind the modal.
         Discovered: 2026-04-09 during testing.
 
+      • Copy to Project — two issues (2026-04-09):
+        1. Only available for book project playgrounds. Should work for
+           ANY playground → copy from any project to any other project.
+           Use case: user has utility code in one project they want to
+           reuse in another. Currently they have to manually copy the
+           .rs file via Finder. The context menu action should appear
+           for all playgrounds (book AND user), with a target project
+           picker that excludes the source project.
+        2. When no editable Rust project exists (e.g. only book projects
+           loaded), "Copy to Project" is still enabled in the context
+           menu. Clicking it shows an error: "No Rust project available,
+           create one first." Harmless but confusing — the menu item
+           should be disabled (greyed out) when there are no valid
+           target projects. Check: filter projects by (a) is user
+           project (not book/readonly), (b) is same language type as
+           source, (c) is not the source project itself. If the
+           filtered list is empty, disable the action.
+        Priority: Low. Not a data issue — just UX polish. Fix together
+        in v0.3.5 or the next feature release.
+
     Code review findings (specs/code-review-v0.3.4.md, 2026-04-09):
     Top 5 by impact — address before Power Edition ships:
       • Fix unbounded output buffer in stream_pipe
