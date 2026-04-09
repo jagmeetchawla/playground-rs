@@ -532,16 +532,21 @@ v0.3.4 — In-App Toolchain Installer & Repair
         and could cause unexpected state changes behind the modal.
         Discovered: 2026-04-09 during testing.
 
-      • Book projects: Cargo.toml "Add Dependency" button is still
-        enabled. The editor tab is correctly read-only (locked for
-        write), but the dependency manager toolbar action bypasses the
-        read-only check and writes to the book project's Cargo.toml.
-        Fix: gate add_dependency/remove_dependency backend commands
-        on !is_book_project, AND disable the toolbar dependency
-        buttons in the frontend when the active project is read-only.
-        Priority: Low. Doesn't corrupt anything (the book project
-        can be re-loaded to reset), but violates the "book projects
-        are read-only" contract. Discovered: 2026-04-09.
+      • Book projects: two read-only bypass bugs (2026-04-09):
+        1. Cargo.toml "Add Dependency" button is still enabled. The
+           editor tab is correctly read-only, but the dependency
+           manager toolbar action bypasses the check and writes to
+           the book project's Cargo.toml.
+        2. Content folder: "+ Add File" button is correctly disabled,
+           but drag-and-drop from Finder still works — files can be
+           dropped into a book project's content folder.
+        Fix: gate add_dependency/remove_dependency + import_content_file
+        backend commands on !is_book_project. Frontend: disable
+        toolbar dep buttons AND reject drag-drop events when the
+        active project is read-only.
+        Priority: Low. Doesn't corrupt anything (book projects can
+        be re-loaded to reset), but violates the "book projects are
+        read-only" contract.
 
       • Copy to Project — two issues (2026-04-09):
         1. Only available for book project playgrounds. Should work for
