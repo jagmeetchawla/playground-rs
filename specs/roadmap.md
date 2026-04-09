@@ -399,6 +399,39 @@ v0.3.4 — In-App Toolchain Installer & Repair
         the version isn't actually bumped. Had to hand-edit during the
         v0.3.4 bump. Fix before next version bump.
 
+      • Menus remain enabled when modal dialogs are open (Welcome
+        Wizard, Settings, FixWizard, Help, About, etc.). User can
+        trigger actions (New Project, Run, Export, etc.) through menus
+        while a modal is up, causing state changes in the dimmed UI
+        behind the modal. Observed: New Project created behind the
+        Welcome Wizard.
+        Root cause: menus and modals are two independent state systems.
+        rebuild_menu() only considers playground/project state, not
+        whether a modal is active. Tauri's menu system is global (always
+        active) while modals are frontend-only (CSS overlay).
+        Fix approaches:
+          (a) Track a global `modalActive` state in App.svelte. When
+              any modal is open, call rebuild_menu with all items
+              disabled (or a minimal safe set: just Quit, Hide, About).
+              On modal close, rebuild with normal state. Simple but
+              adds a rebuild_menu round-trip per modal open/close.
+          (b) Introduce an AppMode enum (Normal, Wizard, Settings,
+              FixWizard, Help, About) that drives BOTH menu state and
+              UI rendering. Menu items are enabled/disabled based on
+              the current mode. More architectural but cleaner — each
+              mode explicitly declares what actions are available.
+          (c) Frontend-only: intercept menu events in App.svelte and
+              silently drop them if any modal is open. Cheapest fix but
+              feels hacky — menus visually look enabled but do nothing.
+        Recommended: (b) for long-term, (a) as a quick v0.3.5 fix.
+        The AppMode enum aligns with the "single AppState struct"
+        suggestion from the code review. Both menus and UI would derive
+        from one source of truth.
+        Priority: Medium. Not a data-corruption risk (modals block the
+        main editor, so file edits can't happen). But it's confusing UX
+        and could cause unexpected state changes behind the modal.
+        Discovered: 2026-04-09 during testing.
+
     Code review findings (specs/code-review-v0.3.4.md, 2026-04-09):
     Top 5 by impact — address before Power Edition ships:
       • Fix unbounded output buffer in stream_pipe
