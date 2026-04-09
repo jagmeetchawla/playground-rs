@@ -197,7 +197,7 @@ See the warning at the top of this file. Additionally:
 
 | Version | Highlights |
 |---|---|
-| v0.3.4 | In-app Rust toolchain installer & repair (no terminal needed), per-language menu restructure, clickable status pill (●/◐/○), `RUSTUP_AUTO_INSTALL=0` on read-only probes so broken state stays visible |
+| v0.3.4 | In-app Rust toolchain installer & repair with guided + manual install paths, Xcode CLT detection as prerequisite, FixWizard split layout with auto-polling, Help menu restructure (Website, GitHub, Rust Help, Rust Book top-level), Rust Toolchain help section, toolchain step skip indicator, code-signed + notarized DMG distribution |
 | v0.3.3 | Edition builds — Rust Edition, C Edition, Power Edition as separate DMGs from one codebase. Saved snapshots with revert, run lifecycle status, update checker, language logos, dynamic window title |
 | v0.3.2 | Welcome Wizard (5-step first-launch), language gating, per-language hello projects, native→clang rename, Apple HIG styling, dual-mode settings/wizard, book management via checkboxes, toolchain pill status |
 | v0.3.1 | Read-only book projects, per-playground locking, Copy to Project, Learn menu, flyout submenus, Zig/Swift themes, auto theme matching, theme dropdown |

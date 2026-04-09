@@ -39,7 +39,7 @@
     "macOS": {
       "entitlements": "./entitlements.plist",
       "exceptionDomain": "",
-      "signingIdentity": null,
+      "signingIdentity": "Developer ID Application: ONE STEP AHEAD APPS, LLC (CW985P4WQJ)",
       "minimumSystemVersion": "12.0"
     }
   }
