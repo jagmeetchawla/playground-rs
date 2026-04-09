@@ -276,6 +276,106 @@ v0.3.4 — In-App Toolchain Installer & Repair
     It works, it's Apple-blessed, and the auto-polling mitigates the
     main UX cost.
 
+  - FEATURE: iCloud sync — projects, settings, and state across Macs.
+    User request (2026-04-09). Full iCloud integration: projects sync
+    across devices, settings follow the user, window state restores on
+    any Mac. Use case: work on MacBook at coffee shop, continue on Mac
+    Studio at home — same projects, same theme, same open tabs.
+    Three layers:
+      1. Project sync (iCloud Drive)
+         • Move (or symlink) the projects folder into the app's iCloud
+           container: ~/Library/Mobile Documents/iCloud~com.rustic-
+           playground.<edition>/projects/
+         • iCloud Drive handles upload, download, conflict resolution
+         • Each .rs file, Cargo.toml, rustic.toml, content/ files all
+           sync automatically
+         • Conflict resolution: iCloud creates "... 2" copies on
+           conflict. App should detect these and surface a merge UI
+           or "pick a version" dialog. For v1, just surface the
+           conflict visually and let the user choose.
+         • Offline support: iCloud Drive caches locally, so the app
+           works offline and syncs when connectivity returns.
+         • Large files: target/ directories must be EXCLUDED from sync
+           (build artifacts are huge, machine-specific, and
+           regeneratable). Use .nosync extension or .gitignore-style
+           exclusion via iCloud's resource values.
+           `NSURL.setResourceValue(true, forKey: .isExcludedFromBackupKey)`
+         • Book projects: sync or re-seed on each device? Re-seeding
+           is simpler (book data is baked into the binary). Sync only
+           user-created projects. Mark book projects with a "don't
+           sync" flag in rustic.toml.
+      2. Settings sync (NSUbiquitousKeyValueStore)
+         • Theme, font size, font family, tab size, cargo path, enabled
+           languages, wizard_completed — all sync via Apple's KVS.
+         • NSUbiquitousKeyValueStore is limited to 1 MB total / 1024
+           keys — more than enough for settings.
+         • Changes propagate in seconds (faster than iCloud Drive).
+         • Conflict resolution: last-write-wins is fine for settings
+           (user's most recent preference is the right one).
+         • Implementation: Tauri command that reads/writes KVS via
+           Objective-C bridge. Frontend polls or listens for change
+           notifications (NSUbiquitousKeyValueStoreDidChangeExternally).
+      3. Window state sync (iCloud Drive or KVS)
+         • window-state.json (size, position, sidebar width, output
+           height, open tabs, active tab, layout) syncs so the user
+           picks up where they left off on another Mac.
+         • Caveat: window position is screen-dependent. If MacBook has
+           a 14" display and Studio has a 27", restored position may
+           be off-screen. Clamp to visible screen bounds on restore.
+         • Open tabs reference playground names, which only make sense
+           if the projects also synced. Dependency on layer 1.
+    iCloud entitlements needed:
+      • com.apple.developer.icloud-container-identifiers
+      • com.apple.developer.icloud-services (CloudDocuments + KVS)
+      • com.apple.developer.ubiquity-container-identifiers
+      • Requires Apple Developer Program membership ($99/year) — same
+        as signing/notarization. Can't test iCloud without it.
+    Tauri + iCloud considerations:
+      • Tauri doesn't have built-in iCloud support. Need to bridge
+        to Apple's CloudKit / iCloud Drive APIs via Objective-C or
+        Swift interop from Rust. Options:
+          (a) Swift plugin compiled as a .dylib, loaded by Tauri
+          (b) objc2 crate for direct Objective-C message passing
+          (c) Shell out to `defaults` for KVS (hacky but works for
+              simple reads/writes)
+        Recommend (b) for KVS (small surface area) and rely on
+        iCloud Drive's filesystem integration for project sync
+        (just move the projects folder to the iCloud container —
+        the OS handles the rest).
+    Settings toggle:
+      • iCloud sync should be opt-in with a toggle in Settings:
+        "Sync projects and settings via iCloud" (default: off).
+      • When enabled, migrate existing local projects to iCloud
+        container. When disabled, migrate back to local.
+      • Show sync status in Settings: "Last synced: 2 min ago" or
+        "Syncing..." or "Offline — will sync when connected."
+    Edition isolation:
+      • Each edition has its own iCloud container (different bundle
+        ID → different container). Rust Edition and Power Edition
+        DON'T share projects via iCloud, same as local storage.
+      • If the user wants cross-edition project access, that's a
+        separate feature (local import/export, not iCloud).
+    Privacy:
+      • User's code lives in their own iCloud account. We never see
+        it. No telemetry, no server-side access. Apple manages the
+        encryption and access control.
+      • Document clearly: "Your projects sync through YOUR iCloud
+        account. We have no access to your code."
+    NOT in v1 of iCloud support:
+      • Real-time collaboration (two users editing same playground)
+      • Cross-edition sync (Rust ↔ Power)
+      • Selective sync (sync some projects but not others)
+      • Version history beyond what iCloud Drive provides natively
+      • iOS/iPadOS companion app (but iCloud container is ready for
+        it if we ever build one)
+    Priority: Medium. Valuable for multi-Mac users (the user's own
+    workflow: MacBook + Mac Studio). Not critical for v0.3.4 launch.
+    Revisit after Rust Edition ships and we see how many users have
+    multi-Mac setups.
+    Depends on: Apple Developer Program membership (for iCloud
+    entitlements). Same dependency as signing/notarization — these
+    will likely be acquired together.
+
   - FEATURE: Parallel playground runs within a single edition.
     User observation (2026-04-08): across editions the app happily runs two
     playgrounds in parallel (filesystem isolation + process isolation free
