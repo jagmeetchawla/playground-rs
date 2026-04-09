@@ -553,6 +553,14 @@ async fn check_url(urls: Vec<String>) -> String {
 #[derive(serde::Deserialize, Debug)]
 #[serde(tag = "type")]
 enum ToolchainFixAction {
+    /// `xcode-select --install` — triggers Apple's GUI installer for the
+    /// Xcode Command Line Tools. This is a hard prerequisite for Rust on
+    /// macOS (rustc relies on `cc` and the macOS SDK to link). The command
+    /// exits immediately after opening the GUI dialog; the actual download
+    /// and install happens in the background under Apple's installer, which
+    /// can take 10–30 minutes. The frontend must re-check after the user
+    /// finishes Apple's installer dialog.
+    InstallXcodeCLT,
     /// Run the official sh.rustup.rs installer with -y for unattended install.
     InstallRustup,
     /// `rustup default stable` — fixes "no default toolchain" state.
@@ -577,6 +585,15 @@ async fn run_toolchain_fix(
         .unwrap_or_else(|| "rustup".to_string());
 
     let mut cmd = match &action {
+        ToolchainFixAction::InstallXcodeCLT => {
+            // Trigger Apple's GUI installer for Command Line Tools. The command
+            // itself returns within a second or two; the actual install runs
+            // under Apple's installer GUI, which we can't stream. Frontend
+            // instructs the user to complete Apple's dialog, then Re-check.
+            let mut c = Command::new("xcode-select");
+            c.arg("--install");
+            c
+        }
         ToolchainFixAction::InstallRustup => {
             // Pipe sh.rustup.rs through sh with -y for unattended install.
             // --default-toolchain stable installs and sets the default in one step
@@ -777,6 +794,18 @@ pub fn run() {
                 "open_rustup" => {
                     let _ = std::process::Command::new("open")
                         .arg("https://rustup.rs")
+                        .spawn();
+                    None
+                }
+                "open_website" => {
+                    let _ = std::process::Command::new("open")
+                        .arg("https://rustic-playground.app")
+                        .spawn();
+                    None
+                }
+                "open_github" => {
+                    let _ = std::process::Command::new("open")
+                        .arg("https://github.com/jagmeetchawla/rustic-playground")
                         .spawn();
                     None
                 }

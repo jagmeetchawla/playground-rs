@@ -146,19 +146,23 @@
   let langEnabled = $derived(enabledLangs.includes(projectType))
   let pillStatus: 'not-enabled' | 'missing' | 'partial' | 'ok' = $derived.by(() => {
     if (!langEnabled) return 'not-enabled'
-    if (!activeToolchain.version) return 'missing'
-    if (projectType === 'rust' && toolchainLabel === '…') return 'missing'
-    // Rust: honor the full rust_state from check_toolchain
+    // Rust: check rust_state FIRST so clt_missing trumps a stale cargo version.
+    // (Cargo can report a version even when CLT is gone — rustc runs but the
+    // link step fails. We must mark this as broken regardless.)
     if (projectType === 'rust') {
+      if (rustState === 'clt_missing') return 'missing'
       if (rustState === 'not_installed' || rustState === 'no_default') return 'missing'
       if (rustState === 'missing_components') return 'partial'
     }
+    if (!activeToolchain.version) return 'missing'
+    if (projectType === 'rust' && toolchainLabel === '…') return 'missing'
     // Zig: warn if installed but not the supported 0.15.x version
     if (projectType === 'zig' && zigInfo && !zigInfo.version_ok) return 'partial'
     return 'ok'
   })
   let pillText = $derived.by(() => {
     if (pillStatus === 'not-enabled') return `${lang.label} support not enabled`
+    if (projectType === 'rust' && rustState === 'clt_missing') return 'Xcode CLT required'
     if (pillStatus === 'missing') return `${toolchainName} not found`
     if (pillStatus === 'partial' && projectType === 'zig') return `${toolchainName} ${toolchainLabel} · requires 0.15.x`
     return `${toolchainName} ${toolchainLabel}${lang.experimental ? ' · experimental' : ''}`

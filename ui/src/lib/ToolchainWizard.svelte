@@ -31,17 +31,17 @@
     refreshKey?: number
   } = $props()
 
-  type RustState = 'not_installed' | 'no_default' | 'missing_components' | 'healthy'
+  type RustState = 'clt_missing' | 'not_installed' | 'no_default' | 'missing_components' | 'healthy'
   type ToolchainStatus = {
     wizard_completed: boolean
     all_good: boolean
     rust_state: RustState
     missing_components: string[]
+    xcode_clt: { installed: boolean; path: string | null }
     rustup: { installed: boolean; version: string | null }
     cargo: { installed: boolean; path: string; version: string | null }
     rustc: { installed: boolean; version: string | null }
     active_toolchain: string | null
-    installed_toolchains: string[]
     components: { rustfmt: boolean; clippy: boolean }
     clang: { installed: boolean; path: string; version: string | null }
     zig: { installed: boolean; path: string; version: string | null; version_ok: boolean }
@@ -143,6 +143,30 @@
     hasSelection
       ? 'Selected: ' + selectedLangs.map(t => getLang(t as ProjectType).label).join(', ')
       : 'You must select at least one language'
+  )
+
+  // Note: we deliberately do NOT block Next/Get Started on a broken toolchain.
+  // The status card makes the situation obvious (red pill, headline, install
+  // button), and the user has multiple in-app paths to fix it later (toolbar
+  // pill click, Settings → Repair Toolchain, Help → Rust Help → Rust Toolchain).
+  // Forcing them through install before they can see the rest of the app would
+  // be hostile — let them browse, read help, decide if they want this tool.
+  // When they actually try to ⌘R a playground, the run will fail with a clear
+  // error pointing back at the toolchain modal.
+
+  // True when Rust is selected but the toolchain is in a hard-block state
+  // (no rust at all, no CLT, or no default toolchain). Used to mark the
+  // toolchain wizard step red instead of green when the user proceeds past
+  // it without installing, and to annotate the finish-step summary so they
+  // know the toolchain still needs attention.
+  // Note: missing_components is NOT considered "skipped" — cargo can still
+  // compile and run, the components are just optional polish.
+  let toolchainSkipped = $derived(
+    selectedLangs.includes('rust') &&
+    status !== null &&
+    (status.rust_state === 'clt_missing' ||
+     status.rust_state === 'not_installed' ||
+     status.rust_state === 'no_default')
   )
 
   // ── Toolchain check ───────────────────────────────────────────────────
@@ -276,18 +300,37 @@
   {#if mode === 'wizard'}
     <div class="step-bar">
       {#each wizardSteps as label, i}
+        <!-- Conditions inlined into directives (not via {@const}) because
+             {@const} inside {#each} doesn't reliably re-evaluate when
+             external $state (status, toolchainSkipped) changes after the
+             iteration first renders. Inlining ensures Svelte's reactivity
+             tracking sees the dependencies and updates the classes when
+             status arrives from check_toolchain. -->
         <button
           class="step-dot"
           class:active={step === i + 1}
-          class:done={step > i + 1}
+          class:done={step > i + 1 && !(allWizardPanels[i] === 'toolchains' && toolchainSkipped)}
+          class:skipped={step > i + 1 && allWizardPanels[i] === 'toolchains' && toolchainSkipped}
           onclick={() => { if (i + 1 < step) step = (i + 1) as any }}
           disabled={i + 1 > step}
         >
-          <span class="dot">{step > i + 1 ? '✓' : i + 1}</span>
+          <span class="dot">
+            {#if step > i + 1 && allWizardPanels[i] === 'toolchains' && toolchainSkipped}
+              !
+            {:else if step > i + 1}
+              ✓
+            {:else}
+              {i + 1}
+            {/if}
+          </span>
           <span class="step-label">{label}</span>
         </button>
         {#if i < wizardSteps.length - 1}
-          <div class="step-line" class:done={step > i + 1}></div>
+          <div
+            class="step-line"
+            class:done={step > i + 1 && !(allWizardPanels[i] === 'toolchains' && toolchainSkipped)}
+            class:skipped={step > i + 1 && allWizardPanels[i] === 'toolchains' && toolchainSkipped}
+          ></div>
         {/if}
       {/each}
     </div>
@@ -371,6 +414,9 @@
                     {#if status.rust_state === 'healthy'}
                       <div class="status-headline ok">● Rust toolchain is healthy</div>
                       <p class="status-sub">Everything is installed and ready to use.</p>
+                    {:else if status.rust_state === 'clt_missing'}
+                      <div class="status-headline missing">○ Xcode Command Line Tools required</div>
+                      <p class="status-sub">Rust needs Apple's Command Line Tools to compile on macOS. Install them first — this one-time setup also enables C/C++ and Swift. <strong>Apple's installer takes about 10–15 minutes</strong>, so grab a coffee.</p>
                     {:else if status.rust_state === 'not_installed'}
                       <div class="status-headline missing">○ Rust is not installed</div>
                       <p class="status-sub">Install rustup, cargo, and the stable toolchain to start writing Rust.</p>
@@ -384,34 +430,43 @@
                   </div>
                   <div class="detail-grid">
                     <div class="detail-row">
-                      <span class="detail-icon" class:ok={status.rustup.installed} class:missing={!status.rustup.installed}>{status.rustup.installed ? '●' : '○'}</span>
-                      <span class="detail-label">rustup</span>
-                      <span class="detail-value">{status.rustup.installed ? (status.rustup.version ?? 'installed') : 'not found'}</span>
+                      <span class="detail-icon" class:ok={status.xcode_clt.installed} class:missing={!status.xcode_clt.installed}>{status.xcode_clt.installed ? '●' : '○'}</span>
+                      <span class="detail-label">Xcode CLT</span>
+                      <span class="detail-value">{status.xcode_clt.installed ? (status.xcode_clt.path ?? 'installed') : 'not found'}</span>
                     </div>
-                    <div class="detail-row">
-                      <span class="detail-icon" class:ok={status.cargo.installed} class:missing={!status.cargo.installed}>{status.cargo.installed ? '●' : '○'}</span>
-                      <span class="detail-label">cargo</span>
-                      <span class="detail-value">{status.cargo.installed ? (status.cargo.version ?? 'installed') : 'not found'}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-icon" class:ok={status.rustc.installed} class:missing={!status.rustc.installed}>{status.rustc.installed ? '●' : '○'}</span>
-                      <span class="detail-label">rustc</span>
-                      <span class="detail-value">{status.rustc.installed ? (status.rustc.version ?? 'installed') : 'not found'}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-icon" class:ok={status.components.rustfmt} class:missing={!status.components.rustfmt}>{status.components.rustfmt ? '●' : '○'}</span>
-                      <span class="detail-label">rustfmt</span>
-                      <span class="detail-value">{status.components.rustfmt ? 'installed' : 'not found'}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-icon" class:ok={status.components.clippy} class:missing={!status.components.clippy}>{status.components.clippy ? '●' : '○'}</span>
-                      <span class="detail-label">clippy</span>
-                      <span class="detail-value">{status.components.clippy ? 'installed' : 'not found'}</span>
-                    </div>
+                    {#if status.rust_state !== 'clt_missing'}
+                      <div class="detail-row">
+                        <span class="detail-icon" class:ok={status.rustup.installed} class:missing={!status.rustup.installed}>{status.rustup.installed ? '●' : '○'}</span>
+                        <span class="detail-label">rustup</span>
+                        <span class="detail-value">{status.rustup.installed ? (status.rustup.version ?? 'installed') : 'not found'}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-icon" class:ok={status.cargo.installed} class:missing={!status.cargo.installed}>{status.cargo.installed ? '●' : '○'}</span>
+                        <span class="detail-label">cargo</span>
+                        <span class="detail-value">{status.cargo.installed ? (status.cargo.version ?? 'installed') : 'not found'}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-icon" class:ok={status.rustc.installed} class:missing={!status.rustc.installed}>{status.rustc.installed ? '●' : '○'}</span>
+                        <span class="detail-label">rustc</span>
+                        <span class="detail-value">{status.rustc.installed ? (status.rustc.version ?? 'installed') : 'not found'}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-icon" class:ok={status.components.rustfmt} class:missing={!status.components.rustfmt}>{status.components.rustfmt ? '●' : '○'}</span>
+                        <span class="detail-label">rustfmt</span>
+                        <span class="detail-value">{status.components.rustfmt ? 'installed' : 'not found'}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-icon" class:ok={status.components.clippy} class:missing={!status.components.clippy}>{status.components.clippy ? '●' : '○'}</span>
+                        <span class="detail-label">clippy</span>
+                        <span class="detail-value">{status.components.clippy ? 'installed' : 'not found'}</span>
+                      </div>
+                    {/if}
                   </div>
                   {#if status.rust_state !== 'healthy'}
                     <div class="install-section">
-                      <button class="btn btn-primary" onclick={() => onrepair?.()}>Install/Repair Toolchain…</button>
+                      <button class="btn btn-primary" onclick={() => onrepair?.()}>
+                        {mode === 'wizard' ? 'Install Rust Toolchain…' : 'Repair Rust Toolchain…'}
+                      </button>
                     </div>
                   {/if}
 
@@ -484,6 +539,23 @@
           </div>
 
           <button class="btn btn-secondary recheck-btn" onclick={runCheck}>Re-check</button>
+
+          {#if selectedLangs.includes('rust')}
+            <!-- External help links — visible in both wizard and settings mode.
+                 Compact footer so users know where to ask for help with toolchain
+                 issues we can't fix in-app. -->
+            <div class="help-links">
+              <div class="help-links-title">Need help with the Rust toolchain?</div>
+              <ul class="help-links-list">
+                <li><button class="link-btn" onclick={() => shellOpen('https://rustup.rs')}>rustup.rs</button> — official installer</li>
+                <li><button class="link-btn" onclick={() => shellOpen('https://www.rust-lang.org/learn/get-started')}>rust-lang.org</button> — getting started guide</li>
+                <li><button class="link-btn" onclick={() => shellOpen('https://users.rust-lang.org')}>users.rust-lang.org</button> — friendly Q&A forum</li>
+                <li><button class="link-btn" onclick={() => shellOpen('https://www.reddit.com/r/rust')}>r/rust</button> — Reddit community</li>
+                <li><button class="link-btn" onclick={() => shellOpen('https://github.com/rust-lang/rustup/issues')}>rustup issues</button> — for installer bugs</li>
+                <li><button class="link-btn" onclick={() => shellOpen('https://github.com/jagmeetchawla/rustic-playground/issues')}>Report a bug</button> — for issues with this app</li>
+              </ul>
+            </div>
+          {/if}
         {/if}
       </div>
 
@@ -629,13 +701,15 @@
           <div class="summary-row">
             <span class="summary-label">Languages</span>
             <span class="summary-value">
-              {selectedLangs.map(t => getLang(t as ProjectType).label).join(', ')}
+              {selectedLangs.map(t => getLang(t as ProjectType).label).join(', ')}{toolchainSkipped ? ' — Rust toolchain skipped' : ''}
             </span>
           </div>
           {:else}
           <div class="summary-row">
             <span class="summary-label">Language</span>
-            <span class="summary-value">{editionLang!.label}</span>
+            <span class="summary-value" class:warn={toolchainSkipped}>
+              {editionLang!.label}{toolchainSkipped ? ' (toolchain skipped)' : ''}
+            </span>
           </div>
           {/if}
           <div class="summary-row">
@@ -794,6 +868,15 @@
   }
   .step-dot.active .step-label { color: var(--accent); }
   .step-dot.done .step-label { color: var(--green); }
+  /* Skipped state — user advanced past the toolchain step without installing.
+     Red dot with "!" inside, red label. Visually distinct from "done". */
+  .step-dot.skipped .dot {
+    background: var(--red, #d44);
+    color: #fff;
+    border-color: var(--red, #d44);
+    font-size: 11px;
+  }
+  .step-dot.skipped .step-label { color: var(--red, #d44); }
   .step-line {
     flex: 1; height: 1.5px;
     background: var(--border);
@@ -802,6 +885,7 @@
     transition: background 0.2s;
   }
   .step-line.done { background: var(--green); }
+  .step-line.skipped { background: var(--red, #d44); }
 
   /* ── Body ── */
   .modal-body {
@@ -1075,6 +1159,10 @@
   }
   .summary-label { color: var(--text-tertiary); font-weight: 600; }
   .summary-value { color: var(--text); font-weight: 500; text-align: right; }
+  /* Toolchain skipped state — red text on the language summary value to
+     match the red step indicator from the wizard. Visually says "this is
+     not OK, fix it later." */
+  .summary-value.warn { color: var(--red, #d44); }
 
   /* ── Footer ── */
   .modal-footer {
@@ -1099,4 +1187,42 @@
   .btn-primary:hover { filter: brightness(1.15); }
   .btn-finish { padding: 8px 28px; font-size: 13px; }
   .btn-reset { margin-top: 12px; font-size: 11px; padding: 4px 12px; opacity: 0.7; }
+
+  /* External help links footer in toolchain panel — visible in both wizard
+     and settings mode. Compact, unobtrusive, but discoverable. */
+  .help-links {
+    margin-top: 16px;
+    padding: 12px 14px;
+    background: rgba(0,0,0,0.15);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .help-links-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .help-links-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 16px;
+  }
+  .help-links-list li {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    line-height: 1.6;
+  }
+  .help-links .link-btn {
+    background: none; border: none; padding: 0;
+    color: var(--accent);
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .help-links .link-btn:hover { text-decoration: underline; }
 </style>

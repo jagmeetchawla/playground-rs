@@ -194,13 +194,13 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         .select_all()
         .build()?;
 
-    // ── Per-language menus (replaces old "Learn" menu) ──
-    // Single-language editions: one top-level menu named after the language
-    //   (e.g. "Rust") with toolchain + book actions inline.
-    // Power Edition (multi-language): one top-level "Languages" menu containing
-    //   per-language submenus.
+    // ── Per-language submenus (live under the Help menu) ──
+    // Single-language editions: a "<Lang> Help" submenu under Help (e.g. "Rust Help")
+    //   containing the language's toolchain + book actions.
+    // Power Edition (multi-language): a "Languages" submenu under Help containing
+    //   per-language sub-submenus (each still named just "Rust", "C/C++", etc.).
     //
-    // Each language menu contains (when applicable):
+    // Each language submenu contains (when applicable):
     //   • Rust Toolchain…           (Rust only — opens install/repair wizard)
     //   • rust-lang.org…            (Rust only — opens website)
     //   • rustup.rs…                (Rust only — opens website)
@@ -220,12 +220,21 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     }
 
     /// Build a single language's submenu. Returns None if there's nothing to show.
+    /// The `title` parameter sets the submenu's displayed name — callers use
+    /// `"<Lang> Help"` for single-language editions and just the language name
+    /// for Power Edition's grouped "Languages" wrapper.
+    /// When `include_book` is false, the book sub-submenu is NOT included in
+    /// the returned language submenu — the caller is expected to place the
+    /// book separately (e.g. as a top-level Help menu item in single-language
+    /// editions for extra discoverability).
     fn build_lang_submenu<R: tauri::Runtime>(
         handle: &impl tauri::Manager<R>,
         lang_variant: &Lang,
         project_sources: &HashMap<String, String>,
+        title: &str,
+        include_book: bool,
     ) -> tauri::Result<Option<tauri::menu::Submenu<R>>> {
-        let mut sub = SubmenuBuilder::new(handle, lang_display_name(lang_variant));
+        let mut sub = SubmenuBuilder::new(handle, title);
         let mut has_items = false;
 
         // Toolchain item — Rust only for v0.3.4. Single entry that opens the
@@ -249,34 +258,17 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         }
 
         // Book items grouped under a sub-submenu named after the book
-        // (matches the structure of the old "Learn" menu).
-        if let Some(book) = lang_variant.book_info() {
-            if has_items {
-                sub = sub.separator();
+        // (matches the structure of the old "Learn" menu). Only included
+        // here when `include_book` is true — single-language editions
+        // promote the book to a top-level Help item instead.
+        if include_book {
+            if let Some(sm) = build_book_submenu(handle, lang_variant, project_sources)? {
+                if has_items {
+                    sub = sub.separator();
+                }
+                sub = sub.item(&sm);
+                has_items = true;
             }
-            let already_loaded = project_sources.values().any(|s| s == book.source_tag);
-            let book_submenu = SubmenuBuilder::new(handle, book.book_name)
-                .item(
-                    &MenuItemBuilder::with_id(book.menu_id, "Load Examples…")
-                        .enabled(!already_loaded)
-                        .build(handle)?,
-                )
-                .item(
-                    &MenuItemBuilder::with_id(book.remove_menu_id, "Remove Examples")
-                        .enabled(already_loaded)
-                        .build(handle)?,
-                )
-                .separator()
-                .item(
-                    &MenuItemBuilder::with_id(
-                        format!("open_book_{}", book.source_tag),
-                        "Read Online…",
-                    )
-                    .build(handle)?,
-                )
-                .build()?;
-            sub = sub.item(&book_submenu);
-            has_items = true;
         }
 
         if has_items {
@@ -286,19 +278,74 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         }
     }
 
-    // Collect submenus for every enabled language that has content.
+    /// Build the book sub-submenu for a language ("The Rust Book" etc.).
+    /// Returns None if the language has no book. Used both inside
+    /// build_lang_submenu (Power Edition nesting) and as a top-level Help
+    /// menu item (single-language editions).
+    fn build_book_submenu<R: tauri::Runtime>(
+        handle: &impl tauri::Manager<R>,
+        lang_variant: &Lang,
+        project_sources: &HashMap<String, String>,
+    ) -> tauri::Result<Option<tauri::menu::Submenu<R>>> {
+        let book = match lang_variant.book_info() {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+        let already_loaded = project_sources.values().any(|s| s == book.source_tag);
+        let book_submenu = SubmenuBuilder::new(handle, book.book_name)
+            .item(
+                &MenuItemBuilder::with_id(book.menu_id, "Load Examples…")
+                    .enabled(!already_loaded)
+                    .build(handle)?,
+            )
+            .item(
+                &MenuItemBuilder::with_id(book.remove_menu_id, "Remove Examples")
+                    .enabled(already_loaded)
+                    .build(handle)?,
+            )
+            .separator()
+            .item(
+                &MenuItemBuilder::with_id(
+                    format!("open_book_{}", book.source_tag),
+                    "Read Online…",
+                )
+                .build(handle)?,
+            )
+            .build()?;
+        Ok(Some(book_submenu))
+    }
+
+    // Collect submenus for every enabled language that has content. For
+    // single-language editions, the submenu title becomes "<Lang> Help"
+    // (e.g. "Rust Help") so it reads naturally under the Help menu. For
+    // Power Edition, inner items keep the plain language name since they
+    // sit inside an outer "Languages" wrapper.
     let mut lang_submenus: Vec<(&Lang, tauri::menu::Submenu<R>)> = Vec::new();
     for lang_variant in Lang::all() {
         if !enabled_languages.iter().any(|l| l == lang_variant.project_type()) {
             continue;
         }
-        if let Some(sm) = build_lang_submenu(handle, lang_variant, project_sources)? {
+        let title = if single_language {
+            format!("{} Help", lang_display_name(lang_variant))
+        } else {
+            lang_display_name(lang_variant).to_string()
+        };
+        // include_book is false in single-language mode — the book gets
+        // promoted to a top-level Help menu item for extra discoverability.
+        // In Power Edition, keep books nested inside Languages to avoid
+        // cluttering Help with 3 separate book entries.
+        let include_book = !single_language;
+        if let Some(sm) =
+            build_lang_submenu(handle, lang_variant, project_sources, &title, include_book)?
+        {
             lang_submenus.push((lang_variant, sm));
         }
     }
 
-    // Build the top-level language menu (single or grouped under "Languages").
-    let language_menu: Option<tauri::menu::Submenu<R>> = if single_language {
+    // Build the language-help bundle that lives inside the Help menu.
+    //   Single-language: the one "<Lang> Help" submenu directly.
+    //   Multi-language: wrap all per-language submenus in a "Languages" submenu.
+    let language_help_menu: Option<tauri::menu::Submenu<R>> = if single_language {
         lang_submenus.into_iter().next().map(|(_, sm)| sm)
     } else if lang_submenus.is_empty() {
         None
@@ -310,26 +357,74 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         Some(langs_builder.build()?)
     };
 
-    let help_menu = SubmenuBuilder::new(handle, "Help")
+    // For single-language editions, build the book submenu separately so
+    // it can sit as a top-level Help item below the language help submenu.
+    let top_level_book: Option<tauri::menu::Submenu<R>> = if single_language {
+        Lang::all()
+            .iter()
+            .find(|l| enabled_languages.iter().any(|e| e == l.project_type()))
+            .and_then(|lang| build_book_submenu(handle, lang, project_sources).ok().flatten())
+    } else {
+        None
+    };
+
+    // Help menu now hosts the language help submenu(s) plus external links.
+    // Structure (single-language):
+    //   Playground Help
+    //   ────
+    //   Rustic Playground Website
+    //   GitHub Repository
+    //   ────
+    //   <Lang> Help            ← toolchain + external lang links
+    //   The <Lang> Book        ← promoted to top-level for discoverability
+    //   ────
+    //   About Rustic Playground
+    // Structure (multi-language / Power Edition):
+    //   Playground Help
+    //   ────
+    //   Rustic Playground Website
+    //   GitHub Repository
+    //   ────
+    //   Languages              ← contains per-lang submenus, each with their book
+    //   ────
+    //   About Rustic Playground
+    let mut help_builder = SubmenuBuilder::new(handle, "Help")
         .item(
             &MenuItemBuilder::with_id("show_help", "Playground Help…")
                 .accelerator("CmdOrCtrl+Shift+/")
                 .build(handle)?,
         )
         .separator()
+        .item(
+            &MenuItemBuilder::with_id("open_website", "Rustic Playground Website…")
+                .build(handle)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("open_github", "GitHub Repository…")
+                .build(handle)?,
+        );
+    if language_help_menu.is_some() || top_level_book.is_some() {
+        help_builder = help_builder.separator();
+    }
+    if let Some(ref lhm) = language_help_menu {
+        help_builder = help_builder.item(lhm);
+    }
+    if let Some(ref book) = top_level_book {
+        help_builder = help_builder.item(book);
+    }
+    let help_menu = help_builder
+        .separator()
         .item(&MenuItemBuilder::with_id("show_about", "About Rustic Playground").build(handle)?)
         .build()?;
 
-    let mut menu_builder = MenuBuilder::new(handle)
+    MenuBuilder::new(handle)
         .item(&app_submenu)
         .item(&project_menu)
         .item(&playground_menu)
         .item(&run_menu)
-        .item(&edit_menu);
-    if let Some(ref lm) = language_menu {
-        menu_builder = menu_builder.item(lm);
-    }
-    menu_builder.item(&help_menu).build()
+        .item(&edit_menu)
+        .item(&help_menu)
+        .build()
 }
 
 #[allow(clippy::too_many_arguments)]

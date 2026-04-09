@@ -60,6 +60,12 @@
         <span class="stack-value">MIT</span>
       </div>
       <div class="stack-row">
+        <span class="stack-label">Website</span>
+        <a class="stack-link" href="https://rustic-playground.app" target="_blank" rel="noreferrer">
+          rustic-playground.app
+        </a>
+      </div>
+      <div class="stack-row">
         <span class="stack-label">Source</span>
         <a class="stack-link" href="https://github.com/jagmeetchawla/rustic-playground" target="_blank" rel="noreferrer">
           github.com/jagmeetchawla/rustic-playground

@@ -187,20 +187,46 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         }
     };
 
-    // Check rustup
+    // Check Xcode Command Line Tools via `xcode-select -p` — the official
+    // Apple API for querying the active developer directory. Returns the
+    // path (e.g. /Library/Developer/CommandLineTools) on success, or exit
+    // code 2 when no developer directory is configured.
+    //
+    // This probe is safe: `xcode-select -p` does NOT trigger Apple's
+    // "Install Command Line Developer Tools" dialog (confirmed via manual
+    // testing and log stream instrumentation on Sequoia, 2026-04-09).
+    //
+    // Note: on vanilla Macs, macOS may show an "Install Command Line
+    // Developer Tools" dialog at app launch. This is triggered by Apple's
+    // WKWebView framework (used by Tauri) probing for developer tools
+    // during WebView initialization — NOT by our code. We cannot prevent
+    // it from our side. The dialog is harmless: users can dismiss it with
+    // "Not Now" and use the in-app toolchain installer when ready.
+    let clt_output = std::process::Command::new("xcode-select")
+        .arg("-p")
+        .output()
+        .ok();
+    let clt_path_str: Option<String> = clt_output
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|p| !p.is_empty() && std::path::Path::new(p).exists());
+    let xcode_clt_installed = clt_path_str.is_some();
+
+    // Check rustup — single subprocess spawn, extract both presence and
+    // version from the same output. (Previous version ran `rustup --version`
+    // twice, which was pure waste of ~30-50ms per check_toolchain call.)
     let rustup_bin = tool_path("rustup");
-    let rustup_installed = std::process::Command::new(&rustup_bin)
+    let rustup_output = std::process::Command::new(&rustup_bin)
         .arg("--version")
         .output()
-        .ok()
+        .ok();
+    let rustup_installed = rustup_output
+        .as_ref()
         .map(|o| o.status.success())
         .unwrap_or(false);
-
     let rustup_version = if rustup_installed {
-        std::process::Command::new(&rustup_bin)
-            .arg("--version")
-            .output()
-            .ok()
+        rustup_output
             .and_then(|o| String::from_utf8(o.stdout).ok())
             .map(|s| s.trim().to_string())
     } else {
@@ -253,23 +279,11 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         None
     };
 
-    // Get installed toolchains list
-    let installed_toolchains: Vec<String> = if rustup_installed {
-        std::process::Command::new(&rustup_bin)
-            .args(["toolchain", "list"])
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| {
-                s.lines()
-                    .map(|l| l.trim().to_string())
-                    .filter(|l| !l.is_empty())
-                    .collect()
-            })
-            .unwrap_or_default()
-    } else {
-        vec![]
-    };
+    // (Previously ran `rustup toolchain list` here, but the resulting
+    // installed_toolchains field was dead code on the frontend — declared
+    // in the TS type but never read or rendered. Removing that call saves
+    // another ~50-100ms per check_toolchain, since rustup walks ~/.rustup
+    // to compose the list.)
 
     // Check for essential components
     let has_rustfmt = std::process::Command::new(tool_path("rustfmt"))
@@ -288,28 +302,36 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         .map(|o| o.status.success())
         .unwrap_or(false);
 
-    // Check clang (C/C++ toolchain via Xcode Command Line Tools)
-    let clang_path = std::process::Command::new("xcrun")
-        .args(["--find", "clang"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "/usr/bin/clang".to_string());
+    // Check clang (C/C++ toolchain via Xcode Command Line Tools).
+    //
+    // CRITICAL: every probe in this block is guarded by xcode_clt_installed.
+    // On a vanilla macOS, `xcrun`, `/usr/bin/clang`, and `swiftc` are SHIM
+    // binaries that, when invoked, automatically pop Apple's "Install
+    // Command Line Tools" dialog. That's a side effect we explicitly do NOT
+    // want from a read-only status check — it would trigger Apple's
+    // installer the moment the user opens the app, before they've clicked
+    // anything. Skip the calls entirely when CLT is absent and just report
+    // clang as not-installed.
+    let (clang_path, clang_installed, clang_version) = if xcode_clt_installed {
+        let path = std::process::Command::new("xcrun")
+            .args(["--find", "clang"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "/usr/bin/clang".to_string());
 
-    let clang_output = std::process::Command::new(&clang_path)
-        .arg("--version")
-        .output()
-        .ok();
-    let clang_installed = clang_output
-        .as_ref()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    let clang_version = clang_output
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
+        let output = std::process::Command::new(&path).arg("--version").output().ok();
+        let installed = output.as_ref().map(|o| o.status.success()).unwrap_or(false);
+        let version = output
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
+        (path, installed, version)
+    } else {
+        (String::new(), false, None)
+    };
 
     // Check zig
     let zig_output = std::process::Command::new("zig")
@@ -334,23 +356,39 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         None
     };
 
-    // Check swiftc (ships with Xcode CLI tools, same install as clang)
-    let swiftc_output = std::process::Command::new("swiftc")
-        .arg("--version")
-        .output()
-        .ok();
-    let swiftc_installed = swiftc_output
-        .as_ref()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    let swiftc_version = swiftc_output
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
+    // Check swiftc (ships with Xcode CLI tools, same install as clang).
+    // Same CLT-shim guard as clang above — invoking `swiftc` on a vanilla
+    // macOS pops Apple's installer dialog. Skip the call when CLT is absent.
+    let (swiftc_installed, swiftc_version, swiftc_path) = if xcode_clt_installed {
+        let output = std::process::Command::new("swiftc").arg("--version").output().ok();
+        let installed = output.as_ref().map(|o| o.status.success()).unwrap_or(false);
+        let version = output
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
+        let path = if installed {
+            std::process::Command::new("xcrun")
+                .args(["--find", "swiftc"])
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+        (installed, version, path)
+    } else {
+        (false, None, String::new())
+    };
 
-    let all_good = cargo_installed && rustc_installed;
+    // `all_good` now requires CLT too — without Xcode Command Line Tools,
+    // cargo can compile but fails at the link step (no cc, no SDK).
+    let all_good = xcode_clt_installed && cargo_installed && rustc_installed;
 
     // Derive Rust toolchain state for the installer/repair flow.
     // States are mutually exclusive and ordered by severity:
+    //   clt_missing       → Xcode Command Line Tools not installed → xcode-select --install
+    //                       (must run BEFORE rustup install; Rust can't link without the SDK)
     //   not_installed     → no rustup binary at all → run sh.rustup.rs installer
     //   no_default        → rustup present but no active toolchain → rustup default stable
     //   missing_components → toolchain works but rustfmt/clippy missing → rustup component add
@@ -366,7 +404,9 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
     if !has_clippy {
         missing_components.push("clippy");
     }
-    let rust_state = if !rustup_installed {
+    let rust_state = if !xcode_clt_installed {
+        "clt_missing"
+    } else if !rustup_installed {
         "not_installed"
     } else if !cargo_installed || !rustc_installed || !active_is_set {
         "no_default"
@@ -381,6 +421,10 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         "all_good": all_good,
         "rust_state": rust_state,
         "missing_components": missing_components,
+        "xcode_clt": {
+            "installed": xcode_clt_installed,
+            "path": clt_path_str,
+        },
         "rustup": {
             "installed": rustup_installed,
             "version": rustup_version,
@@ -395,7 +439,6 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
             "version": rustc_version,
         },
         "active_toolchain": active_toolchain,
-        "installed_toolchains": installed_toolchains,
         "components": {
             "rustfmt": has_rustfmt,
             "clippy": has_clippy,
@@ -413,15 +456,7 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         },
         "swiftc": {
             "installed": swiftc_installed,
-            "path": if swiftc_installed {
-                std::process::Command::new("xcrun")
-                    .args(["--find", "swiftc"])
-                    .output()
-                    .ok()
-                    .and_then(|o| String::from_utf8(o.stdout).ok())
-                    .map(|s| s.trim().to_string())
-                    .unwrap_or_default()
-            } else { String::new() },
+            "path": swiftc_path,
             "version": swiftc_version,
         }
     })

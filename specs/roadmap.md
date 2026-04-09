@@ -47,6 +47,15 @@ Distribution & Launch (post v0.3.4)
   See specs/release-plan.md for the full 16-step launch checklist.
 
   Tasks:
+  - DMG visual identity — DEFERRED. We attempted custom background +
+    custom installer file icon during 2026-04-07 testing. The .dmg file
+    icon worked, but the mounted volume icon stayed as the app icon
+    (Tauri stamps it via .VolumeIcon.icns and there's no clean way to
+    override without a heavier post-build hdiutil mount/inject/recompress
+    pipeline). Decision: ship with stock Tauri DMG behavior for v0.3.4
+    Phase 1 — accept that the .dmg file looks similar to the app. Revisit
+    when there's appetite for the full mount/inject/recompress pipeline,
+    or when DMG identity becomes a real user complaint post-launch.
   - Per-edition icons (art task — can ship with same icon initially)
   - Build DMGs via scripts/build-editions.sh (Rust Edition + Power Edition)
   - Code-sign + notarize DMGs (macOS Gatekeeper requirement)
@@ -105,8 +114,664 @@ v0.3.4 — In-App Toolchain Installer & Repair
      "● Rust toolchain is healthy / Everything is installed and ready to use"
 
   Tested branches: healthy, missing_components (rustfmt and/or clippy),
-  no_default (rustup default none), not_installed (rustup self uninstall).
-  All four verified end-to-end in the built .app.
+  no_default (rustup default none), not_installed (rustup self uninstall),
+  clt_missing (Xcode Command Line Tools absent — added 2026-04-07).
+  All five verified end-to-end on a vanilla macOS VM.
+
+  Known Issues (discovered during 2026-04-08 testing):
+  - Power Edition: when CLT is missing and the user selects ONLY C/C++
+    (not Rust), the wizard offers no way to install/repair CLT in-app.
+    The Install Rust Toolchain… button only appears when Rust is selected
+    because the FixWizard is wired to rust_state, not to a global CLT
+    prerequisite. C/C++ users see "clang not found" with a static
+    `xcode-select --install` Terminal command but can't trigger the
+    repair from inside the app the way Rust users can.
+    Scope: Power Edition only (Rust Edition forces Rust selection so this
+    can't happen). Does NOT block v0.3.4 Rust Edition Phase 1.
+    Workaround for users today: copy the `xcode-select --install` command
+    from the wizard's clang section, run in Terminal, follow Apple's GUI
+    installer, return to the app and click Re-check.
+    Proper fix: aligns with the "Promote Xcode CLT to a global
+    prerequisite" refactor below. Once CLT is a top-of-cascade prereq
+    rendered ABOVE the per-language status, the Install Xcode CLT button
+    becomes language-agnostic and shows for any selected language that
+    needs it (Rust, C/C++, Swift). Same FixWizard, same auto-polling,
+    same UX — independent of which language(s) the user enabled.
+    Resolve as part of the CLT refactor. Discovered: 2026-04-08.
+
+  - Power Edition fails to detect zig (and likely non-standard clang/swiftc
+    installs) even when they're on the user's PATH and resolvable via
+    `which zig` in Terminal.
+    Root cause: macOS app bundles launch with a minimal PATH that does NOT
+    include /opt/homebrew/bin, /usr/local/bin, ~/.local/bin, or any other
+    shell-init PATH additions. We correctly work around this for Rust by
+    resolving cargo/rustc via absolute paths in ~/.cargo/bin (see the
+    tool_path() helper in cargo_commands.rs). For zig, the current code
+    uses bare `zig version` and `which zig`, which fail in the bundled app
+    even though they succeed in Terminal.
+    Scope: Power Edition only. Rust Edition ships with only Rust enabled
+    and the zig detection code is never hit. This does NOT block the
+    Rust Edition Phase 1 release.
+    Fix options (for Power Edition Phase 2):
+      1. Probe common zig install locations in order: /opt/homebrew/bin/zig,
+         /usr/local/bin/zig, ~/.local/bin/zig, /usr/bin/zig. Covers ~95% of
+         Homebrew and manual installs. Simplest.
+      2. Load the user's shell environment via `zsh -ilc 'echo $PATH'`
+         (login interactive shell) and search the resulting PATH. Most
+         robust but adds a shell invocation to every check_toolchain call.
+      3. Add a user-configurable zig_path setting in Settings → Languages
+         → Zig, same pattern as cargo_path. Most flexible but requires
+         manual setup.
+      4. Combine 1 + 3: probe common paths automatically, allow manual
+         override via settings when the auto-detect misses.
+    Same root cause likely affects:
+      • Homebrew-installed LLVM clang (/opt/homebrew/opt/llvm/bin/clang)
+      • Swift toolchain downloads (/Library/Developer/Toolchains/*.xctoolchain/usr/bin/swift)
+      • Zig version managers (zvm, etc.) with non-standard install paths
+    Aligns with: "Promote Xcode CLT to a global prerequisite" refactor
+    and the broader subprocess discovery cleanup needed for Power Edition.
+    Belongs in the same refactor sprint — resolve together.
+
+  Post v0.3.4 Backlog:
+  - DISCUSS: Switch CLT install from `xcode-select --install` to the
+    Homebrew "softwareupdate placeholder" technique for fully in-CLI install.
+    User raised (2026-04-08): Homebrew, rustup-init, and most macOS
+    provisioning tools install Xcode Command Line Tools entirely from CLI
+    without the GUI dialog popping up. They use an undocumented but stable
+    Apple workaround. Worth understanding the technique and discussing
+    whether to adopt it for Rustic Playground v0.4+. **Do NOT implement
+    without discussion** — there are real tradeoffs.
+    The technique:
+      ```sh
+      # Step 1: signal "user is requesting CLT install"
+      sudo touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+      # Step 2: softwareupdate now lists CLT as available
+      PROD=$(softwareupdate -l | grep -E '\*.*Command Line Tools' \
+        | sed -E 's/^[^C]+(Command Line Tools.*)/\1/' | sort -V \
+        | tail -n 1 | tr -d '\n')
+      # Step 3: install non-interactively (no GUI)
+      sudo softwareupdate -i "$PROD" --verbose
+      # Step 4: clean up
+      sudo rm -f /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+      ```
+    Why it works:
+      • macOS's softwareupdate daemon checks for the placeholder file to
+        decide whether to expose CLT as an installable package. Without
+        the file, `softwareupdate -l` hides CLT and treats it as a
+        "needs the GUI flow" item. With the file, CLT shows up as a
+        regular softwareupdate package and installs via the standard
+        non-interactive softwareupdate -i path.
+      • Apple's own GUI dialog uses this same internal IPC contract — the
+        placeholder file is the "the user has consented, proceed" signal
+        they pass to softwareupdate from the GUI shim. Third-party tools
+        bypass the GUI and create the file directly.
+      • Stable since macOS 10.10 (~2014). Works through Tahoe (26).
+        Apple has never documented or removed it despite knowing tools
+        rely on it — implicit understanding.
+    Pros vs current xcode-select --install + polling:
+      + No "find Apple's dialog hidden behind our app" UX problem
+      + Real-time progress streamed to console (like a normal cargo build)
+      + Synchronous: command returns when CLT is actually installed —
+        no auto-polling loop, no 10–15 minute wait dance
+      + FixWizard CLT branch becomes much simpler — drop the polling,
+        drop the "find the dialog" callout, drop the elapsed timer
+      + Matches Homebrew/rustup mental model — power users will recognize
+        the pattern and trust it
+    Cons:
+      - Requires SUDO. Tauri apps can't directly elevate. Standard
+        workaround is `osascript -e 'do shell script "..." with
+        administrator privileges'` which pops macOS's native admin
+        password prompt with our app's name. Cleaner than expected
+        but it's another modal that some users find scarier than
+        Apple's branded "Install Command Line Tools?" dialog.
+      - "Rustic Playground wants to make changes, enter password" feels
+        more invasive than Apple's blue-bordered system dialog, even
+        though they're mechanically equivalent.
+      - Sudo prompts can't be programmatically satisfied — must wrap
+        multiple steps in one `do shell script` call to avoid re-prompts.
+      - Depends on undocumented behavior. If macOS 27 or 28 changes the
+        placeholder mechanism, our installer breaks and we ship a fix
+        urgently. Homebrew can absorb this risk; we're smaller.
+      - Privilege escalation triggers user trust scrutiny. Need a clear
+        UI explanation: "we need admin to install Apple's developer
+        tools, same way Homebrew does." Plus a Help section.
+    What to discuss before deciding:
+      1. Are users actually complaining about the hidden Apple dialog,
+         or is it a paper cut we've already mitigated with the auto-poll?
+      2. Are we comfortable depending on undocumented Apple behavior in a
+         tool that targets beginners (who can't easily diagnose if it
+         breaks)?
+      3. Do we want a "headless / unattended" install mode for CI users
+         and provisioning scripts? That's the strongest argument for
+         this technique — `xcode-select --install` cannot be made
+         unattended at all.
+      4. Could this be a Power-Edition-only feature — Rust Edition stays
+         on the safe Apple-blessed flow, Power Edition gets the
+         power-user-friendly fast path?
+      5. What's the regression risk vs the UX improvement?
+    Sketch of how it would integrate with FixWizard:
+      • Replace the InstallXcodeCLT FixAction handler in lib.rs:
+         - Current: spawns `xcode-select --install`, returns in seconds
+         - New: spawns `osascript -e 'do shell script "<all 4 steps>"
+           with administrator privileges'`
+         - Streams sudo command output via Tauri Channel like other fixes
+      • Frontend FixWizard:
+         - Drop the auto-polling code entirely
+         - Drop the "Apple installer is now open" callout
+         - Drop the "10-15 min" hint (it's still long, but progress is
+           visible in the streaming log so the wait feels active)
+         - Same Install button, same output panel, same "fixState success"
+           handler — symmetry with InstallRustup
+      • The regression-test signal: on a vanilla VM, clicking "Install
+        Xcode Command Line Tools" should pop ONE macOS admin password
+        prompt, then stream ~10-15 min of softwareupdate output to the
+        console panel, then return success. No GUI dialogs from Apple
+        ever appear.
+    Trigger conditions for revisiting:
+      • A user explicitly asks for fully unattended/headless CLT install
+      • A user complains about Apple's dialog being hidden behind our app
+      • We add CI/scripted-install support (provisioning Macs at scale)
+      • macOS 27 or 28 makes the existing GUI dialog flow worse somehow
+    Until then: stick with the current `xcode-select --install` flow.
+    It works, it's Apple-blessed, and the auto-polling mitigates the
+    main UX cost.
+
+  - FEATURE: Parallel playground runs within a single edition.
+    User observation (2026-04-08): across editions the app happily runs two
+    playgrounds in parallel (filesystem isolation + process isolation free
+    from macOS), but within ONE edition we're single-run-at-a-time by
+    choice. Ship this as a proper feature to match Unix/terminal mental
+    models and VS Code-style multi-run workflows.
+    Technical reality:
+      • Cargo's lock is on the BUILD (per target dir), not on execution.
+        Two already-built playground binaries can run in parallel just
+        fine — the OS happily forks parallel processes of the same exec.
+      • Playgrounds from DIFFERENT projects within an edition already
+        have different target dirs, so even the builds could run in
+        parallel without any lock contention.
+      • Playgrounds from the SAME project share a target dir, so builds
+        serialize on .cargo-lock — but execution is still parallel once
+        they're built.
+      • Nothing at the OS or Cargo layer prevents N-way parallelism.
+    The blocker is UX. The current app has exactly one of each:
+      1. Output panel — single Console view that streams stdout/stderr
+      2. stdin input field — single text box for read_line() style input
+      3. isRunning status flag — drives status bar, stop button, etc.
+      4. Stop button — singular, no answer to "stop what?" with multiple
+      5. Run block — one collapsible block per run in the timeline
+    To support N-way parallel runs we'd need to pluralize all five:
+      • Tabbed or split Console with a panel per active run
+      • Per-run stdin inputs (the active tab's run gets keyboard focus)
+      • A "Runs" list (sidebar section or tab bar) showing each active
+        run with its lifecycle state (Saving/Compiling/Running)
+      • Individual Stop buttons per run + a "Stop All" menu action
+      • Status bar that shows either the active run OR a summary
+        ("2 runs active") when multiple
+    Design sketch:
+      • Run list as a horizontal tab bar above the Output panel, similar
+        to terminal emulators' tab bar or VS Code's debug sessions
+      • Each tab shows playground name, running state icon, stop button
+      • Click a tab → switches the Console view to that run's output
+      • ⌘R starts a new run (doesn't kill existing ones); the
+        stop-and-run confirmation dialog is removed because it's no
+        longer needed
+      • ⌘. stops the active-tab run; ⌘⇧. stops all
+      • When all runs finish, tabs persist for history until user closes
+        them or starts a new run that would reuse the slot
+      • Maximum N (configurable, default 4?) to prevent runaway resource
+        use — past the limit, the oldest run's slot gets reused
+    Keyboard shortcuts to rework:
+      • ⌘R — start new run (new tab)
+      • ⌘. — stop active-tab run
+      • ⌘⇧. — stop all runs
+      • ⌘1..9 — switch to run tab N (like terminal emulators)
+      • ⌘W in Run tab context — close that run tab (if finished)
+    Book projects:
+      • Book playgrounds can be run in parallel too — same mechanism.
+    Settings:
+      • "Maximum concurrent runs" setting (default 4, min 1, max 10)
+      • "Auto-close finished runs after N seconds" setting (default off)
+    Compared to existing tools:
+      • Swift Playgrounds.app: one run at a time (same constraint as ours
+        today). Swift Playgrounds users won't feel regressed.
+      • VS Code: multi-run via Debug panel + tabs. Closest analog.
+      • JetBrains IDEs: multi-run via Run tool window with per-run tabs.
+      • Terminal emulators: trivially parallel (open another tab). Our
+        target model for power-user workflows.
+    Why NOT in v1 (v0.3.x / v0.4):
+      • Major UX refactor — touches Output panel, status bar, run
+        lifecycle, menu items, keyboard shortcuts. Weeks of work.
+      • Beginners (the primary audience) typically run one thing at a
+        time. Adding this feature risks making the app feel busier
+        without meaningful benefit for them.
+      • The Swift Playgrounds model (single run) is the mental model
+        for the learning-tool positioning. Changing it pulls us toward
+        "lightweight IDE" which is a different product.
+      • Running Rust Edition + Power Edition side-by-side already gives
+        you 2-way parallelism if you really need it — not elegant but
+        zero additional work to use.
+    When to build it:
+      • After v0.4+ when the core feature set is stable.
+      • If user feedback specifically asks for it (watch for "I want to
+        compare outputs of two playgrounds side by side" type requests).
+      • Could also be a "Power Edition exclusive" — Rust Edition stays
+        beginner-simple, Power Edition gets the multi-run tab bar.
+        Aligns with Power Edition's "for users who want more" positioning.
+    Priority: LOW for now. Revisit based on feedback. Great candidate
+    for a Power-Edition-only feature differentiation.
+
+  - REFACTOR SPRINT: tech-debt cleanup after the v0.3.4 Rust Edition
+    release ships. Not pre-release work — these don't block shipping, but
+    should be done before the Power Edition ramp. Collect new items here
+    as they're discovered.
+    Items so far:
+      • Parallelize check_toolchain subprocess spawns.
+        Current: ~13 sequential Command::output() calls, ~150-400ms total
+        on a fully-equipped dev machine. Modal open latency is noticeable.
+        Approach: spawn all independent probes concurrently
+        (Command::spawn → child.wait_with_output() collected via join),
+        then assemble the ToolchainStatus from the results. Could cut
+        total time ~5x since probes are I/O-bound and independent. Main
+        complexity: some probes are conditional on others (e.g. rustup-
+        show-active-toolchain needs rustup_installed). Careful ordering
+        or a two-phase approach (phase 1: presence, phase 2: details)
+        keeps correctness.
+      • Consolidate clang/swift detection logic. Currently duplicated
+        between cargo_commands.rs::check_toolchain and
+        rustic_manifest.rs::detect_clang_version / detect_swift_toolchain.
+        Same xcrun/clang/swiftc shim concerns apply to both sites.
+        Extract a shared `macos_toolchain` module (or add to languages/
+        mod.rs) so the CLT guard + version extraction lives in one place.
+        Aligns with the "Promote Xcode CLT to a global prerequisite"
+        refactor already on the roadmap — could be done together.
+      • Code-split the Monaco editor bundle. Current vite build warning
+        every time: "Some chunks are larger than 500 kB" — index-*.js is
+        ~4 MB / ~1 MB gzipped, dominated by Monaco. Dynamic import()
+        split would reduce initial load and let non-editor UI
+        (Welcome Wizard, Settings) render before Monaco is ready. Follow
+        vite's manualChunks guidance in rollupOptions.
+      • Audit all "currently unused field in JSON response" type decls.
+        We found installed_toolchains as dead code during this sprint;
+        there may be others. Grep ToolchainStatus consumers vs the
+        backend JSON keys and remove any drift.
+      • sync-version.sh sed bug (noted in project_next_session memory).
+        The Cargo.toml version replacement pattern fails silently and
+        the version isn't actually bumped. Had to hand-edit during the
+        v0.3.4 bump. Fix before next version bump.
+
+    Code review findings (specs/code-review-v0.3.4.md, 2026-04-09):
+    Top 5 by impact — address before Power Edition ships:
+      • Fix unbounded output buffer in stream_pipe
+        (playground_commands.rs:516-561). A playground that outputs a
+        single huge line with no newline grows memory without bound →
+        OOM. Add MAX_LINE_LEN (~1 MB) and truncate/emit partial lines.
+      • Fix missing source path validation in import_content_file
+        (content_commands.rs:75-117). Source path is never checked for
+        traversal or symlinks. User could import /etc/passwd into a
+        project. Validate source, reject symlinks, optionally restrict
+        to safe directories.
+      • Fix unsafe unwrap on child process pipes
+        (playground_commands.rs:484-485, 657). child.stdout.take() and
+        child.stderr.take() use .unwrap() which panics if pipes are
+        None (edge case during process termination race). Replace with
+        .ok_or("Failed to capture stdout/stderr")?.
+      • Add timeout to cargo check (playground_commands.rs:635-656).
+        Live check runs with no timeout — on slow machines or large
+        projects, the process could hang indefinitely. Wrap in
+        tokio::time::timeout(Duration::from_secs(30), child.wait()).
+      • Fix race in check_playground process cancellation
+        (playground_commands.rs:618-625). Killing a previous cargo
+        check by PID can hit a reused PID if the process already exited
+        naturally. Use a generation counter or verify the process is
+        still alive before sending SIGTERM.
+
+    Additional review items (lower severity, address opportunistically):
+      • Race condition: mutex lock held across await boundary
+        (playground_commands.rs:482). Move sync lock outside async path.
+      • Shell pattern in rustup install (lib.rs:601-604). sh -c with
+        piped curl is unsafe pattern even with hardcoded URL. Consider
+        download-then-execute.
+      • No cleanup on failed export (export.rs:437-523). Partial files
+        left on disk. Use temp dir + atomic rename.
+      • No concurrent edit handling — last write wins silently. Add
+        optimistic locking before multi-window support ships.
+      • Zombie process potential (playground_commands.rs:563-581). Call
+        .wait() after SIGKILL to reap children.
+      • Dead parameters in build_menu (menu.rs:23, 26). Remove
+        _playground_count and _project_type from signature.
+      • No config caching (lib.rs:135-149). load_config() re-reads
+        disk every call. Cache in app state.
+      • Hardcoded Rust edition "2024" (lib.rs:167-171). Make
+        configurable or detect from rustc.
+      See specs/code-review-v0.3.4.md for full details on all 25 items.
+
+  - FEATURE: Expand Run/Stop toolbar into Check / Run / Test / Format / Lint.
+    User request (2026-04-08). Currently the only editor action is Run
+    (which is cargo run: build + execute). Users want more granular
+    actions for the common dev loop.
+    Proposed actions:
+      • Check     (⌘B)    — cargo check, validates compile without running
+      • Run       (⌘R)    — current behavior (cargo run), unchanged
+      • Test      (⌘U)    — cargo test --bin <name>, runs #[test] fns
+      • Stop      (⌘.)    — current behavior, kills whatever is running
+      • Format    (⌘⇧F)   — rustfmt on current file
+      • Clippy    (⌘⇧K)   — cargo clippy, stricter lint pass
+      • Build Release     — cargo build --release (no execution)
+    Toolbar UX:
+      • Keep Save, Run, Stop as primary buttons — don't clutter.
+      • Add a small dropdown arrow next to the Run button (▾) that
+        reveals Check / Run / Test as sibling actions.
+      • Format / Clippy / Build Release live in a new "Build" top-level
+        menu (alongside Project / Playground / Run / Edit), OR extend
+        the existing Run menu with all of them under clear separators.
+      • Match Xcode's mental model: Build (⌘B), Run (⌘R), Test (⌘U)
+        are distinct, separate keyboard shortcuts.
+    Format specifically:
+      • Pipe current editor content through rustfmt via stdin → stdout,
+        replace editor content with formatted result. Avoids save-reload
+        dance and keeps Monaco's undo stack intact (user can ⌘Z if they
+        don't like it).
+      • Add "Format on save" setting — default off for v1 so it's not
+        surprising. When on, ⌘S runs rustfmt before writing to disk.
+      • For C/C++, use clang-format if available (ships with Xcode CLT).
+      • For Zig, use `zig fmt` (built-in).
+      • For Swift, swift-format isn't default — skip for v1 or document
+        as "not supported for Swift yet".
+    Clippy specifically:
+      • `cargo clippy --bin <name> -- -W clippy::all`
+      • Output streams to console like a normal run.
+      • Warnings/errors get parsed as diagnostics markers in the editor
+        (reuse the existing live-check markers infrastructure).
+      • Possibly merge with live-check: if clippy is installed, live
+        check already uses it via cargo check + clippy lints. The
+        explicit Clippy action gives a stricter pass (e.g. -D warnings).
+    Test specifically:
+      • `cargo test --bin <name>`, streams to console.
+      • For v1, just show raw output. Future: parse the test summary
+        ("running N tests ... test result: ok. X passed; Y failed")
+        and show a nice pass/fail badge in the status bar.
+      • If the playground has no #[test] functions, show a toast
+        "No tests found in this playground" instead of silent success.
+    Language matrix (what each language supports in v1):
+      • Rust   — Check, Run, Test, Format, Clippy, Build Release (full)
+      • C/C++  — Check (parse-only), Run, Format (clang-format), Build Release
+      • Zig    — Check, Run, Test, Format, Build Release
+      • Swift  — Check, Run, Build Release (no fmt, no clippy-equivalent)
+      Menu items dynamically enable/disable based on the active project's
+      language — reuse the existing Lang enum dispatch pattern.
+    Backend mechanics:
+      • New Tauri commands: check_playground, format_playground,
+        clippy_playground, test_playground, build_release_playground.
+        Each takes project + playground name + streams output via Channel.
+      • Reuse stream_pipe infrastructure from playground_commands.rs.
+      • Format is special: returns the formatted source as a String
+        response, not a streaming command. Frontend replaces editor
+        content atomically.
+    Status bar during long actions:
+      • Show the action name during runs:
+        "Checking…" / "Running…" / "Testing…" / "Linting…" / "Formatting…"
+      • Reuse the existing Saving → Compiling → Running lifecycle pattern.
+    Book projects:
+      • Check + Run only. Format, Test, Clippy, Build Release all touch
+        files or produce artifacts — keep disabled for book projects.
+    Scope for v1:
+      • Just Check + Format + Clippy + Test for Rust, plus the toolbar
+        dropdown and keyboard shortcuts. Build Release can wait for the
+        Download Executable feature (which already needs a release build).
+      • Other languages: subset per the matrix above, designed later.
+
+  - FEATURE: Download compiled executable (debug or release).
+    User request (2026-04-08). Complements "Export Project" which ships
+    source + Cargo.toml. Users who wrote a useful CLI tool want to share
+    the working binary with someone who doesn't have Rust installed.
+    UX:
+      • Two new menu items under Project (alongside "Export Project"):
+         - "Download Executable (Debug)"     — fast build, larger binary
+         - "Download Executable (Release)"   — slow build, optimized
+      • Alternative: replace the single "Export Project…" item with an
+        "Export ▸" submenu containing all three options. Less menu
+        clutter, more discoverable as a family.
+      • Status bar / console feedback during build (reuse run-lifecycle
+        Compiling → Done machinery — same as a normal ⌘R run).
+      • On success, show a toast or small success dialog with:
+         - Where the file was saved
+         - Short note that the binary is unsigned → first run on a
+           receiver's Mac needs right-click → Open to bypass Gatekeeper
+         - "Reveal in Finder" button to pop the folder open
+      • Toolbar Export button could become a dropdown with all three
+        options (v2 concern — don't add UI clutter in v1).
+    Backend mechanics:
+      • New Tauri command: `build_playground_binary(project, playground,
+        mode: "debug" | "release") -> BinaryPath`
+      • Run `cargo build --bin <playground>` or `cargo build --release
+        --bin <playground>` with the same target dir used by playground
+        runs (target/playground-runs/ — avoids lock contention with
+        cargo check).
+      • Stream compile output via Tauri Channel to the console panel,
+        same pattern as the existing run command.
+      • On success, locate the binary at
+        `target/playground-runs/{debug,release}/<playground>`
+        and copy it to the final destination.
+      • On failure, return the compile error; don't copy anything.
+    Destination path (confirmed 2026-04-08):
+      • Default: ~/Downloads/<project_name>/<playground_name>
+      • Creates the ~/Downloads/<project_name>/ subfolder if it doesn't
+        exist. Each subsequent download adds another binary to that
+        folder — clean per-project separation, easy to find.
+      • No file extension on macOS — just the playground name (matches
+        how cargo produces binaries).
+      • Prefill a save-file dialog with this default so the user can
+        override if they want (pick a different location, rename, etc.).
+      • If the same filename already exists, the dialog handles overwrite
+        confirmation (Tauri dialog plugin default behavior).
+      • Project directories stay source-only — no build artifacts leak
+        into them outside the existing target/ dir.
+    Content files warning:
+      • Playgrounds that read PLAYGROUND_CONTENT won't have that env var
+        set when run standalone from the downloaded binary. Pre-build
+        check: if the playground source contains "PLAYGROUND_CONTENT",
+        show a warning dialog: "This playground reads from the content
+        folder. The downloaded binary won't have access to those files
+        unless you set PLAYGROUND_CONTENT manually when running it."
+      • Give the user a "Continue" / "Cancel" choice.
+    Binary metadata to surface in success dialog:
+      • Architecture (aarch64 / x86_64 — use `file` or mach-o header)
+      • File size
+      • Mode (debug/release)
+      • Example of how to run it: `./<playground_name>` from Terminal
+    Gatekeeper note in the success dialog (critical for UX):
+      • "On another Mac, right-click → Open the first time to bypass
+        Gatekeeper. Or run: xattr -dr com.apple.quarantine <path>"
+      • Without this note, recipients will think the binary is broken.
+    Menu wiring:
+      • src-tauri/src/menu.rs — add the two items under Project menu.
+      • Frontend menu handlers in App.svelte.
+      • Keyboard shortcuts: skip for v1 (Export has ⌘⇧E already; don't
+        overload).
+    NOT in v1 (explicit exclusions):
+      • Cross-compile to Linux/Windows (needs rustup targets + linker
+        setup — separate feature).
+      • Code signing (needs Apple Developer ID + signing identity).
+      • Stripping symbols further than cargo does by default.
+      • Bundling content files alongside the binary.
+      • Packaging as .app or .pkg installer.
+    Power Edition consideration:
+      • C/C++: same concept, compile with clang to an executable, same
+        download flow. Language modules already handle compilation.
+      • Swift: same, swiftc produces executables.
+      • Zig: same, zig produces executables.
+      • All four languages should support this feature — don't build
+        it Rust-only. The language registry (languages/mod.rs) already
+        knows how to build each type; this feature just needs a
+        `build_binary` dispatch method per language.
+
+  - FEATURE: Rust Modules tab — shared code across playgrounds in a project.
+    User request (2026-04-08). Currently every playground is a standalone
+    binary in src/bin/ with no way to share code — users who want a helper
+    function across multiple playgrounds have to copy-paste it. Modules fix
+    this.
+    UX concept:
+      • New "Modules" section in the sidebar, parallel to "Content".
+      • Click "+ Add Module" → name input → creates src/modules/<name>.rs
+        with a starter template (a `pub fn` and a doc comment).
+      • Modules are editable in Monaco like playgrounds; same rename/delete
+        context menu actions.
+      • Scope is global within a project: every playground has access to
+        every module. No per-module visibility config — keep it simple.
+      • Playgrounds import via `use <pkg>::modules::<name>::*;` where
+        <pkg> is the Cargo.toml [package] name (stable per-project).
+    Backend mechanics:
+      • Physical layout: src/modules/<name>.rs for each module, plus an
+        auto-generated src/modules/mod.rs that re-exports all of them
+        (`pub mod foo; pub mod bar;`).
+      • src/lib.rs auto-generated with `pub mod modules;` so the library
+        crate surfaces the modules tree. Auto-ensure [lib] block exists
+        in Cargo.toml with path = "src/lib.rs".
+      • First module creation triggers the lib/mod.rs scaffolding; delete
+        of the last module should leave the lib intact but warn the user
+        (don't silently remove scaffolding — might break existing use
+        statements in their playgrounds).
+      • mod.rs is regenerated on every add/rename/delete — never
+        hand-edited. Treat it as derived state, like Cargo.lock.
+    Tauri commands needed:
+      • list_modules(project) -> Vec<ModuleInfo>
+      • create_module(project, name, template_slug)
+      • read_module(project, name) -> String
+      • save_module(project, name, contents)
+      • rename_module(project, old, new) — must also update any use
+        statements in playgrounds? (see "Rename gotcha" below)
+      • delete_module(project, name) — regenerates mod.rs
+    Rename gotcha:
+      • If user renames a module, playgrounds referencing it break.
+        Options: (a) auto-rewrite use statements across all playgrounds
+        (complex, error-prone, touches files the user didn't expect);
+        (b) warn the user on rename and let them fix manually; (c) block
+        rename if any playground references it (too restrictive).
+        Lean (b) — clear warning dialog, user decides.
+    Crate-name stability:
+      • Playgrounds use `<pkg_name>::modules::` which bakes the Cargo
+        package name into imports. Renaming the PROJECT (which renames
+        the Cargo package name) breaks all module refs.
+      • Mitigation: either (1) use a fixed internal crate name like
+        `playground_modules` regardless of project name (hide the rename
+        from Rust), or (2) warn on project rename and auto-rewrite. Lean
+        (1) — more robust, hides implementation detail from users.
+    Export implications:
+      • When exporting a playground, the exporter must also include the
+        modules it references (or all of them — simpler). Update
+        scripts/export.rs Rust export path to walk src/modules/ and
+        include every .rs file.
+      • Exported README should document the module structure.
+    Live checking:
+      • cargo check already covers the whole package (lib + all bins),
+        so errors in modules show inline via existing diagnostics.
+      • No new machinery needed on the diagnostics side.
+    Book projects:
+      • Book projects are read-only by design — disable "+ Add Module"
+        and make any existing modules read-only.
+      • Copy-to-Project for a book playground should also copy any
+        modules it references (diff/ask user if modules would collide
+        with existing ones in the target project).
+    Sidebar iconography:
+      • Distinct file-badge icon for modules (vs playgrounds and content
+        files). Cargo orange tint? Or a `fn{}` style glyph?
+    Templates for new modules:
+      • "Empty module" — just `pub fn hello() -> &'static str`
+      • "Data model" — pub struct with derive Debug/Clone + impl block
+      • "Error helper" — custom Result + Error enum scaffold
+      • "Common utilities" — file I/O wrappers, env helpers
+      • "Unit tests only" — #[cfg(test)] mod tests scaffold
+    Interactions to think about:
+      • What if a playground has `fn main()` and a module has `fn main()`?
+        The lib's main would be shadowed — not a real issue since lib
+        crates don't have main. Harmless.
+      • What if user tries to create a module named "main" or "lib"?
+        Blocklist these at the Tauri command level.
+      • What about cyclic module deps? Rust handles this at the crate
+        level, should be fine.
+    Scope for v1 of this feature:
+      • Just the mechanics above. No per-module docs, no module discovery
+        from crates.io, no inter-module visibility config. Keep it tight.
+      • Power Edition: Zig, Swift, and C/C++ have their own module/header
+        concepts — this feature is Rust-only for v1, design separately
+        for other languages later.
+
+  - REFACTOR: Promote Xcode CLT to a global prerequisite (must do before
+    Power Edition / Phase 2 ships).
+    Why: CLT is a platform prerequisite for nearly all native languages,
+    not just Rust. clang IS Xcode CLT, swiftc IS Xcode CLT, Rust's linker
+    (cc) + macOS SDK come from CLT. Zig is the only LARGELY-independent
+    language: it ships its own LLVM compiler, its own lld linker, and
+    bundled macOS SDK TBD stubs that let trivial programs link libSystem
+    without CLT. But anything that imports Apple frameworks
+    (CoreFoundation, AppKit, etc.) or hits non-trivial system features
+    will need real SDK headers from CLT. So Zig has a SOFT dependency
+    where the others have HARD dependencies.
+    Currently we model CLT as a Rust-specific cascade state (rust_state =
+    'clt_missing'), which is convenient for the Rust Edition but
+    architecturally wrong — when Power Edition ships with all four
+    languages, the Rust-centric framing won't fit. A user with broken CLT
+    on a C/C++ project should see the same Install button, same FixWizard,
+    same auto-polling experience.
+
+    Hard vs soft block matrix:
+      Rust   → HARD block (no link, no compile output)
+      Clang  → HARD block (clang IS CLT — without it, no compiler at all)
+      Swift  → HARD block (swiftc IS CLT — without it, no compiler at all)
+      Zig    → SOFT warning ("install CLT if you hit linker errors with
+                Apple framework imports"); pill stays yellow not red;
+                trivial programs still work.
+    Refactor scope:
+      Backend (cargo_commands.rs)
+      • Lift xcode_clt_installed out of rust_state into its own top-level
+        status field (`xcode_clt: { installed, path }` already exists; just
+        stop letting rust_state collapse into 'clt_missing').
+      • rust_state cascade goes back to 4 values: not_installed → no_default
+        → missing_components → healthy.
+      • clang and swift toolchain checks should report a "blocked by CLT"
+        sub-state when CLT is absent (instead of just "not found"). For
+        clang/swiftc, CLT *is* the compiler — these will already fail to
+        find the binary without CLT.
+      • Zig: surface CLT as a SOFT recommendation. Zig itself works
+        without CLT for trivial programs (bundled SDK stubs cover
+        libSystem), but warn that Apple framework imports require CLT.
+        Pill goes yellow, not red. Don't block runs.
+      Backend (lib.rs)
+      • InstallXcodeCLT FixAction stays as-is (already language-agnostic).
+      Frontend (ToolchainFixWizard.svelte)
+      • Treat CLT as a separate top-of-cascade check rendered ABOVE the
+        per-language status. Possibly a dedicated "Prerequisites" status
+        card at the top of the modal that shows when CLT is missing AND
+        any selected language depends on it.
+      • The split-layout (Help Me Install / I'll Do It Myself) stays the
+        same — manual mode shows xcode-select --install as step 1 for any
+        affected language; guided mode shows the same Install Xcode CLT
+        button regardless of which language led the user here.
+      Frontend (ToolchainWizard.svelte)
+      • The toolchain step's status grid should show CLT as a top row
+        BEFORE the per-language sections, with a single "Install Xcode CLT"
+        action that benefits all languages at once.
+      • Each language section can still show its own status, but CLT
+        becomes a shared prerequisite badge.
+      Frontend (App.svelte)
+      • pillStatus for rust/clang/swift considers CLT a HARD block (red).
+      • pillStatus for zig considers CLT a SOFT warning (yellow) — only
+        when CLT is also missing. If Zig is healthy and CLT is present,
+        pill stays green. If Zig is healthy but CLT is missing, pill is
+        yellow with tooltip explaining the framework-import limitation.
+      • pillText for HARD CLT-blocked state: "Xcode CLT required".
+      • pillText for SOFT CLT-warning Zig state: "{zig version} · CLT
+        recommended" or similar.
+      Naming
+      • Consider renaming ToolchainFixWizard.svelte to something
+        language-agnostic (PrereqFixWizard? ToolchainSetupModal?) since it
+        will no longer be Rust-specific.
+      • The Help → Rust Help → Rust Toolchain… menu item stays Rust-named,
+        but the modal it opens is shared infrastructure.
+    Test plan: Round 2 BRANCH 0 currently lives under "Rust Toolchain Wizard"
+    — should be re-categorized as a global prereq test. Add equivalent
+    BRANCH 0 tests for clang and swift (vanilla VM, no CLT, click pill,
+    same modal opens).
 
 v0.3.2 — Welcome Wizard + Language Gating
   Status: complete — released 2026-04-04

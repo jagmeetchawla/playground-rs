@@ -28,6 +28,9 @@
     { id: 'languages', label: edition.isSingleLanguage ? ({
       rust: 'Rust / Cargo', clang: 'C / Clang', zig: 'Zig', swift: 'Swift'
     }[edition.defaultProjectType] ?? 'Language') : 'Languages' },
+    // Rust toolchain section: in-app installer/repair flow + manual instructions.
+    // Shown only when Rust is enabled — the in-app installer is Rust-only.
+    ...(enabledLanguages.includes('rust') ? [{ id: 'toolchain', label: 'Rust Toolchain' }] : []),
     { id: 'playgrounds', label: 'Playgrounds' },
     { id: 'projects', label: 'Projects' },
     { id: 'console', label: 'Console' },
@@ -199,6 +202,128 @@
         {/if}
       </div>
 
+    {:else if activeSection === 'toolchain'}
+      <h1>Rust Toolchain</h1>
+      <p class="lead">
+        {edition.displayName} checks your Rust toolchain on every launch and helps you
+        install or repair anything that's missing — without ever opening Terminal if you
+        don't want to.
+      </p>
+
+      <h2>Auto-Detection on Startup</h2>
+      <p>
+        When the app launches it runs a silent toolchain check and shows the result as a
+        status pill in the toolbar. Click the pill any time to open the Toolchain modal.
+      </p>
+      <table class="status-table">
+        <tbody>
+          <tr><td><span class="dot ok">●</span></td><td><strong>Healthy</strong></td><td>Everything is installed and ready.</td></tr>
+          <tr><td><span class="dot warn">◐</span></td><td><strong>Partial</strong></td><td>Cargo works but a component (rustfmt or clippy) is missing.</td></tr>
+          <tr><td><span class="dot err">○</span></td><td><strong>Broken</strong></td><td>Rust can't compile yet — Xcode CLT, rustup, or the default toolchain is missing.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>What the App Checks</h2>
+      <ul>
+        <li><strong>Xcode Command Line Tools</strong> — required prerequisite. Rust uses Apple's <code>cc</code> linker and SDK to build executables on macOS. Without CLT, even a perfectly installed Rust toolchain can't link.</li>
+        <li><strong>rustup</strong> — the official Rust toolchain manager.</li>
+        <li><strong>cargo</strong> + <strong>rustc</strong> — the build tool and compiler.</li>
+        <li><strong>rustfmt</strong> — auto-formatter (used when you save).</li>
+        <li><strong>clippy</strong> — linter that powers live error checking in the editor.</li>
+      </ul>
+
+      <h3>Note: macOS Developer Tools Dialog</h3>
+      <p class="hint">
+        On a Mac without developer tools installed, macOS may show an
+        "Install Command Line Developer Tools" dialog when the app first
+        launches. This is triggered by macOS itself (specifically Apple's
+        WebKit framework used by the app's rendering engine), not by the
+        app. You can dismiss it by clicking <strong>Not Now</strong> —
+        the app will guide you through installation when you're ready
+        via the toolchain status pill and the Install Rust Toolchain flow.
+      </p>
+
+      <h2>If Anything Is Missing or Corrupted</h2>
+      <p>
+        The first-launch <strong>Welcome Wizard</strong> shows a clear status card when something
+        is missing, with an <em>Install Rust Toolchain…</em> button that opens the Toolchain modal.
+        You're free to keep exploring the app even with a broken toolchain — the toolbar pill
+        stays red as a reminder, and trying to run a playground will show a clear error pointing
+        you back to the fix flow. Anytime later, clicking the pill opens the <strong>Toolchain</strong>
+        modal — same content, two paths:
+      </p>
+
+      <div class="card-grid two-col">
+        <div class="card">
+          <h3>Help Me Install</h3>
+          <p>Guided in-app installer. Click the action button (e.g. <em>Install Rust</em>) and the app runs the right command, streams the output live, and re-checks automatically when it's done.</p>
+        </div>
+        <div class="card">
+          <h3>I'll Do It Myself</h3>
+          <p>Shows the exact Terminal commands you'd run yourself, with copy-to-clipboard buttons. Click <strong>Re-check</strong> when you're done and the app verifies your setup.</p>
+        </div>
+      </div>
+
+      <p>
+        The same Toolchain modal is reachable from <strong>Settings</strong> (the
+        <em>Repair Rust Toolchain…</em> button), the <strong>Help → Rust Help → Rust Toolchain…</strong>
+        menu item, or by clicking the toolbar pill directly.
+      </p>
+
+      <h2>Manual Installation (Terminal)</h2>
+      <p>If you prefer to install everything yourself, here's the full sequence on a fresh Mac:</p>
+
+      <h3>1. Install Xcode Command Line Tools</h3>
+      <div class="code-block">
+        <pre>xcode-select --install</pre>
+      </div>
+      <p class="hint">
+        Opens Apple's installer dialog. Click <strong>Install</strong> and wait
+        10–15 minutes. This also enables C/C++ and Swift.
+      </p>
+
+      <h3>2. Install Rust via rustup</h3>
+      <div class="code-block">
+        <pre>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable</pre>
+      </div>
+      <p class="hint">
+        Downloads and runs the official installer from <button class="link-btn" onclick={() => shellOpen('https://rustup.rs')}>rustup.rs</button>.
+        Installs <code>rustup</code>, <code>cargo</code>, <code>rustc</code>, <code>rustfmt</code>, and <code>clippy</code>.
+        Takes a few minutes.
+      </p>
+
+      <h3>3. (If needed) Set the default toolchain</h3>
+      <div class="code-block">
+        <pre>rustup default stable</pre>
+      </div>
+
+      <h3>4. (If needed) Install missing components</h3>
+      <div class="code-block">
+        <pre>rustup component add rustfmt clippy</pre>
+      </div>
+
+      <h2>The RUSTUP_AUTO_INSTALL=0 Guard</h2>
+      <p>
+        When the app probes your toolchain it sets <code>RUSTUP_AUTO_INSTALL=0</code> on every
+        rustup-aware command. This prevents rustup ≥ 1.28 from silently re-downloading a
+        missing default toolchain just because we asked for its version. The point of the
+        check is to <em>observe</em> a broken state, not heal it behind your back —
+        explicit fixes only happen when you click an action button.
+      </p>
+
+      <h2>Get More Help</h2>
+      <p>If you're stuck on something Rust-specific, these are the best places to look:</p>
+      <ul class="link-list">
+        <li><button class="link-btn" onclick={() => shellOpen('https://www.rust-lang.org')}>rust-lang.org</button> — official Rust homepage</li>
+        <li><button class="link-btn" onclick={() => shellOpen('https://rustup.rs')}>rustup.rs</button> — toolchain installer</li>
+        <li><button class="link-btn" onclick={() => shellOpen('https://doc.rust-lang.org/book/')}>The Rust Programming Language</button> — the canonical book (free, online)</li>
+        <li><button class="link-btn" onclick={() => shellOpen('https://users.rust-lang.org')}>users.rust-lang.org</button> — friendly Q&A forum, beginners welcome</li>
+        <li><button class="link-btn" onclick={() => shellOpen('https://www.reddit.com/r/rust')}>r/rust</button> — Reddit community</li>
+        <li><button class="link-btn" onclick={() => shellOpen('https://stackoverflow.com/questions/tagged/rust')}>Stack Overflow [rust]</button> — searchable Q&A</li>
+        <li><button class="link-btn" onclick={() => shellOpen('https://github.com/rust-lang/rustup/issues')}>rustup issues</button> — for installer / toolchain bugs</li>
+        <li><button class="link-btn" onclick={() => shellOpen('https://github.com/jagmeetchawla/rustic-playground/issues')}>Rustic Playground issues</button> — for bugs in this app</li>
+      </ul>
+
     {:else if activeSection === 'playgrounds'}
       <h1>Working with Playgrounds</h1>
       <p class="lead">
@@ -222,7 +347,7 @@
       <p>Right-click any playground in the sidebar for these actions. Book playgrounds are read-only — use <strong>Copy to Project</strong> to create an editable copy.</p>
 
       <h2>Templates</h2>
-      <p>Each language includes starter templates: Hello World, CLI Input, Structs, Error Handling, and more. Templates auto-add required dependencies for Rust projects.</p>
+      <p>Includes starter templates: Hello World, CLI Input, Structs, Error Handling, and more. Templates auto-add required dependencies for Rust projects.</p>
 
     {:else if activeSection === 'projects'}
       <h1>Projects</h1>
@@ -240,12 +365,17 @@
 
       <h2>Project Types</h2>
       <p>
-        Each project has a language type set at creation. Rust projects use <code>Cargo.toml</code>
-        for dependency management. Other languages use <code>rustic.toml</code> for project config
-        and compiler flags.
+        {#if enabledLanguages.some(l => l !== 'rust')}
+          Each project has a language type set at creation. Rust projects use <code>Cargo.toml</code>
+          for dependency management. Other languages use <code>rustic.toml</code> for project config
+          and compiler flags.
+        {:else}
+          Each Rust project uses a <code>Cargo.toml</code> file for configuration and dependency
+          management — the standard Cargo package layout.
+        {/if}
       </p>
 
-      <h2>Dependencies (Rust)</h2>
+      <h2>Dependencies</h2>
       <p>
         All Rust playgrounds in a project share one <code>Cargo.toml</code>. Click it at the bottom
         of the sidebar to edit directly, or use the dependency manager in the toolbar.
@@ -257,11 +387,13 @@ rand = "0.8"
 tokio = &#123; version = "1", features = ["full"] &#125;</pre>
       </div>
 
-      <h2>Compiler Flags (C/C++, Zig, Swift)</h2>
-      <p>
-        Non-Rust projects have per-project compiler flags visible in the sidebar.
-        These are saved to <code>rustic.toml</code> and applied on every run.
-      </p>
+      {#if enabledLanguages.some(l => l !== 'rust')}
+        <h2>Compiler Flags (C/C++, Zig, Swift)</h2>
+        <p>
+          Non-Rust projects have per-project compiler flags visible in the sidebar.
+          These are saved to <code>rustic.toml</code> and applied on every run.
+        </p>
+      {/if}
 
       <h2>Storage</h2>
       <p>
@@ -671,4 +803,43 @@ fn main() &#123;
     font-family: inherit; font-weight: inherit;
   }
   .link-btn:hover { text-decoration: underline; }
+
+  /* ── Toolchain section: status table, two-col cards, hint, link list ── */
+  .status-table { margin: 4px 0 8px; }
+  .status-table td {
+    padding: 6px 10px 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .status-table td:first-child {
+    width: 24px; text-align: center; font-size: 14px;
+  }
+  .status-table td:nth-child(2) { width: 90px; }
+  .dot.ok { color: var(--green, #4ec05c); }
+  .dot.warn { color: #f5c542; }
+  .dot.err { color: var(--red, #d44); }
+
+  /* Two-column variant of card-grid for the Toolchain section */
+  .card-grid.two-col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Inline hint paragraph under code blocks */
+  .hint {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    line-height: 1.55;
+    margin: 4px 0 8px;
+  }
+
+  /* Bullet list of external links */
+  .link-list {
+    list-style: disc;
+    padding-left: 20px;
+    margin: 0;
+  }
+  .link-list li {
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
 </style>

@@ -353,6 +353,12 @@
       border-radius: 3px;
       padding: 2px 6px;
     }
+    .req-note {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 12px;
+      line-height: 1.6;
+    }
 
     /* ── Security banner ── */
     .security { border-top: 1px solid var(--border); }
@@ -695,10 +701,19 @@
           <span class="req-value">12 Monterey or later</span>
         </div>
         <div class="req-row">
+          <span class="req-name">Xcode Command Line Tools</span>
+          <span class="req-value">Required &mdash; Rust needs Apple's linker and SDK</span>
+        </div>
+        <div class="req-row">
           <span class="req-name">Rust toolchain</span>
           <span class="req-value">stable &mdash; install via <a href="https://rustup.rs">rustup.rs</a></span>
         </div>
       </div>
+      <p class="req-note">
+        On a Mac without developer tools, macOS may show an &ldquo;Install Command Line Developer Tools&rdquo;
+        dialog on first launch. This is triggered by macOS, not by the app. You can dismiss it &mdash;
+        the app will guide you through installation when you're ready.
+      </p>
     </div>
   </section>
 
