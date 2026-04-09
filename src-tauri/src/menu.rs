@@ -8,7 +8,7 @@ use crate::languages::Lang;
 
 /// Book source tags → submenu labels (same order as frontend BOOK_LABELS).
 const BOOK_LABELS: &[(&str, &str)] = &[
-    ("rust_book", "The Rust Programming Language (2021 Edition)"),
+    ("rust_book", "The Rust Programming Language (2024 Edition)"),
     ("knr_book", "The C Programming Language (K&&R)"),
     ("swift_book", "The Swift Programming Language"),
 ];
