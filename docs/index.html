@@ -894,56 +894,8 @@
 
   <!-- ── Slideshow JS ── -->
   <script>
-    const slides = [
-      { id: 'editor',    caption: 'Write code, press \u2318R, see output stream live' },
-      { id: 'wizard',    caption: 'Welcome Wizard \u2014 guided first-launch toolchain setup' },
-      { id: 'fixwizard', caption: 'Toolchain install \u2014 guided or manual, your choice' },
-      { id: 'book',      caption: 'Learn from 20 chapters of The Rust Programming Language' },
-      { id: 'help',      caption: 'Built-in help with toolchain docs, install commands, and links' },
-    ];
-    let currentSlide = 0;
-    let currentTheme = 'dark';
-    let autoTimer;
-
-    function renderDots() {
-      const dots = document.getElementById('slide-dots');
-      dots.innerHTML = slides.map((_, i) =>
-        `<button class="slide-dot${i === currentSlide ? ' active' : ''}" onclick="goToSlide(${i})"></button>`
-      ).join('');
-    }
-
-    function showSlide(index) {
-      currentSlide = index;
-      const img = document.getElementById('slide-img');
-      const caption = document.getElementById('slide-caption');
-      img.src = `images/slide-${slides[index].id}-${currentTheme}.png`;
-      img.alt = slides[index].caption;
-      caption.textContent = slides[index].caption;
-      renderDots();
-    }
-
-    function setSlideTheme(theme) {
-      currentTheme = theme;
-      document.querySelectorAll('.theme-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.theme === theme);
-      });
-      showSlide(currentSlide);
-    }
-
-    function nextSlide() { showSlide((currentSlide + 1) % slides.length); }
-    function prevSlide() { showSlide((currentSlide - 1 + slides.length) % slides.length); }
-    function goToSlide(i) { showSlide(i); }
-
-    // Auto-advance every 4 seconds, pause on hover
-    function startAuto() { autoTimer = setInterval(nextSlide, 4000); }
-    function stopAuto() { clearInterval(autoTimer); }
-    const container = document.getElementById('slide-container');
-    container.addEventListener('mouseenter', stopAuto);
-    container.addEventListener('mouseleave', startAuto);
-
-    // Init
-    renderDots();
-    startAuto();
+    // ── Main slideshow (commented out — will be replaced by video) ──
+    // Kept here so the code is ready when the video section is added.
 
     // ── Wizard Slideshow (single-theme, story-driven) ──
     const wizardSlides = [
