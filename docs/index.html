@@ -522,6 +522,41 @@
     }
     .slide-dot.active { background: var(--accent); }
 
+    /* ── Lightbox ── */
+    .lightbox {
+      display: none;
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0, 0, 0, 0.9);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      align-items: center; justify-content: center;
+      cursor: zoom-out;
+    }
+    .lightbox.open { display: flex; }
+    .lightbox img {
+      max-width: 95vw; max-height: 92vh;
+      border-radius: 8px;
+      box-shadow: 0 16px 80px rgba(0,0,0,0.8);
+      object-fit: contain;
+    }
+    .lightbox-close {
+      position: absolute; top: 16px; right: 20px;
+      width: 36px; height: 36px;
+      background: rgba(255,255,255,0.12); color: #fff;
+      border: none; border-radius: 50%;
+      font-size: 20px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .lightbox-close:hover { background: rgba(255,255,255,0.25); }
+    .lightbox-caption {
+      position: absolute; bottom: 20px;
+      text-align: center; width: 100%;
+      font-size: 14px; color: rgba(255,255,255,0.7);
+    }
+    /* Make zoomable images show a zoom cursor */
+    .zoomable { cursor: zoom-in; }
+
     /* ── Responsive ── */
     @media (max-width: 768px) {
       .hero { padding: 48px 20px 40px; }
@@ -581,7 +616,7 @@
         View Source
       </a>
     </div>
-    <img class="hero-screenshot" src="images/hero-composite.png" alt="Rustic Playground in Dark, Rust, and Light themes — writing and running Rust code with live console output">
+    <img class="hero-screenshot zoomable" src="images/hero-composite.png" alt="Rustic Playground in Dark, Rust, and Light themes — writing and running Rust code with live console output" onclick="openLightbox(this)">
     <p class="hero-caption">Dark, Rust, and Light themes &mdash; writing and running Rust code with interactive console</p>
   </section>
 
@@ -663,7 +698,7 @@
         <div class="slide-container" id="wizard-slide-container">
           <button class="slide-arrow prev" onclick="wizardPrev()">&#8249;</button>
           <div class="slide-wrapper">
-            <img id="wizard-slide-img" src="images/welcome/1-welcome-entire-toolchain-missing.png" alt="Welcome Wizard screenshot">
+            <img id="wizard-slide-img" class="zoomable" src="images/welcome/1-welcome-entire-toolchain-missing.png" alt="Welcome Wizard screenshot" onclick="openLightbox(this)">
           </div>
           <button class="slide-arrow next" onclick="wizardNext()">&#8250;</button>
         </div>
@@ -726,7 +761,7 @@
             <a href="https://doc.rust-lang.org/book/">Read online</a>
           </p>
         </div>
-        <img class="book-screenshot" src="images/screenshot-rust.png" alt="Rust theme showing book examples">
+        <img class="book-screenshot zoomable" src="images/screenshot-rust.png" alt="Rust theme showing book examples" onclick="openLightbox(this)">
       </div>
     </div>
   </section>
@@ -891,6 +926,13 @@
     </div>
   </footer>
 
+  <!-- ── Lightbox ── -->
+  <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+    <img id="lightbox-img" src="" alt="">
+    <div class="lightbox-caption" id="lightbox-caption"></div>
+  </div>
+
   <!-- ── Slideshow JS ── -->
   <script>
     // ── Main slideshow (commented out — will be replaced by video) ──
@@ -941,6 +983,29 @@
 
     wizardRenderDots();
     wizardStartAuto();
+
+    // ── Lightbox (click-to-zoom for any .zoomable image) ──
+    function openLightbox(img) {
+      const lb = document.getElementById('lightbox');
+      const lbImg = document.getElementById('lightbox-img');
+      const lbCap = document.getElementById('lightbox-caption');
+      lbImg.src = img.src;
+      lbCap.textContent = img.alt || '';
+      lb.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      // Pause wizard slideshow while lightbox is open
+      wizardStopAuto();
+    }
+    function closeLightbox() {
+      const lb = document.getElementById('lightbox');
+      lb.classList.remove('open');
+      document.body.style.overflow = '';
+      wizardStartAuto();
+    }
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeLightbox();
+    });
   </script>
 </body>
 </html>
