@@ -620,6 +620,16 @@ v0.3.4 — In-App Toolchain Installer & Repair
         Discuss design in detail before implementing — this touches
         every component.
 
+      • DMG volume icon: when the DMG is mounted, the Desktop volume
+        icon shows the same app icon as the installed .app. Standard
+        macOS convention is to show a disk/external-drive icon with
+        the app icon overlaid. Fix: post-build script that converts
+        DMG to read/write, mounts it, copies a custom .VolumeIcon.icns
+        to the mount root, sets the custom icon flag via SetFile -a C,
+        unmounts, and converts back to compressed/read-only. ~15 lines
+        of bash. Low priority — cosmetic polish only.
+        Discovered: 2026-04-10.
+
     Code review findings (specs/code-review-v0.3.4.md, 2026-04-09):
     Top 5 by impact — address before Power Edition ships:
       • Fix unbounded output buffer in stream_pipe
