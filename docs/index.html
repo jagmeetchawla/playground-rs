@@ -5,8 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rustic Playground — The Rust Edition</title>
   <meta name="description" content="A macOS desktop app for learning Rust. Write code, press ⌘R, see output stream live. Inspired by Swift Playgrounds.">
-  <meta name="theme-color" content="#1a1410">
+  <meta name="theme-color" content="#1a1210">
   <link rel="icon" type="image/png" href="images/app-icon.png">
+
+  <!-- Prevent flash of wrong theme -->
+  <script>
+    (function() {
+      var t = localStorage.getItem('site-theme');
+      if (!t || !{ dark:1, light:1, rust:1 }[t]) {
+        t = 'rust';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 
   <!-- Open Graph -->
   <meta property="og:title" content="Rustic Playground — The Rust Edition">
@@ -20,6 +31,12 @@
 
     /* ── Tokens ── */
     :root {
+      --radius: 12px;
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", Menlo, monospace;
+      --max-width: 1080px;
+
+      /* Dark theme (default) */
       --bg: #111;
       --bg-card: #1a1a1a;
       --bg-code: #0d0d0d;
@@ -31,10 +48,66 @@
       --accent-glow: rgba(196, 90, 45, 0.15);
       --border: #2a2520;
       --border-light: #3a3530;
-      --radius: 12px;
-      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-      --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", Menlo, monospace;
-      --max-width: 1080px;
+      --nav-bg: rgba(17, 17, 17, 0.85);
+      --kbd-bg: rgba(255, 255, 255, 0.08);
+      --kbd-shadow: rgba(0, 0, 0, 0.4);
+      --code-bg: rgba(255, 255, 255, 0.06);
+      --img-shadow: 0 16px 80px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.3);
+      --img-shadow-sm: 0 8px 32px rgba(0,0,0,0.4);
+      --lb-bg: rgba(0, 0, 0, 0.92);
+      --lb-text: rgba(255, 255, 255, 0.7);
+      --lb-chrome: rgba(255, 255, 255, 0.12);
+      --lb-chrome-hover: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Light theme */
+    [data-theme="light"] {
+      --bg: #faf8f6;
+      --bg-card: #ffffff;
+      --bg-code: #f0ece8;
+      --text: #2c2420;
+      --text-secondary: #6b6058;
+      --text-tertiary: #9a9088;
+      --accent: #b84820;
+      --accent-light: #c45a2d;
+      --accent-glow: rgba(184, 72, 32, 0.10);
+      --border: #e0dcd8;
+      --border-light: #d0ccc8;
+      --nav-bg: rgba(250, 248, 246, 0.88);
+      --kbd-bg: rgba(0, 0, 0, 0.06);
+      --kbd-shadow: rgba(0, 0, 0, 0.12);
+      --code-bg: rgba(0, 0, 0, 0.04);
+      --img-shadow: 0 12px 48px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+      --img-shadow-sm: 0 8px 24px rgba(0,0,0,0.1);
+      --lb-bg: rgba(250, 248, 246, 0.96);
+      --lb-text: rgba(44, 36, 32, 0.7);
+      --lb-chrome: rgba(0, 0, 0, 0.08);
+      --lb-chrome-hover: rgba(0, 0, 0, 0.15);
+    }
+
+    /* Rust theme */
+    [data-theme="rust"] {
+      --bg: #1a1210;
+      --bg-card: #241c18;
+      --bg-code: #120e0c;
+      --text: #e8d5c4;
+      --text-secondary: #b5a090;
+      --text-tertiary: #8a7565;
+      --accent: #ce422b;
+      --accent-light: #e05a3a;
+      --accent-glow: rgba(206, 66, 43, 0.15);
+      --border: #3a2e25;
+      --border-light: #4a3e35;
+      --nav-bg: rgba(26, 18, 16, 0.85);
+      --kbd-bg: rgba(255, 255, 255, 0.08);
+      --kbd-shadow: rgba(0, 0, 0, 0.4);
+      --code-bg: rgba(255, 255, 255, 0.06);
+      --img-shadow: 0 16px 80px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.3);
+      --img-shadow-sm: 0 8px 32px rgba(0,0,0,0.4);
+      --lb-bg: rgba(26, 18, 16, 0.93);
+      --lb-text: rgba(232, 213, 196, 0.7);
+      --lb-chrome: rgba(232, 213, 196, 0.12);
+      --lb-chrome-hover: rgba(232, 213, 196, 0.25);
     }
 
     /* ── Base ── */
@@ -45,6 +118,7 @@
       color: var(--text);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
+      transition: background-color 0.3s, color 0.3s;
     }
     a { color: var(--accent-light); text-decoration: none; }
     a:hover { text-decoration: underline; }
@@ -56,7 +130,7 @@
     /* ── Nav ── */
     nav {
       position: sticky; top: 0; z-index: 100;
-      background: rgba(17, 17, 17, 0.85);
+      background: var(--nav-bg);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
@@ -80,7 +154,7 @@
     .nav-links a:hover { color: var(--text); text-decoration: none; }
     .nav-cta {
       font-size: 13px; font-weight: 600;
-      color: var(--bg) !important;
+      color: #fff !important;
       background: var(--accent);
       padding: 6px 16px;
       border-radius: 6px;
@@ -97,7 +171,7 @@
       width: 120px; height: 120px;
       border-radius: 24px;
       margin: 0 auto 28px;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+      box-shadow: var(--img-shadow-sm);
     }
     .hero h1 {
       font-size: 44px; font-weight: 700;
@@ -113,7 +187,7 @@
       letter-spacing: 0.06em;
       color: var(--accent);
       background: var(--accent-glow);
-      border: 1px solid rgba(196, 90, 45, 0.25);
+      border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
       border-radius: 4px;
       padding: 3px 10px;
       margin-bottom: 20px;
@@ -154,7 +228,7 @@
     .hero-screenshot {
       width: 100%; max-width: 900px; margin: 0 auto;
       border-radius: 12px;
-      box-shadow: 0 16px 80px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.3);
+      box-shadow: var(--img-shadow);
     }
     .hero-caption {
       font-size: 13px; color: var(--text-tertiary);
@@ -223,7 +297,7 @@
       width: 36px; height: 36px;
       border-radius: 50%;
       background: var(--accent-glow);
-      border: 1px solid rgba(196, 90, 45, 0.3);
+      border: 1px solid color-mix(in srgb, var(--accent-light) 30%, transparent);
       color: var(--accent-light);
       font-size: 15px; font-weight: 700;
       margin-bottom: 14px;
@@ -264,7 +338,7 @@
     .book-screenshot {
       width: 380px; flex-shrink: 0;
       border-radius: 8px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      box-shadow: var(--img-shadow-sm);
     }
 
     /* ── Themes showcase ── */
@@ -318,12 +392,12 @@
       font-family: var(--font);
       font-size: 12px; font-weight: 600;
       color: var(--text);
-      background: rgba(255,255,255,0.08);
+      background: var(--kbd-bg);
       border: 1px solid var(--border-light);
       border-radius: 4px;
       padding: 2px 8px;
       line-height: 1.5;
-      box-shadow: 0 1px 0 rgba(0,0,0,0.4);
+      box-shadow: 0 1px 0 var(--kbd-shadow);
     }
     .shortcut-label { color: var(--text-secondary); }
 
@@ -348,7 +422,7 @@
     .req-value { color: var(--text-secondary); font-size: 13px; }
     .req-value code {
       font-family: var(--font-mono); font-size: 12px;
-      background: rgba(255,255,255,0.06);
+      background: var(--code-bg);
       border: 1px solid var(--border);
       border-radius: 3px;
       padding: 2px 6px;
@@ -526,7 +600,7 @@
     .lightbox {
       display: none;
       position: fixed; inset: 0; z-index: 1000;
-      background: rgba(0, 0, 0, 0.9);
+      background: var(--lb-bg);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       align-items: center; justify-content: center;
@@ -534,28 +608,134 @@
     }
     .lightbox.open { display: flex; }
     .lightbox img {
-      max-width: 95vw; max-height: 92vh;
+      max-width: 95vw; max-height: 85vh;
       border-radius: 8px;
-      box-shadow: 0 16px 80px rgba(0,0,0,0.8);
+      box-shadow: var(--img-shadow);
       object-fit: contain;
+      cursor: default;
     }
     .lightbox-close {
       position: absolute; top: 16px; right: 20px;
       width: 36px; height: 36px;
-      background: rgba(255,255,255,0.12); color: #fff;
+      background: var(--lb-chrome); color: var(--lb-text);
       border: none; border-radius: 50%;
       font-size: 20px; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       transition: background 0.15s;
     }
-    .lightbox-close:hover { background: rgba(255,255,255,0.25); }
+    .lightbox-close:hover { background: var(--lb-chrome-hover); }
     .lightbox-caption {
       position: absolute; bottom: 20px;
       text-align: center; width: 100%;
-      font-size: 14px; color: rgba(255,255,255,0.7);
+      font-size: 14px; color: var(--lb-text);
     }
+    .lightbox-arrow {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 48px; height: 48px;
+      background: var(--lb-chrome); color: var(--lb-text);
+      border: none; border-radius: 50%;
+      font-size: 28px; cursor: pointer; z-index: 1001;
+      display: none; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .lightbox-arrow:hover { background: var(--lb-chrome-hover); }
+    .lightbox-arrow.prev { left: 20px; }
+    .lightbox-arrow.next { right: 20px; }
+    .lightbox.has-slides .lightbox-arrow { display: flex; }
+    .lightbox-dots {
+      position: absolute; bottom: 48px;
+      display: none; gap: 8px; justify-content: center;
+      width: 100%;
+    }
+    .lightbox.has-slides .lightbox-dots { display: flex; }
+    .lb-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--lb-chrome);
+      border: none; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .lb-dot.active { background: var(--accent-light); }
     /* Make zoomable images show a zoom cursor */
     .zoomable { cursor: zoom-in; }
+
+    /* ── Site theme switcher ── */
+    .site-theme-toggle {
+      display: flex; gap: 2px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px;
+      margin-right: 12px;
+    }
+    .site-theme-btn {
+      font-family: var(--font); font-size: 12px; font-weight: 500;
+      padding: 4px 10px; border-radius: 4px;
+      background: transparent; color: var(--text-tertiary);
+      border: none; cursor: pointer;
+      transition: all 0.15s;
+      line-height: 1.4;
+    }
+    .site-theme-btn:hover { color: var(--text-secondary); }
+    .site-theme-btn.active {
+      background: var(--accent); color: #fff;
+    }
+
+    /* ── Download split button + release dropdown ── */
+    .download-group {
+      position: relative;
+      display: inline-flex;
+    }
+    .download-group .btn-primary {
+      border-radius: 8px 0 0 8px;
+    }
+    .download-chevron {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--accent); color: #fff;
+      border: none; border-left: 1px solid rgba(255,255,255,0.2);
+      border-radius: 0 8px 8px 0;
+      padding: 0 12px;
+      cursor: pointer;
+      font-size: 10px;
+      transition: background 0.15s;
+    }
+    .download-chevron:hover { background: var(--accent-light); }
+    .release-menu {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      min-width: 340px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--img-shadow-sm);
+      z-index: 50;
+      overflow: hidden;
+    }
+    .release-menu.open { display: block; }
+    .release-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .release-item:last-of-type { border-bottom: none; }
+    .release-tag { font-size: 13px; font-weight: 600; color: var(--text); }
+    .release-date { font-size: 12px; color: var(--text-tertiary); margin-left: 8px; }
+    .release-dl {
+      font-size: 12px; font-weight: 500;
+      color: var(--accent-light);
+      text-decoration: none;
+    }
+    .release-dl:hover { text-decoration: underline; }
+    .release-no-dmg { font-size: 12px; color: var(--text-tertiary); }
+    .release-menu-footer {
+      border-top: 1px solid var(--border);
+      padding: 10px 16px;
+      text-align: center;
+    }
+    .release-menu-footer a {
+      font-size: 13px; color: var(--text-secondary);
+    }
 
     /* ── Responsive ── */
     @media (max-width: 768px) {
@@ -572,6 +752,8 @@
       .support-grid { grid-template-columns: 1fr; }
       .section-header h2 { font-size: 24px; }
       .nav-links .nav-link-text { display: none; }
+      .site-theme-toggle { margin-right: 8px; }
+      .site-theme-btn { padding: 4px 7px; font-size: 11px; }
       .footer-inner { flex-direction: column; gap: 12px; }
     }
   </style>
@@ -590,7 +772,12 @@
         <a href="#how-it-works" class="nav-link-text">How It Works</a>
         <a href="#support" class="nav-link-text">Support</a>
         <a href="https://github.com/jagmeetchawla/rustic-playground" class="nav-link-text">GitHub</a>
-        <a href="https://github.com/jagmeetchawla/rustic-playground/releases" class="nav-cta">
+        <div class="site-theme-toggle">
+          <button class="site-theme-btn" data-set-theme="dark" title="Dark theme">Dark</button>
+          <button class="site-theme-btn" data-set-theme="light" title="Light theme">Light</button>
+          <button class="site-theme-btn active" data-set-theme="rust" title="Rust theme">Rust</button>
+        </div>
+        <a href="https://github.com/jagmeetchawla/rustic-playground/releases" class="nav-cta download-link">
           Download
         </a>
       </div>
@@ -607,10 +794,14 @@
       Write code, press <kbd>&#8984;R</kbd>, see output stream live. No terminal required.
     </p>
     <div class="hero-actions">
-      <a href="https://github.com/jagmeetchawla/rustic-playground/releases" class="btn btn-primary">
-        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 12l-4-4h2.5V3h3v5H12L8 12zM3 14h10v-1H3v1z"/></svg>
-        Download for macOS
-      </a>
+      <div class="download-group">
+        <a href="https://github.com/jagmeetchawla/rustic-playground/releases" class="btn btn-primary download-link">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 12l-4-4h2.5V3h3v5H12L8 12zM3 14h10v-1H3v1z"/></svg>
+          Download for macOS
+        </a>
+        <button class="download-chevron" onclick="toggleReleaseMenu(event)">&#9662;</button>
+        <div class="release-menu" id="release-menu"></div>
+      </div>
       <a href="https://github.com/jagmeetchawla/rustic-playground" class="btn btn-secondary">
         <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
         View Source
@@ -896,7 +1087,7 @@
       <h2>Start learning Rust today</h2>
       <p>Download Rustic Playground and write your first program in under a minute.</p>
       <div class="hero-actions">
-        <a href="https://github.com/jagmeetchawla/rustic-playground/releases" class="btn btn-primary">
+        <a href="https://github.com/jagmeetchawla/rustic-playground/releases" class="btn btn-primary download-link">
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 12l-4-4h2.5V3h3v5H12L8 12zM3 14h10v-1H3v1z"/></svg>
           Download for macOS
         </a>
@@ -928,13 +1119,75 @@
 
   <!-- ── Lightbox ── -->
   <div class="lightbox" id="lightbox" onclick="closeLightbox()">
-    <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
-    <img id="lightbox-img" src="" alt="">
+    <button class="lightbox-close" onclick="event.stopPropagation(); closeLightbox()">&times;</button>
+    <button class="lightbox-arrow prev" onclick="event.stopPropagation(); lightboxPrev()">&#8249;</button>
+    <img id="lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+    <button class="lightbox-arrow next" onclick="event.stopPropagation(); lightboxNext()">&#8250;</button>
     <div class="lightbox-caption" id="lightbox-caption"></div>
+    <div class="lightbox-dots" id="lightbox-dots"></div>
   </div>
 
-  <!-- ── Slideshow JS ── -->
+  <!-- ── Theme + Slideshow JS ── -->
   <script>
+    // ── Site theme switcher ──
+    const themeColors = { dark: '#111', light: '#faf8f6', rust: '#1a1210' };
+    function setSiteTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      document.querySelector('meta[name="theme-color"]').content = themeColors[theme] || themeColors.dark;
+      localStorage.setItem('site-theme', theme);
+      document.querySelectorAll('.site-theme-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.setTheme === theme);
+      });
+    }
+    // Sync button state with theme set by head script, then wire up clicks
+    (function() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      setSiteTheme(current);
+    })();
+    document.querySelectorAll('.site-theme-btn').forEach(btn => {
+      btn.addEventListener('click', () => setSiteTheme(btn.dataset.setTheme));
+    });
+
+    // ── Download: fetch latest releases from GitHub API ──
+    (async function() {
+      try {
+        const res = await fetch('https://api.github.com/repos/jagmeetchawla/rustic-playground/releases?per_page=5');
+        if (!res.ok) return;
+        const releases = await res.json();
+
+        // Find first release with a DMG asset → update all download links
+        for (const rel of releases) {
+          const dmg = rel.assets.find(function(a) { return a.name.endsWith('.dmg'); });
+          if (dmg) {
+            document.querySelectorAll('.download-link').forEach(function(a) { a.href = dmg.browser_download_url; });
+            break;
+          }
+        }
+
+        // Populate the release dropdown
+        var menu = document.getElementById('release-menu');
+        var html = '';
+        releases.forEach(function(rel) {
+          var dmg = rel.assets.find(function(a) { return a.name.endsWith('.dmg'); });
+          var date = new Date(rel.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          var right = dmg
+            ? '<a href="' + dmg.browser_download_url + '" class="release-dl" onclick="event.stopPropagation()">Download</a>'
+            : '<a href="' + rel.html_url + '" class="release-no-dmg" onclick="event.stopPropagation()">View</a>';
+          html += '<div class="release-item"><div><span class="release-tag">' + rel.tag_name + '</span><span class="release-date">' + date + '</span></div>' + right + '</div>';
+        });
+        html += '<div class="release-menu-footer"><a href="https://github.com/jagmeetchawla/rustic-playground/releases">All releases on GitHub &rarr;</a></div>';
+        menu.innerHTML = html;
+      } catch(e) { /* API unavailable — static fallback links remain */ }
+    })();
+
+    function toggleReleaseMenu(e) {
+      e.stopPropagation();
+      document.getElementById('release-menu').classList.toggle('open');
+    }
+    document.addEventListener('click', function() {
+      document.getElementById('release-menu').classList.remove('open');
+    });
+
     // ── Main slideshow (commented out — will be replaced by video) ──
     // Kept here so the code is ready when the video section is added.
 
@@ -984,27 +1237,68 @@
     wizardRenderDots();
     wizardStartAuto();
 
-    // ── Lightbox (click-to-zoom for any .zoomable image) ──
+    // ── Lightbox (click-to-zoom, with slideshow support) ──
+    let lbSlides = null;
+    let lbIndex = 0;
+
     function openLightbox(img) {
       const lb = document.getElementById('lightbox');
-      const lbImg = document.getElementById('lightbox-img');
-      const lbCap = document.getElementById('lightbox-caption');
-      lbImg.src = img.src;
-      lbCap.textContent = img.alt || '';
+      wizardStopAuto();
+
+      // Check if this image is from the wizard slideshow
+      if (img.id === 'wizard-slide-img') {
+        lbSlides = wizardSlides;
+        lbIndex = wizardCurrent;
+        lb.classList.add('has-slides');
+        showLbSlide(lbIndex);
+      } else {
+        lbSlides = null;
+        lb.classList.remove('has-slides');
+        document.getElementById('lightbox-img').src = img.src;
+        document.getElementById('lightbox-caption').textContent = img.alt || '';
+      }
+
       lb.classList.add('open');
       document.body.style.overflow = 'hidden';
-      // Pause wizard slideshow while lightbox is open
-      wizardStopAuto();
     }
+
+    function showLbSlide(index) {
+      lbIndex = index;
+      document.getElementById('lightbox-img').src = lbSlides[index].src;
+      document.getElementById('lightbox-caption').textContent = lbSlides[index].caption;
+      renderLbDots();
+    }
+
+    function renderLbDots() {
+      if (!lbSlides) return;
+      document.getElementById('lightbox-dots').innerHTML = lbSlides.map((_, i) =>
+        '<button class="lb-dot' + (i === lbIndex ? ' active' : '') + '" onclick="event.stopPropagation(); showLbSlide(' + i + ')"></button>'
+      ).join('');
+    }
+
+    function lightboxPrev() {
+      if (!lbSlides) return;
+      showLbSlide((lbIndex - 1 + lbSlides.length) % lbSlides.length);
+    }
+    function lightboxNext() {
+      if (!lbSlides) return;
+      showLbSlide((lbIndex + 1) % lbSlides.length);
+    }
+
     function closeLightbox() {
       const lb = document.getElementById('lightbox');
-      lb.classList.remove('open');
+      lb.classList.remove('open', 'has-slides');
       document.body.style.overflow = '';
+      lbSlides = null;
       wizardStartAuto();
     }
-    // Close on Escape key
+
+    // Keyboard: Escape to close, arrows to navigate slides
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') closeLightbox();
+      if (!lbSlides) return;
+      if (e.key === 'ArrowLeft') lightboxPrev();
+      if (e.key === 'ArrowRight') lightboxNext();
     });
   </script>
 </body>
