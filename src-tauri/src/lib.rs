@@ -828,7 +828,7 @@ pub fn run() {
                 }
                 "open_discord" => {
                     let _ = std::process::Command::new("open")
-                        .arg("https://discord.gg/ADTXvuVA")
+                        .arg("https://discord.gg/AqPUgNfb")
                         .spawn();
                     None
                 }
