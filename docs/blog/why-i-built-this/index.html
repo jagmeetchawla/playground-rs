@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Why I built Rustic Playground</title>
+  <meta name="description" content="A macOS playground for learning Rust, inspired by Swift Playgrounds. Here's where it came from.">
+  <meta name="theme-color" content="#1a1210">
+  <link rel="icon" type="image/png" href="../../images/app-icon.png">
+
+  <!-- Prevent flash of wrong theme -->
+  <script>
+    (function() {
+      var t = localStorage.getItem('site-theme');
+      if (!t || !{ dark:1, light:1, rust:1 }[t]) {
+        t = 'rust';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Why I built Rustic Playground">
+  <meta property="og:description" content="A macOS playground for learning Rust, inspired by Swift Playgrounds. Here's where it came from.">
+  <meta property="og:image" content="https://rustic-playground.app/images/screenshot-themes.png">
+  <meta property="og:url" content="https://rustic-playground.app/blog/why-i-built-this/">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens (matches main site) ── */
+    :root {
+      --radius: 12px;
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", Menlo, monospace;
+      --max-width: 680px;
+
+      --bg: #111;
+      --bg-card: #1a1a1a;
+      --text: #e8e4df;
+      --text-secondary: #9a9590;
+      --text-tertiary: #6b6560;
+      --accent: #c45a2d;
+      --accent-light: #e07040;
+      --accent-glow: rgba(196, 90, 45, 0.15);
+      --border: #2a2520;
+      --border-light: #3a3530;
+      --nav-bg: rgba(17, 17, 17, 0.85);
+      --code-bg: rgba(255, 255, 255, 0.06);
+    }
+
+    [data-theme="light"] {
+      --bg: #faf8f6;
+      --bg-card: #ffffff;
+      --text: #2c2420;
+      --text-secondary: #6b6058;
+      --text-tertiary: #9a9088;
+      --accent: #b84820;
+      --accent-light: #c45a2d;
+      --accent-glow: rgba(184, 72, 32, 0.10);
+      --border: #e0dcd8;
+      --border-light: #d0ccc8;
+      --nav-bg: rgba(250, 248, 246, 0.88);
+      --code-bg: rgba(0, 0, 0, 0.04);
+    }
+
+    [data-theme="rust"] {
+      --bg: #1a1210;
+      --bg-card: #241c18;
+      --text: #e8d5c4;
+      --text-secondary: #b5a090;
+      --text-tertiary: #8a7565;
+      --accent: #ce422b;
+      --accent-light: #e05a3a;
+      --accent-glow: rgba(206, 66, 43, 0.15);
+      --border: #3a2e25;
+      --border-light: #4a3e35;
+      --nav-bg: rgba(26, 18, 16, 0.85);
+      --code-bg: rgba(255, 255, 255, 0.06);
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    a { color: var(--accent-light); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Nav (matches main site) ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--nav-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1080px; margin: 0 auto; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 52px;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 600; font-size: 15px; color: var(--text);
+      text-decoration: none;
+    }
+    .nav-brand img { width: 28px; height: 28px; border-radius: 6px; }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a {
+      font-size: 13px; font-weight: 500; color: var(--text-secondary);
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-cta {
+      font-size: 13px; font-weight: 600;
+      color: #fff !important;
+      background: var(--accent);
+      padding: 6px 16px;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+    .nav-cta:hover { background: var(--accent-light); text-decoration: none !important; }
+
+    .site-theme-toggle {
+      display: flex; gap: 2px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px;
+      margin-right: 12px;
+    }
+    .site-theme-btn {
+      font-family: var(--font); font-size: 12px; font-weight: 500;
+      padding: 4px 10px; border-radius: 4px;
+      background: transparent; color: var(--text-tertiary);
+      border: none; cursor: pointer;
+      transition: all 0.15s;
+      line-height: 1.4;
+    }
+    .site-theme-btn:hover { color: var(--text-secondary); }
+    .site-theme-btn.active {
+      background: var(--accent); color: #fff;
+    }
+
+    /* ── Article ── */
+    .post {
+      max-width: var(--max-width);
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+    }
+    .post-back {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; color: var(--text-tertiary);
+      margin-bottom: 32px;
+    }
+    .post-back:hover { color: var(--text-secondary); text-decoration: none; }
+    .post h1 {
+      font-size: 40px; font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+    .post-meta {
+      font-size: 14px; color: var(--text-tertiary);
+      margin-bottom: 48px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .post-meta span + span::before {
+      content: " · ";
+      margin: 0 4px;
+    }
+    .post-body p {
+      font-size: 17px;
+      line-height: 1.75;
+      color: var(--text);
+      margin-bottom: 22px;
+    }
+    .post-body p:first-child {
+      font-size: 19px;
+      color: var(--text);
+    }
+    .post-body a {
+      color: var(--accent-light);
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.15s;
+    }
+    .post-body a:hover {
+      border-bottom-color: var(--accent-light);
+      text-decoration: none;
+    }
+    .post-body em { font-style: italic; }
+    .post-body code {
+      font-family: var(--font-mono);
+      font-size: 0.88em;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
+    .post-signature {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 15px;
+      color: var(--text-secondary);
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 0;
+      text-align: center;
+    }
+    .footer-inner {
+      max-width: 1080px; margin: 0 auto; padding: 0 24px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .footer-left {
+      font-size: 13px; color: var(--text-tertiary);
+    }
+    .footer-links {
+      display: flex; gap: 20px;
+    }
+    .footer-links a {
+      font-size: 13px; color: var(--text-tertiary);
+      transition: color 0.15s;
+    }
+    .footer-links a:hover { color: var(--text-secondary); }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .post { padding: 40px 20px 60px; }
+      .post h1 { font-size: 30px; }
+      .post-body p { font-size: 16px; }
+      .post-body p:first-child { font-size: 17px; }
+      .nav-links .nav-link-text { display: none; }
+      .site-theme-toggle { margin-right: 8px; }
+      .site-theme-btn { padding: 4px 7px; font-size: 11px; }
+      .footer-inner { flex-direction: column; gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Navigation ── -->
+  <nav>
+    <div class="nav-inner">
+      <a href="../../" class="nav-brand">
+        <img src="../../images/app-icon.png" alt="Rustic Playground icon">
+        Rustic Playground
+      </a>
+      <div class="nav-links">
+        <a href="../../#features" class="nav-link-text">Features</a>
+        <a href="../../#how-it-works" class="nav-link-text">How It Works</a>
+        <a href="https://github.com/jagmeetchawla/rustic-playground" class="nav-link-text">GitHub</a>
+        <div class="site-theme-toggle">
+          <button class="site-theme-btn" data-set-theme="dark" title="Dark theme">Dark</button>
+          <button class="site-theme-btn" data-set-theme="light" title="Light theme">Light</button>
+          <button class="site-theme-btn active" data-set-theme="rust" title="Rust theme">Rust</button>
+        </div>
+        <a href="https://github.com/jagmeetchawla/rustic-playground/releases" class="nav-cta">
+          Download
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Article ── -->
+  <article class="post">
+    <a href="../../" class="post-back">&larr; Back to Rustic Playground</a>
+    <h1>Why I built Rustic Playground</h1>
+    <div class="post-meta">
+      <span>April 15, 2026</span>
+      <span>Jagmeet Chawla</span>
+    </div>
+
+    <div class="post-body">
+      <p>I bought the Rust Book in 2018. I didn&rsquo;t open it for seven years.</p>
+
+      <p>A sabbatical earlier this year finally cleared the calendar. I tried Python first and decided it wasn&rsquo;t for me &mdash; my mind is wired for C/C++, and runtime surprises felt like the wrong trade. I wanted something that would push me.</p>
+
+      <p>The last time I learned a language and actually enjoyed it was Swift, when Swift 2.0 came out. Apple&rsquo;s Swift book was excellent, but what made it stick was Swift Playgrounds. I could follow along, try things, break them, and learn protocols, generics, and closures without leaving the playground. It was the most fun I&rsquo;d had with a language since picking up K&amp;R in school.</p>
+
+      <p>I opened the Rust Book expecting something similar. The concepts are there &mdash; traits, generics, and ownership and borrowing &mdash; which I think are more interesting than Swift&rsquo;s ARC. But following along meant constantly shuttling between a terminal for <code>cargo new</code>, an editor for the <code>.rs</code> file, and back to the terminal for <code>cargo run</code>. VS Code with rust-analyzer is fine, but it isn&rsquo;t a playground. RustRover is a great IDE, but I didn&rsquo;t want one that hides the toolchain &mdash; I wanted to learn the language <em>and</em> the toolchain.</p>
+
+      <p>So I started building what I wished existed.</p>
+
+      <p>The first version was a CLI: drop a <code>{name}.rs</code> file in <code>src/bin/</code>, run <code>cargo run --bin {name}</code>. Then a UI around it &mdash; write code, press &#8984;R, see output stream live. Then dependency management, toolchain install and repair, the Rust Book examples baked in, and eventually C/C++, Zig, and Swift.</p>
+
+      <p>There&rsquo;s a second thread I should be honest about. I was getting into agentic development with Claude Code around the same time, and Rustic Playground became how I learned what that actually looks like in practice. One thing I didn&rsquo;t expect: Rust&rsquo;s compiler makes AI-assisted development meaningfully better. The same strictness that makes Rust hard to learn catches a class of bugs before they ever run. If you&rsquo;re exploring agentic dev, try it on a Rust project.</p>
+
+      <p>What pushed this from side project to something I wanted to finish was watching two kids I&rsquo;d been mentoring try to learn Rust. One is a CS major. They were following instructions without understanding what was happening underneath, getting frustrated, drifting toward giving up. Swift Playgrounds solved that for Swift. Rust deserved something similar.</p>
+
+      <p>Rustic Playground is that attempt. It&rsquo;s macOS-only on purpose, free, and open source.</p>
+
+      <p>If you&rsquo;re learning Rust on a Mac, I&rsquo;d love for you to try it. Download at <a href="https://rustic-playground.app">rustic-playground.app</a>, star it on <a href="https://github.com/jagmeetchawla/rustic-playground">GitHub</a>, and come hang out in the <a href="https://discord.gg/AqPUgNfb">Discord</a>.</p>
+
+      <p class="post-signature">&mdash; Jagmeet</p>
+    </div>
+  </article>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-left">
+        Rustic Playground &mdash; MIT License
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/jagmeetchawla/rustic-playground">GitHub</a>
+        <a href="https://github.com/jagmeetchawla/rustic-playground/releases">Releases</a>
+        <a href="https://github.com/jagmeetchawla/rustic-playground/issues">Issues</a>
+        <a href="https://discord.gg/AqPUgNfb">Discord</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ── Theme switcher ── -->
+  <script>
+    const themeColors = { dark: '#111', light: '#faf8f6', rust: '#1a1210' };
+    function setSiteTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      document.querySelector('meta[name="theme-color"]').content = themeColors[theme] || themeColors.dark;
+      localStorage.setItem('site-theme', theme);
+      document.querySelectorAll('.site-theme-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.setTheme === theme);
+      });
+    }
+    (function() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      setSiteTheme(current);
+    })();
+    document.querySelectorAll('.site-theme-btn').forEach(btn => {
+      btn.addEventListener('click', () => setSiteTheme(btn.dataset.setTheme));
+    });
+  </script>
+</body>
+</html>
