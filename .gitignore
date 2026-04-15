@@ -5,3 +5,7 @@
 
 # Dev-mode content folder (user files — not source code)
 /content
+
+# Source video originals — compressed copies live in docs/videos/
+/assets/Vidoes
+/assets/Videos

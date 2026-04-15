@@ -40,6 +40,58 @@ v0.3 — Language Module Architecture + Zig & Swift Support
 NEXT UP
 ───────
 
+v0.3.5 — Rust Toolchain Version Gate + In-App Update (URGENT)
+  Status: planned — 2026-04-14
+  Priority: ASAP — ships before broader distribution push.
+
+  Problem:
+  We display the rustc/cargo version in the toolchain pill and wizard, but
+  we never enforce a minimum. All generated Cargo.toml files use
+  `edition = "2024"`, which requires rustc ≥ 1.85 (Feb 2025). A user on
+  an older toolchain sees green status everywhere, then their first
+  playground fails to compile with a confusing edition error. Zig already
+  has this gate (`version_ok` on 0.15.x); Rust does not.
+
+  Plan (mirrors Zig's pattern + v0.3.4 toolchain installer infra):
+
+  Backend — src-tauri/src/cargo_commands.rs
+    - Add MIN_RUST = (1, 85, 0) constant (edition 2024 floor)
+    - Parse rustc --version → semver tuple, compare to MIN_RUST
+    - Add `version_ok: bool` to the rust block in check_toolchain JSON
+    - New Tauri command: update_rust → spawns `rustup update stable`,
+      streams stdout/stderr to a console block (reuse the streaming
+      infra from v0.3.4's install_toolchain command)
+    - Edge: if rustup is missing but rustc is outdated, return
+      version_ok: false with a hint to install rustup first
+    - Edge: if version parsing fails, default version_ok: true (don't
+      block users on parser bugs)
+
+  Frontend
+    - App.svelte: add rustInfo.version_ok mirroring zigInfo; thread into
+      projectStatus() so the toolchain pill renders YELLOW (not green,
+      not red) when Rust is installed but outdated
+    - ToolchainWizard.svelte: yellow row + "Update Rust" button when
+      !version_ok, with the same UX as the existing repair flow
+    - SettingsModal.svelte: same "Update Rust" affordance under the
+      Rust section
+    - Tooltip / message copy: "Rust 1.85+ required for edition 2024.
+      Click to run `rustup update stable`."
+
+  Test plan
+    - Vanilla VM with old rustup-installed toolchain: pin to 1.74,
+      verify yellow pill, click Update Rust, verify success and
+      re-check turns green
+    - Vanilla VM with no rustup: verify version_ok: false plus the
+      "install rustup first" hint
+    - Dev machine (current toolchain): verify nothing visually
+      changes — green stays green
+
+  Why ASAP: as soon as we publicize the website/DMG, users on stale
+  Rust toolchains will hit confusing edition-2024 errors on their first
+  playground. This needs to land before the launch announcements go out.
+
+---
+
 Distribution & Launch (post v0.3.4)
   Status: not started — 2026-04-06
 
@@ -61,11 +113,309 @@ Distribution & Launch (post v0.3.4)
   - Code-sign + notarize DMGs (macOS Gatekeeper requirement)
   - GitHub Releases: upload DMGs as v0.3.4 release assets
   - Website launch: rustic-playground.app on GitHub Pages
+  - Website videos (2026-04-12): 5 Focusee screen recordings (30-45s each)
+    for the "How it works" section. One video per step:
+      1. Create a project
+      2. Write a playground
+      3. Press ⌘R
+      4. Iterate
+      5. Make it yours (settings: theme, font, editor config)
+    Format: short, focused, no narration (silent with captions or just
+    the app in action). Embed inline under each step or as a
+    click-to-play thumbnail. Tool: Focusee (macOS screen recorder).
   - Wiki / FAQ pages (Zig 0.15 pinning, edition differences, install guide)
   - Staggered community announcements over 5 days
 
   Phase 1: Rust Edition first (sharpest pitch — one language, one audience)
   Phase 2: Power Edition a few weeks later
+
+  - FEATURE: Share Playground — generate permanent sharing links.
+    User request (2026-04-12). "Generate a Permanent Sharing Link" → "Perfect
+    for Discord, GitHub, or StackOverflow" → "Collaborate with a Click."
+    Goal: one-click share of a playground's code as a permanent, clickable URL.
+    Recipients can view the code, copy it, or import it into their own Rustic
+    Playground.
+
+    Requires a cloud backend — playground code needs to live somewhere
+    addressable by URL. Options:
+      (a) GitHub Gist integration — authenticate via GitHub OAuth, create a
+          gist per share, return the gist URL. Pros: permanent, well-known,
+          syntax highlighting built in, no server to maintain. Cons: requires
+          GitHub account + OAuth flow, gists are public or require paid GitHub.
+      (b) Custom share service — lightweight API (e.g. Cloudflare Workers +
+          KV store) that accepts code payloads, returns a short URL like
+          rustic-playground.app/s/<id>. Pros: branded, no GitHub dependency,
+          can add features (expiry, edit, fork). Cons: we run a service, need
+          abuse controls, storage costs.
+      (c) iCloud-backed sharing — store shared snippets in the user's iCloud
+          container, generate a CloudKit share link. Pros: no third-party
+          accounts, Apple-native. Cons: recipient needs iCloud, complex API,
+          CloudKit sharing is designed for collaboration not public links.
+      (d) URL-encoded (no backend) — compress code with gzip, base64-encode,
+          embed in URL fragment: rustic-playground.app/share#<payload>. Website
+          decodes and renders. Pros: zero infrastructure, truly permanent (it's
+          in the URL). Cons: URL length limits (~2000 chars safe, ~8000 max in
+          modern browsers), won't work for large playgrounds, ugly URLs.
+
+    Recommended approach: Start with (d) for small playgrounds (under ~4KB of
+    source), fall back to (a) GitHub Gist for larger ones. Evaluate (b) custom
+    service if we want a branded experience. Discuss before implementing.
+
+    Share flow (frontend):
+      1. User clicks Share button (toolbar or menu) or presses shortcut
+      2. Current playground code is captured from the editor
+      3. Code is compressed + encoded into a share URL (or uploaded to backend)
+      4. URL is copied to clipboard with a success toast
+      5. Optional: show a modal with the URL, a "Copy" button, and preview of
+         how it will look to recipients
+
+    Receive flow (website):
+      • rustic-playground.app/share#<payload> or /s/<id>
+      • Website renders the code with syntax highlighting (Monaco or Prism.js)
+      • "Open in Rustic Playground" button (deep link via custom URL scheme)
+      • "Copy Code" button for users without the app
+      • Language badge (Rust/C/C++/Zig/Swift) and metadata
+
+    App-side receive (deep link):
+      • Register rustic-playground:// URL scheme in Tauri config
+      • Handle rustic-playground://share?code=<payload> — opens app, creates
+        a new playground from the shared code, or opens it in a scratch buffer
+      • Alternatively: just copy to clipboard and let user paste — simpler v1
+
+    Menu / toolbar integration:
+      • New menu item: Playground → "Share Playground…" (⌘⇧S or ⌘⇧A)
+      • Toolbar: add to existing export dropdown, or new share button
+      • Disabled for empty/unsaved playgrounds
+
+    Metadata to include in share:
+      • Code (required)
+      • Language / project type (rust/clang/zig/swift)
+      • Playground name (optional — for display)
+      • App version that created the share (for compatibility)
+      • Timestamp
+
+    iCloud angle:
+      • User mentioned iCloud as a possible backend. iCloud sync (already
+        spec'd above as a separate feature) handles project sync across
+        the user's own devices. Sharing is different — it's about sending
+        code to OTHER people. iCloud's CloudKit sharing could theoretically
+        do this but it's designed for collaboration (inviting specific Apple
+        IDs), not public link sharing. Keep iCloud for device sync, use a
+        different mechanism for public sharing.
+
+    Collaboration (future):
+      • v1 is one-way sharing (read-only links). Real-time collaboration
+        (two users editing the same playground) is a much larger feature
+        that would need operational transform / CRDTs, presence indicators,
+        cursor sharing, etc. Park for post-v1. Could build on CloudKit or
+        a WebSocket service.
+
+    Priority: Medium. Strong "show and tell" value for learners sharing code
+    on Discord/Reddit/StackOverflow. The URL-encoded approach (d) could ship
+    quickly as a v1 with no backend dependency.
+
+  - FEATURE: Cloud Projects — full shared projects hosted in the cloud.
+    User request (2026-04-12). Natural evolution of the Share Playground
+    feature. Instead of sharing a single playground as a read-only snippet,
+    host an entire project (all playgrounds, Cargo.toml, content files) in
+    the cloud so multiple users can access, fork, and collaborate on it.
+
+    Why this matters:
+      • Share Playground (above) covers the "show a snippet" use case. But
+        real learning happens in projects with multiple playgrounds, shared
+        dependencies, and content files. A workshop instructor wants to share
+        a 10-playground project with students — not 10 individual links.
+      • "Open this project in Rustic Playground" becomes a one-click onboard
+        for tutorials, courses, blog posts, and conference workshops.
+      • Combines the distribution model of GitHub repos with the instant-run
+        experience of the app — no git clone, no cargo build, just open.
+
+    Cloud backend requirements:
+      • Project storage — full project tree (Cargo.toml, rustic.toml,
+        src/bin/*.rs, content/*) stored server-side. NOT build artifacts.
+      • User accounts — at minimum, identify who owns a project. Could
+        piggyback on GitHub OAuth (same as Gist sharing) or Apple Sign In.
+      • Project URLs — rustic-playground.app/p/<owner>/<project> or
+        rustic-playground.app/p/<short-id>
+      • Access control — public (anyone can view/fork), unlisted (link-only),
+        private (owner only). Start with public + unlisted.
+      • Forking — "Fork to My Projects" downloads the cloud project into
+        the user's local app as a new editable project. One-way copy, not
+        a live sync (that's collaboration, below).
+      • Versioning — at minimum, snapshots (user manually publishes a new
+        version). Git-style history is overkill for v1.
+
+    Relationship to other features:
+      • Share Playground (above) = lightweight, no account, single file.
+        Cloud Projects = heavier, requires account, full project.
+        They coexist — Share for quick snippets, Cloud for full projects.
+      • iCloud Sync (above) = private, across the user's OWN devices.
+        Cloud Projects = public/shared, across DIFFERENT users.
+        Different use cases, different backends, different auth models.
+
+    Backend options:
+      (a) GitHub-backed — each cloud project is a GitHub repo (or gist)
+          under the user's account. Pros: free hosting, version control
+          built in, familiar. Cons: requires GitHub account, repo clutter,
+          can't control the UX of the hosted page.
+      (b) Custom service — API server (Cloudflare Workers / Fly.io /
+          Railway) + object storage (R2 / S3) + database (D1 / Turso).
+          Pros: full control, branded URLs, custom features. Cons: we
+          run infrastructure, costs scale with users, abuse controls needed.
+      (c) CloudKit (Apple) — store projects in a public CloudKit database.
+          Pros: free tier generous (10 GB assets, 100K records), Apple-
+          native, no separate account for Apple users. Cons: Apple-only
+          (non-Apple recipients can't access), CloudKit API is complex,
+          web access requires CloudKit JS (limited).
+      (d) Hybrid — GitHub for storage + our service for metadata/discovery.
+          User authenticates with GitHub once, we create repos on their
+          behalf, our API indexes them for search/browse. Pros: combines
+          GitHub's reliability with our UX. Cons: complexity of two systems.
+
+    Recommended approach: Evaluate (b) custom service if we want full
+    control over the experience, or (d) hybrid if we want to leverage
+    GitHub without running heavy storage. Discuss before committing —
+    running a service is a different kind of commitment than shipping
+    a desktop app.
+
+    UX flow — publishing:
+      1. User opens a project in the app
+      2. Project → "Publish to Cloud…" (or Share → "Publish Project…")
+      3. First time: OAuth sign-in (GitHub or Apple)
+      4. Modal: project name, description, visibility (public/unlisted)
+      5. Upload: all project files serialized and pushed to cloud backend
+      6. Success: shareable URL copied to clipboard + toast
+      7. Updates: "Update Published Project" pushes latest local state
+
+    UX flow — consuming:
+      1. Recipient clicks rustic-playground.app/p/<owner>/<project>
+      2. Website renders: project overview, playground list, code preview
+      3. "Open in Rustic Playground" button (deep link → app imports project)
+      4. "Fork to My Projects" button (downloads as new local project)
+      5. Without the app: browse code on the website, copy individual files
+
+    App-side import:
+      • Deep link: rustic-playground://project?url=<cloud-url>
+      • App downloads all project files, creates a new local project
+      • Marks it with source = "cloud:<url>" in rustic.toml for update tracking
+      • User can pull updates from the published version (like git pull)
+
+    Workshop / classroom use case:
+      • Instructor publishes a project with 10 playgrounds + exercises
+      • Students click one link → project appears in their app, ready to run
+      • Students work locally — no live sync, no conflict resolution needed
+      • Instructor can publish updates; students see "Update available" badge
+
+    Content beyond code:
+      • Cloud projects include content/ files (data files, images, text)
+      • Cargo.toml with dependencies — recipients get the same deps
+      • rustic.toml metadata — project type, build flags carry over
+
+    What this does NOT include (v1):
+      • Real-time collaboration (two users editing simultaneously)
+      • Live sync (changes propagate automatically between users)
+      • Comments, issues, or discussion threads on projects
+      • Pull requests or merge workflows
+      • Project discovery / marketplace / browse page (v2 maybe)
+      • Billing or paid tiers
+
+    Dependencies:
+      • Requires Share Playground to be designed first (shared infra:
+        OAuth, URL scheme, website share pages)
+      • Requires cloud backend decision — can't be URL-encoded like
+        single-playground shares (projects are too large)
+      • Requires user account system (GitHub OAuth or Apple Sign In)
+
+    Priority: LOW for now. This is a significant infrastructure commitment
+    (running a service, user accounts, abuse controls, storage costs).
+    Share Playground covers 80% of the sharing need with much less effort.
+    Revisit after Share Playground ships and we see demand for full-project
+    sharing — especially from workshop/classroom users.
+
+  - FEATURE: Crate Manager — search and add dependencies from crates.io.
+    User request (2026-04-12). "Search 100k+ Crates via crates.io" → "Add
+    Dependencies Instantly" → "No Manual Cargo.toml Edits Required."
+    Goal: in-app crate discovery and dependency management. Users search
+    crates.io, pick a crate, and it's added to their project's Cargo.toml
+    automatically — no terminal, no manual TOML editing.
+
+    Current state:
+      • The app already has a basic "Add Dependency" button in the toolbar
+        (cargo_commands.rs: add_dependency / remove_dependency commands).
+      • It takes a crate name + version string and writes to Cargo.toml.
+      • Known issue (v0.3.3): button doesn't focus the input, no search,
+        no validation against crates.io, no version picker.
+
+    Proposed UX:
+      • New "Manage Dependencies" modal (⌘⇧D or via toolbar button)
+      • Search bar at top — live search against crates.io API as user types
+        (debounced, ~300ms, like the editor's live check)
+      • Search results: crate name, description, latest version, download
+        count, last updated. Paginated or virtual-scrolled for large results.
+      • Click a result → expands to show: full description, recent versions
+        dropdown, feature flags checkboxes, "Add to Project" button
+      • Current dependencies listed below search (or in a separate tab):
+        shows all [dependencies] from Cargo.toml with version, "Remove"
+        button, "Update" button (if newer version exists on crates.io)
+      • Version picker: dropdown showing recent versions (latest 5-10),
+        with "Latest" as default. Shows semver compatibility hint.
+      • Feature flags: checkboxes for optional features (crates.io API
+        exposes these). Common pattern: serde with "derive" feature.
+
+    crates.io API:
+      • Search: GET https://crates.io/api/v1/crates?q=<query>&per_page=20
+      • Crate detail: GET https://crates.io/api/v1/crates/<name>
+      • Versions: GET https://crates.io/api/v1/crates/<name>/versions
+      • No auth required for read-only access
+      • Rate limit: 1 req/sec (respect via frontend debounce + backend
+        rate limiting). User-Agent header required.
+      • All requests from Rust backend (Tauri command), not frontend JS —
+        avoids CORS issues and keeps network access in the backend layer.
+
+    Backend commands:
+      • search_crates(query: String, page: u32) -> CrateSearchResult
+        Hits crates.io search API, returns Vec<CrateSummary>
+      • get_crate_details(name: String) -> CrateDetail
+        Hits crates.io crate detail API, returns full info + versions
+      • add_dependency(project, crate_name, version, features) — enhanced
+        version of existing command, now with features support
+      • remove_dependency(project, crate_name) — already exists
+      • update_dependency(project, crate_name, new_version) — new
+      • list_dependencies(project) -> Vec<Dependency> — parse Cargo.toml
+
+    Cargo.toml writing:
+      • Use toml_edit crate (preserves formatting, comments, ordering) —
+        NOT string manipulation or serde round-trip (which loses formatting).
+      • Handle both simple (`serde = "1.0"`) and table (`serde = { version
+        = "1.0", features = ["derive"] }`) dependency formats.
+      • After writing, trigger cargo check in background to verify the
+        dependency resolves (surface errors immediately, don't wait for
+        next ⌘R).
+
+    Offline behavior:
+      • Search requires network. Show clear "No internet connection" state
+        instead of silent failure.
+      • Manual add (type crate name + version directly) should still work
+        offline — it writes to Cargo.toml without validation. Add a warning
+        toast: "Added without verification — will validate on next build."
+
+    Book projects:
+      • Disable entirely for book projects (read-only).
+
+    Language scope:
+      • Rust only for v1. Zig (build.zig.zon), Swift (Package.swift), and
+        C/C++ (no package manager) are out of scope.
+      • The modal title/UI should make it clear this is Rust/Cargo specific.
+        "Cargo Dependencies" or "Crate Manager" — not generic "Dependencies."
+
+    Power Edition considerations:
+      • Only show the crate manager when active project is Rust type.
+      • Menu item and shortcut disabled for non-Rust projects.
+
+    Priority: HIGH. This is one of the most-requested beginner friction
+    points — "how do I add rand to my playground?" Currently requires
+    knowing TOML syntax and crate version numbers. A searchable UI with
+    one-click add removes that barrier entirely.
 
 ---
 
