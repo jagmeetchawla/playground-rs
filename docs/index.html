@@ -283,32 +283,47 @@
     .how-it-works { border-top: 1px solid var(--border); }
     .steps-list {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 24px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 32px;
       counter-reset: step;
     }
     .step {
       position: relative;
       counter-increment: step;
     }
-    .step::before {
-      content: counter(step);
+    .step-video {
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      border-radius: var(--radius);
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      box-shadow: var(--img-shadow-sm);
+      margin-bottom: 16px;
+      display: block;
+      object-fit: cover;
+    }
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .step-number {
+      flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
-      width: 36px; height: 36px;
+      width: 32px; height: 32px;
       border-radius: 50%;
       background: var(--accent-glow);
       border: 1px solid color-mix(in srgb, var(--accent-light) 30%, transparent);
       color: var(--accent-light);
-      font-size: 15px; font-weight: 700;
-      margin-bottom: 14px;
+      font-size: 14px; font-weight: 700;
     }
     .step h3 {
-      font-size: 14px; font-weight: 600;
-      margin-bottom: 6px;
+      font-size: 16px; font-weight: 600;
     }
     .step p {
-      font-size: 13px; color: var(--text-secondary);
-      line-height: 1.55;
+      font-size: 14px; color: var(--text-secondary);
+      line-height: 1.6;
     }
 
     /* ── Book section ── */
@@ -744,7 +759,7 @@
       .hero .tagline { font-size: 16px; }
       .hero-icon { width: 88px; height: 88px; border-radius: 18px; }
       .feature-grid { grid-template-columns: 1fr; }
-      .steps-list { grid-template-columns: 1fr 1fr; }
+      .steps-list { grid-template-columns: 1fr; gap: 24px; }
       .book-card { flex-direction: column; padding: 24px; }
       .book-screenshot { width: 100%; }
       .themes-grid { grid-template-columns: 1fr; }
@@ -908,20 +923,36 @@
       </div>
       <div class="steps-list">
         <div class="step">
-          <h3>Create a project</h3>
+          <video class="step-video" src="videos/1-create-project.mp4" autoplay loop muted playsinline></video>
+          <div class="step-header">
+            <span class="step-number">1</span>
+            <h3>Create a project</h3>
+          </div>
           <p>An isolated Cargo package for your experiments. Its own config, dependencies, and playgrounds.</p>
         </div>
         <div class="step">
-          <h3>Write a playground</h3>
+          <video class="step-video" src="videos/2-write-playground.mp4" autoplay loop muted playsinline></video>
+          <div class="step-header">
+            <span class="step-number">2</span>
+            <h3>Write a playground</h3>
+          </div>
           <p>Each playground is a <code>.rs</code> file with a <code>fn main()</code>. Pick a template or start blank.</p>
         </div>
         <div class="step">
-          <h3>Press &#8984;R</h3>
-          <p>The app compiles with <code>cargo run</code> and streams output live. Errors show inline in the editor.</p>
+          <video class="step-video" src="videos/3-run-iterate.mp4" autoplay loop muted playsinline></video>
+          <div class="step-header">
+            <span class="step-number">3</span>
+            <h3>Press &#8984;R and iterate</h3>
+          </div>
+          <p>The app compiles with <code>cargo run</code> and streams output live. Errors show inline. Edit, save with &#8984;S, run again.</p>
         </div>
         <div class="step">
-          <h3>Iterate</h3>
-          <p>Edit, run, repeat. Save with &#8984;S. Add dependencies from the toolbar. Export when you're ready.</p>
+          <video class="step-video" src="videos/4-make-your-own.mp4" autoplay loop muted playsinline></video>
+          <div class="step-header">
+            <span class="step-number">4</span>
+            <h3>Make it yours</h3>
+          </div>
+          <p>Pick a theme, set your font, configure the editor. Settings sync across projects so you can focus on code.</p>
         </div>
       </div>
     </div>
