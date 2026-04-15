@@ -199,10 +199,7 @@ fn ensure_project(app: &AppHandle) -> Result<(), String> {
     let cargo_toml = workspace.join("Cargo.toml");
     let bin = workspace.join("src").join("bin");
     let config = load_config(app);
-    if config.wizard_completed
-        && !cargo_toml.exists()
-        && !workspace.join("rustic.toml").exists()
-    {
+    if config.wizard_completed && !cargo_toml.exists() && !workspace.join("rustic.toml").exists() {
         // Post-wizard new Rust project — scaffold Cargo.toml + hello.rs
         std::fs::create_dir_all(&bin)
             .map_err(|e| format!("Failed to create project dirs: {}", e))?;
@@ -567,6 +564,9 @@ enum ToolchainFixAction {
     SetDefaultStable,
     /// `rustup component add <name>` — installs a missing component.
     AddComponent { name: String },
+    /// `rustup update stable` — bumps the stable toolchain when the installed
+    /// rustc is below MIN_RUST (edition 2024 needs 1.85+).
+    UpdateRust,
 }
 
 #[tauri::command]
@@ -613,6 +613,16 @@ async fn run_toolchain_fix(
         ToolchainFixAction::AddComponent { name } => {
             let mut c = Command::new(&rustup_bin);
             c.args(["component", "add", name]);
+            c
+        }
+        ToolchainFixAction::UpdateRust => {
+            // `rustup update stable` pulls the latest stable toolchain and
+            // keeps it as the default. If rustup itself is missing (standalone
+            // rustc installs), the spawn below fails cleanly with a message
+            // the frontend can surface — the wizard only shows UpdateRust when
+            // rustup_installed is true, so that path should be rare.
+            let mut c = Command::new(&rustup_bin);
+            c.args(["update", "stable"]);
             c
         }
     };

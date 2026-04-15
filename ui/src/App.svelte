@@ -125,11 +125,11 @@
 
   // ── Toolchain + Cargo.toml ────────────────────────────────────────────────────
   let cargoToml:     string                             = $state('')
-  let toolchainInfo: { path: string; version: string } = $state({ path: '', version: '' })
+  let toolchainInfo: { path: string; version: string; version_ok: boolean; min_version: string } = $state({ path: '', version: '', version_ok: true, min_version: '1.85.0' })
   let clangInfo:     { path: string; version: string } = $state({ path: '', version: '' })
   let zigInfo:       { path: string; version: string; version_ok: boolean } = $state({ path: '', version: '', version_ok: false })
   let swiftInfo:     { version: string }               = $state({ version: '' })
-  type RustState = 'not_installed' | 'no_default' | 'missing_components' | 'healthy'
+  type RustState = 'not_installed' | 'no_default' | 'outdated' | 'missing_components' | 'healthy'
   let rustState: RustState = $state('healthy')
   let activeToolchain = $derived(
     projectType === 'clang' ? clangInfo
@@ -152,7 +152,7 @@
     if (projectType === 'rust') {
       if (rustState === 'clt_missing') return 'missing'
       if (rustState === 'not_installed' || rustState === 'no_default') return 'missing'
-      if (rustState === 'missing_components') return 'partial'
+      if (rustState === 'outdated' || rustState === 'missing_components') return 'partial'
     }
     if (!activeToolchain.version) return 'missing'
     if (projectType === 'rust' && toolchainLabel === '…') return 'missing'
@@ -165,6 +165,7 @@
     if (projectType === 'rust' && rustState === 'clt_missing') return 'Xcode CLT required'
     if (pillStatus === 'missing') return `${toolchainName} not found`
     if (pillStatus === 'partial' && projectType === 'zig') return `${toolchainName} ${toolchainLabel} · requires 0.15.x`
+    if (pillStatus === 'partial' && projectType === 'rust' && rustState === 'outdated') return `${toolchainName} ${toolchainLabel} · update to ${toolchainInfo.min_version}+`
     return `${toolchainName} ${toolchainLabel}${lang.experimental ? ' · experimental' : ''}`
   })
   // Status dot — matches the ●/◐/○ vocabulary used in the toolchain status cards
@@ -339,7 +340,8 @@
         invoke<string[]>('list_projects'),
       ])
       await loadProjectData()
-      toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+      const baseInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+      toolchainInfo = { ...toolchainInfo, ...baseInfo }
       settings = await invoke<Settings>('get_settings')
       enabledLangs = await invoke<string[]>('get_enabled_languages')
 
@@ -357,6 +359,13 @@
         showWizard = true
       }
       if (tc.rust_state) rustState = tc.rust_state
+      if (tc.rustc) {
+        toolchainInfo = {
+          ...toolchainInfo,
+          version_ok: tc.rustc.version_ok ?? true,
+          min_version: tc.rustc.min_version ?? '1.85.0',
+        }
+      }
       if (tc.clang) {
         clangInfo = { path: tc.clang.path ?? '', version: tc.clang.version ?? '' }
       }
@@ -1618,7 +1627,13 @@
       try {
         const tc = await invoke<any>('check_toolchain')
         if (tc.rust_state) rustState = tc.rust_state
-        toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+        const baseInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+        toolchainInfo = {
+          ...toolchainInfo,
+          ...baseInfo,
+          version_ok: tc.rustc?.version_ok ?? true,
+          min_version: tc.rustc?.min_version ?? '1.85.0',
+        }
       } catch {}
       toolchainRefreshKey++
     }}
@@ -1627,7 +1642,13 @@
       try {
         const tc = await invoke<any>('check_toolchain')
         if (tc.rust_state) rustState = tc.rust_state
-        toolchainInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+        const baseInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+        toolchainInfo = {
+          ...toolchainInfo,
+          ...baseInfo,
+          version_ok: tc.rustc?.version_ok ?? true,
+          min_version: tc.rustc?.min_version ?? '1.85.0',
+        }
       } catch {}
       // Bump key so any open ToolchainWizard panel re-checks too.
       toolchainRefreshKey++

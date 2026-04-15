@@ -5,8 +5,8 @@
 //! dispatches to the right module via exhaustive match — the compiler ensures
 //! every arm is handled when a new language is added.
 
-mod knr_book;
 pub mod clang;
+mod knr_book;
 pub mod rust;
 mod rust_book;
 pub mod swift;

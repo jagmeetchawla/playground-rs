@@ -2,6 +2,30 @@ use tauri::AppHandle;
 
 use crate::{cargo_path, config_path, load_config, settings_path, workspace_dir, Config, Settings};
 
+/// Minimum rustc version required for edition = "2024" (stabilized in 1.85,
+/// Feb 2025). Generated Cargo.toml files pin this edition, so a toolchain
+/// below MIN_RUST compiles user playgrounds into confusing edition errors.
+pub const MIN_RUST: (u32, u32, u32) = (1, 85, 0);
+
+/// Parse a rustc/cargo --version line into (major, minor, patch).
+///
+/// Input shapes seen in the wild:
+///   "rustc 1.85.0 (4eb161250 2025-03-15)"
+///   "cargo 1.85.0 (d73d2caf9 2024-12-31)"
+///   "rustc 1.90.0-nightly (abcdef 2025-06-01)"
+///
+/// Returns None on any parse failure — callers should default `version_ok` to
+/// true in that case, so a parser regression doesn't block healthy users.
+fn parse_rust_version(line: &str) -> Option<(u32, u32, u32)> {
+    let version_field = line.split_whitespace().nth(1)?;
+    let core = version_field.split('-').next()?;
+    let mut parts = core.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    let patch = parts.next()?.parse().ok()?;
+    Some((major, minor, patch))
+}
+
 #[tauri::command]
 pub fn get_cargo_toml(app: AppHandle) -> Result<String, String> {
     let path = workspace_dir(&app).join("Cargo.toml");
@@ -266,6 +290,14 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim().to_string());
 
+    // Enforce minimum rustc for edition 2024. Parse failures default to
+    // version_ok: true so a parser regression never blocks a healthy user.
+    let rust_version_ok = rustc_version
+        .as_ref()
+        .and_then(|v| parse_rust_version(v))
+        .map(|v| v >= MIN_RUST)
+        .unwrap_or(true);
+
     // Get active toolchain if rustup is available
     let active_toolchain = if rustup_installed {
         std::process::Command::new(&rustup_bin)
@@ -323,7 +355,10 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "/usr/bin/clang".to_string());
 
-        let output = std::process::Command::new(&path).arg("--version").output().ok();
+        let output = std::process::Command::new(&path)
+            .arg("--version")
+            .output()
+            .ok();
         let installed = output.as_ref().map(|o| o.status.success()).unwrap_or(false);
         let version = output
             .and_then(|o| String::from_utf8(o.stdout).ok())
@@ -360,7 +395,10 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
     // Same CLT-shim guard as clang above — invoking `swiftc` on a vanilla
     // macOS pops Apple's installer dialog. Skip the call when CLT is absent.
     let (swiftc_installed, swiftc_version, swiftc_path) = if xcode_clt_installed {
-        let output = std::process::Command::new("swiftc").arg("--version").output().ok();
+        let output = std::process::Command::new("swiftc")
+            .arg("--version")
+            .output()
+            .ok();
         let installed = output.as_ref().map(|o| o.status.success()).unwrap_or(false);
         let version = output
             .and_then(|o| String::from_utf8(o.stdout).ok())
@@ -410,6 +448,8 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         "not_installed"
     } else if !cargo_installed || !rustc_installed || !active_is_set {
         "no_default"
+    } else if !rust_version_ok {
+        "outdated"
     } else if !missing_components.is_empty() {
         "missing_components"
     } else {
@@ -437,6 +477,8 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
         "rustc": {
             "installed": rustc_installed,
             "version": rustc_version,
+            "version_ok": rust_version_ok,
+            "min_version": format!("{}.{}.{}", MIN_RUST.0, MIN_RUST.1, MIN_RUST.2),
         },
         "active_toolchain": active_toolchain,
         "components": {
@@ -595,10 +637,7 @@ mod tests {
 
 /// Mark the toolchain wizard as completed and persist enabled languages.
 #[tauri::command]
-pub fn complete_wizard(
-    enabled_languages: Vec<String>,
-    app: AppHandle,
-) -> Result<(), String> {
+pub fn complete_wizard(enabled_languages: Vec<String>, app: AppHandle) -> Result<(), String> {
     let existing = load_config(&app);
     let config = Config {
         active_project: existing.active_project,

@@ -28,12 +28,13 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     project_sources: &HashMap<String, String>,
     enabled_languages: &[String],
 ) -> tauri::Result<tauri::menu::Menu<R>> {
-    let product_name = handle.config().product_name.clone().unwrap_or_else(|| "Rustic Playground".to_string());
+    let product_name = handle
+        .config()
+        .product_name
+        .clone()
+        .unwrap_or_else(|| "Rustic Playground".to_string());
     let app_submenu = SubmenuBuilder::new(handle, &product_name)
-        .item(
-            &MenuItemBuilder::with_id("check_update", "Check for Updates…")
-                .build(handle)?,
-        )
+        .item(&MenuItemBuilder::with_id("check_update", "Check for Updates…").build(handle)?)
         .separator()
         .item(
             &MenuItemBuilder::with_id("show_settings", "Settings…")
@@ -241,19 +242,10 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         // status/repair modal (the modal self-describes healthy vs needs-fix).
         if matches!(lang_variant, Lang::Rust) {
             sub = sub
-                .item(
-                    &MenuItemBuilder::with_id("rust_toolchain", "Rust Toolchain…")
-                        .build(handle)?,
-                )
+                .item(&MenuItemBuilder::with_id("rust_toolchain", "Rust Toolchain…").build(handle)?)
                 .separator()
-                .item(
-                    &MenuItemBuilder::with_id("open_rust_lang", "rust-lang.org…")
-                        .build(handle)?,
-                )
-                .item(
-                    &MenuItemBuilder::with_id("open_rustup", "rustup.rs…")
-                        .build(handle)?,
-                );
+                .item(&MenuItemBuilder::with_id("open_rust_lang", "rust-lang.org…").build(handle)?)
+                .item(&MenuItemBuilder::with_id("open_rustup", "rustup.rs…").build(handle)?);
             has_items = true;
         }
 
@@ -305,11 +297,8 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
             )
             .separator()
             .item(
-                &MenuItemBuilder::with_id(
-                    format!("open_book_{}", book.source_tag),
-                    "Read Online…",
-                )
-                .build(handle)?,
+                &MenuItemBuilder::with_id(format!("open_book_{}", book.source_tag), "Read Online…")
+                    .build(handle)?,
             )
             .build()?;
         Ok(Some(book_submenu))
@@ -322,7 +311,10 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     // sit inside an outer "Languages" wrapper.
     let mut lang_submenus: Vec<(&Lang, tauri::menu::Submenu<R>)> = Vec::new();
     for lang_variant in Lang::all() {
-        if !enabled_languages.iter().any(|l| l == lang_variant.project_type()) {
+        if !enabled_languages
+            .iter()
+            .any(|l| l == lang_variant.project_type())
+        {
             continue;
         }
         let title = if single_language {
@@ -363,7 +355,11 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         Lang::all()
             .iter()
             .find(|l| enabled_languages.iter().any(|e| e == l.project_type()))
-            .and_then(|lang| build_book_submenu(handle, lang, project_sources).ok().flatten())
+            .and_then(|lang| {
+                build_book_submenu(handle, lang, project_sources)
+                    .ok()
+                    .flatten()
+            })
     } else {
         None
     };
@@ -399,10 +395,7 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
             &MenuItemBuilder::with_id("open_website", "Rustic Playground Website…")
                 .build(handle)?,
         )
-        .item(
-            &MenuItemBuilder::with_id("open_github", "GitHub Repository…")
-                .build(handle)?,
-        );
+        .item(&MenuItemBuilder::with_id("open_github", "GitHub Repository…").build(handle)?);
     if language_help_menu.is_some() || top_level_book.is_some() {
         help_builder = help_builder.separator();
     }

@@ -423,6 +423,9 @@
                     {:else if status.rust_state === 'no_default'}
                       <div class="status-headline missing">○ No default toolchain</div>
                       <p class="status-sub">rustup is installed, but no default toolchain is selected. This often happens after moving <code>~/.rustup</code>.</p>
+                    {:else if status.rust_state === 'outdated'}
+                      <div class="status-headline warn">◐ Rust toolchain is outdated</div>
+                      <p class="status-sub">Your rustc is below <strong>{status.rustc.min_version ?? '1.85.0'}</strong>, required for <code>edition = "2024"</code>. New playgrounds won't compile until you update.</p>
                     {:else if status.rust_state === 'missing_components'}
                       <div class="status-headline warn">◐ Missing components</div>
                       <p class="status-sub">Rust is installed, but {status.missing_components.join(' and ')} {status.missing_components.length === 1 ? 'is' : 'are'} missing.</p>
@@ -445,10 +448,12 @@
                         <span class="detail-label">cargo</span>
                         <span class="detail-value">{status.cargo.installed ? (status.cargo.version ?? 'installed') : 'not found'}</span>
                       </div>
+                      {@const rustcOk = status.rustc.installed && (status.rustc.version_ok ?? true)}
+                      {@const rustcOutdated = status.rustc.installed && status.rustc.version_ok === false}
                       <div class="detail-row">
-                        <span class="detail-icon" class:ok={status.rustc.installed} class:missing={!status.rustc.installed}>{status.rustc.installed ? '●' : '○'}</span>
+                        <span class="detail-icon" class:ok={rustcOk} class:warn={rustcOutdated} class:missing={!status.rustc.installed}>{rustcOk ? '●' : rustcOutdated ? '◐' : '○'}</span>
                         <span class="detail-label">rustc</span>
-                        <span class="detail-value">{status.rustc.installed ? (status.rustc.version ?? 'installed') : 'not found'}</span>
+                        <span class="detail-value">{status.rustc.installed ? (status.rustc.version ?? 'installed') : 'not found'}{rustcOutdated ? ` · needs ${status.rustc.min_version ?? '1.85.0'}+` : ''}</span>
                       </div>
                       <div class="detail-row">
                         <span class="detail-icon" class:ok={status.components.rustfmt} class:missing={!status.components.rustfmt}>{status.components.rustfmt ? '●' : '○'}</span>

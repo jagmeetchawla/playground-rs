@@ -10,14 +10,14 @@
 
   let { onclose, onfixed }: { onclose: () => void; onfixed?: () => void } = $props()
 
-  type RustState = 'clt_missing' | 'not_installed' | 'no_default' | 'missing_components' | 'healthy'
+  type RustState = 'clt_missing' | 'not_installed' | 'no_default' | 'outdated' | 'missing_components' | 'healthy'
   type ToolchainStatus = {
     rust_state: RustState
     missing_components: string[]
     xcode_clt: { installed: boolean; path: string | null }
     rustup: { installed: boolean; version: string | null }
     cargo: { installed: boolean; path: string; version: string | null }
-    rustc: { installed: boolean; version: string | null }
+    rustc: { installed: boolean; version: string | null; version_ok?: boolean; min_version?: string }
     components: { rustfmt: boolean; clippy: boolean }
   }
   type FixAction =
@@ -25,6 +25,7 @@
     | { type: 'InstallRustup' }
     | { type: 'SetDefaultStable' }
     | { type: 'AddComponent'; name: string }
+    | { type: 'UpdateRust' }
 
   let status = $state<ToolchainStatus | null>(null)
   let checking = $state(false)
@@ -350,6 +351,9 @@
             {:else if status.rust_state === 'no_default'}
               <div class="status-headline missing">○ No default toolchain</div>
               <p class="status-sub">rustup is installed, but no default toolchain is selected. This often happens after moving <code>~/.rustup</code>.</p>
+            {:else if status.rust_state === 'outdated'}
+              <div class="status-headline warn">◐ Rust toolchain is outdated</div>
+              <p class="status-sub">Rust is installed but below <strong>{status.rustc.min_version ?? '1.85.0'}</strong>, which is required for <code>edition = "2024"</code>. New playgrounds won't compile until you update.</p>
             {:else if status.rust_state === 'missing_components'}
               <div class="status-headline warn">◐ Missing components</div>
               <p class="status-sub">Rust is installed, but {status.missing_components.join(' and ')} {status.missing_components.length === 1 ? 'is' : 'are'} missing. {status.missing_components.includes('rustfmt') ? 'rustfmt enables auto-formatting.' : ''} {status.missing_components.includes('clippy') ? 'clippy powers live error checking.' : ''}</p>
@@ -378,10 +382,12 @@
                     <span class="detail-label">cargo</span>
                     <span class="detail-value">{status.cargo.installed ? (status.cargo.version ?? 'installed') : 'not found'}</span>
                   </div>
+                  {@const rustcOk = status.rustc.installed && (status.rustc.version_ok ?? true)}
+                  {@const rustcOutdated = status.rustc.installed && status.rustc.version_ok === false}
                   <div class="detail-row">
-                    <span class="detail-icon" class:ok={status.rustc.installed} class:missing={!status.rustc.installed}>{status.rustc.installed ? '●' : '○'}</span>
+                    <span class="detail-icon" class:ok={rustcOk} class:warn={rustcOutdated} class:missing={!status.rustc.installed}>{rustcOk ? '●' : rustcOutdated ? '◐' : '○'}</span>
                     <span class="detail-label">rustc</span>
-                    <span class="detail-value">{status.rustc.installed ? (status.rustc.version ?? 'installed') : 'not found'}</span>
+                    <span class="detail-value">{status.rustc.installed ? (status.rustc.version ?? 'installed') : 'not found'}{rustcOutdated ? ` · needs ${status.rustc.min_version ?? '1.85.0'}+` : ''}</span>
                   </div>
                   <div class="detail-row">
                     <span class="detail-icon" class:ok={status.components.rustfmt} class:missing={!status.components.rustfmt}>{status.components.rustfmt ? '●' : '○'}</span>
@@ -418,6 +424,18 @@
                   <button class="fix-btn primary" disabled={fixState === 'running'} onclick={() => runFix({ type: 'SetDefaultStable' }, 'Setting default toolchain')}>
                     {fixState === 'running' ? 'Setting default…' : 'Set default to stable'}
                   </button>
+                {:else if status.rust_state === 'outdated'}
+                  {#if status.rustup.installed}
+                    <button class="fix-btn primary" disabled={fixState === 'running'} onclick={() => runFix({ type: 'UpdateRust' }, 'Updating Rust toolchain')}>
+                      {fixState === 'running' ? 'Updating…' : 'Update Rust'}
+                    </button>
+                    <p class="fix-hint">Runs <code>rustup update stable</code>. Takes 1–3 minutes.</p>
+                  {:else}
+                    <p class="fix-hint">Your rustc is below {status.rustc.min_version ?? '1.85.0'}, but <strong>rustup isn't installed</strong>, so we can't auto-update. Install rustup first (runs the official installer from <button class="link-btn" onclick={() => shellOpen('https://rustup.rs')}>rustup.rs</button>), then come back and click <strong>Update Rust</strong>.</p>
+                    <button class="fix-btn primary" disabled={fixState === 'running'} onclick={() => runFix({ type: 'InstallRustup' }, 'Installing rustup')}>
+                      Install rustup
+                    </button>
+                  {/if}
                 {:else if status.rust_state === 'missing_components'}
                   <div class="fix-row">
                     {#if status.missing_components.length > 1}
@@ -535,6 +553,17 @@
                     </button>
                   </div>
                   <p class="step-hint">Downloads the stable toolchain if needed and sets it as the default.</p>
+                </div>
+              {:else if status.rust_state === 'outdated'}
+                <div class="manual-step">
+                  <div class="step-title">Update Rust to {status.rustc.min_version ?? '1.85.0'}+</div>
+                  <div class="command-box">
+                    <code>rustup update stable</code>
+                    <button class="copy-btn" onclick={() => copyCommand('rustup update stable')}>
+                      {copiedCommand === 'rustup update stable' ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <p class="step-hint">Pulls the latest stable toolchain (needed for <code>edition = "2024"</code>).</p>
                 </div>
               {:else if status.rust_state === 'missing_components'}
                 {@const componentsCmd = `rustup component add ${status.missing_components.join(' ')}`}
