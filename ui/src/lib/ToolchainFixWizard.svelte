@@ -557,15 +557,16 @@
                   <p class="step-hint">Downloads the stable toolchain if needed and sets it as the default.</p>
                 </div>
               {:else if status.rust_state === 'outdated'}
+                {@const updateCmd = 'rustup update stable && rustup default stable'}
                 <div class="manual-step">
                   <div class="step-title">Update Rust to {status.rustc.min_version ?? '1.85.0'}+</div>
                   <div class="command-box">
-                    <code>rustup update stable</code>
-                    <button class="copy-btn" onclick={() => copyCommand('rustup update stable')}>
-                      {copiedCommand === 'rustup update stable' ? 'Copied' : 'Copy'}
+                    <code>{updateCmd}</code>
+                    <button class="copy-btn" onclick={() => copyCommand(updateCmd)}>
+                      {copiedCommand === updateCmd ? 'Copied' : 'Copy'}
                     </button>
                   </div>
-                  <p class="step-hint">Pulls the latest stable toolchain (needed for <code>edition = "2024"</code>).</p>
+                  <p class="step-hint">Pulls the latest stable toolchain and re-points your default to it — needed for <code>edition = "2024"</code>. The second step matters if you pinned a specific version before (e.g. <code>rustup default 1.74.0</code>).</p>
                 </div>
               {:else if status.rust_state === 'missing_components'}
                 {@const componentsCmd = `rustup component add ${status.missing_components.join(' ')}`}
