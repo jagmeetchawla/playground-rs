@@ -622,13 +622,18 @@
       cursor: zoom-out;
     }
     .lightbox.open { display: flex; }
-    .lightbox img {
+    .lightbox img,
+    .lightbox video {
       max-width: 95vw; max-height: 85vh;
       border-radius: 8px;
       box-shadow: var(--img-shadow);
       object-fit: contain;
       cursor: default;
     }
+    .lightbox video { background: #000; }
+    #lightbox-img, #lightbox-video { display: none; }
+    .lightbox.mode-img #lightbox-img { display: block; }
+    .lightbox.mode-video #lightbox-video { display: block; }
     .lightbox-close {
       position: absolute; top: 16px; right: 20px;
       width: 36px; height: 36px;
@@ -672,6 +677,7 @@
     .lb-dot.active { background: var(--accent-light); }
     /* Make zoomable images show a zoom cursor */
     .zoomable { cursor: zoom-in; }
+    .step-video.zoomable { cursor: zoom-in; }
 
     /* ── Site theme switcher ── */
     .site-theme-toggle {
@@ -923,7 +929,7 @@
       </div>
       <div class="steps-list">
         <div class="step">
-          <video class="step-video" src="videos/1-create-project.mp4" autoplay loop muted playsinline></video>
+          <video class="step-video zoomable" onclick="openVideoLightbox(this)" src="videos/1-create-project.mp4" autoplay loop muted playsinline></video>
           <div class="step-header">
             <span class="step-number">1</span>
             <h3>Create a project</h3>
@@ -931,7 +937,7 @@
           <p>An isolated Cargo package for your experiments. Its own config, dependencies, and playgrounds.</p>
         </div>
         <div class="step">
-          <video class="step-video" src="videos/2-write-playground.mp4" autoplay loop muted playsinline></video>
+          <video class="step-video zoomable" onclick="openVideoLightbox(this)" src="videos/2-write-playground.mp4" autoplay loop muted playsinline></video>
           <div class="step-header">
             <span class="step-number">2</span>
             <h3>Write a playground</h3>
@@ -939,7 +945,7 @@
           <p>Each playground is a <code>.rs</code> file with a <code>fn main()</code>. Pick a template or start blank.</p>
         </div>
         <div class="step">
-          <video class="step-video" src="videos/3-run-iterate.mp4" autoplay loop muted playsinline></video>
+          <video class="step-video zoomable" onclick="openVideoLightbox(this)" src="videos/3-run-iterate.mp4" autoplay loop muted playsinline></video>
           <div class="step-header">
             <span class="step-number">3</span>
             <h3>Press &#8984;R and iterate</h3>
@@ -947,7 +953,7 @@
           <p>The app compiles with <code>cargo run</code> and streams output live. Errors show inline. Edit, save with &#8984;S, run again.</p>
         </div>
         <div class="step">
-          <video class="step-video" src="videos/4-make-your-own.mp4" autoplay loop muted playsinline></video>
+          <video class="step-video zoomable" onclick="openVideoLightbox(this)" src="videos/4-make-your-own.mp4" autoplay loop muted playsinline></video>
           <div class="step-header">
             <span class="step-number">4</span>
             <h3>Make it yours</h3>
@@ -1153,6 +1159,7 @@
     <button class="lightbox-close" onclick="event.stopPropagation(); closeLightbox()">&times;</button>
     <button class="lightbox-arrow prev" onclick="event.stopPropagation(); lightboxPrev()">&#8249;</button>
     <img id="lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+    <video id="lightbox-video" src="" controls autoplay loop playsinline onclick="event.stopPropagation()"></video>
     <button class="lightbox-arrow next" onclick="event.stopPropagation(); lightboxNext()">&#8250;</button>
     <div class="lightbox-caption" id="lightbox-caption"></div>
     <div class="lightbox-dots" id="lightbox-dots"></div>
@@ -1276,6 +1283,9 @@
       const lb = document.getElementById('lightbox');
       wizardStopAuto();
 
+      lb.classList.remove('mode-video');
+      lb.classList.add('mode-img');
+
       // Check if this image is from the wizard slideshow
       if (img.id === 'wizard-slide-img') {
         lbSlides = wizardSlides;
@@ -1288,6 +1298,22 @@
         document.getElementById('lightbox-img').src = img.src;
         document.getElementById('lightbox-caption').textContent = img.alt || '';
       }
+
+      lb.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function openVideoLightbox(src) {
+      const lb = document.getElementById('lightbox');
+      const video = document.getElementById('lightbox-video');
+      wizardStopAuto();
+
+      lbSlides = null;
+      lb.classList.remove('mode-img', 'has-slides');
+      lb.classList.add('mode-video');
+      document.getElementById('lightbox-caption').textContent = '';
+      video.src = typeof src === 'string' ? src : src.currentSrc || src.src;
+      video.play().catch(() => {});
 
       lb.classList.add('open');
       document.body.style.overflow = 'hidden';
@@ -1318,9 +1344,13 @@
 
     function closeLightbox() {
       const lb = document.getElementById('lightbox');
-      lb.classList.remove('open', 'has-slides');
+      const video = document.getElementById('lightbox-video');
+      lb.classList.remove('open', 'has-slides', 'mode-img', 'mode-video');
       document.body.style.overflow = '';
       lbSlides = null;
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
       wizardStartAuto();
     }
 
