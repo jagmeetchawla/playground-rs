@@ -438,22 +438,24 @@
                       <span class="detail-value">{status.xcode_clt.installed ? (status.xcode_clt.path ?? 'installed') : 'not found'}</span>
                     </div>
                     {#if status.rust_state !== 'clt_missing'}
+                      {@const toolchainOutdated = status.rustc.installed && status.rustc.version_ok === false}
+                      {@const minVer = status.rustc.min_version ?? '1.85.0'}
                       <div class="detail-row">
                         <span class="detail-icon" class:ok={status.rustup.installed} class:missing={!status.rustup.installed}>{status.rustup.installed ? '●' : '○'}</span>
                         <span class="detail-label">rustup</span>
                         <span class="detail-value">{status.rustup.installed ? (status.rustup.version ?? 'installed') : 'not found'}</span>
                       </div>
+                      {@const cargoOk = status.cargo.installed && !toolchainOutdated}
                       <div class="detail-row">
-                        <span class="detail-icon" class:ok={status.cargo.installed} class:missing={!status.cargo.installed}>{status.cargo.installed ? '●' : '○'}</span>
+                        <span class="detail-icon" class:ok={cargoOk} class:warn={toolchainOutdated && status.cargo.installed} class:missing={!status.cargo.installed}>{cargoOk ? '●' : toolchainOutdated ? '◐' : '○'}</span>
                         <span class="detail-label">cargo</span>
-                        <span class="detail-value">{status.cargo.installed ? (status.cargo.version ?? 'installed') : 'not found'}</span>
+                        <span class="detail-value">{status.cargo.installed ? (status.cargo.version ?? 'installed') : 'not found'}{toolchainOutdated && status.cargo.installed ? ` · needs ${minVer}+` : ''}</span>
                       </div>
-                      {@const rustcOk = status.rustc.installed && (status.rustc.version_ok ?? true)}
-                      {@const rustcOutdated = status.rustc.installed && status.rustc.version_ok === false}
+                      {@const rustcOk = status.rustc.installed && !toolchainOutdated}
                       <div class="detail-row">
-                        <span class="detail-icon" class:ok={rustcOk} class:warn={rustcOutdated} class:missing={!status.rustc.installed}>{rustcOk ? '●' : rustcOutdated ? '◐' : '○'}</span>
+                        <span class="detail-icon" class:ok={rustcOk} class:warn={toolchainOutdated} class:missing={!status.rustc.installed}>{rustcOk ? '●' : toolchainOutdated ? '◐' : '○'}</span>
                         <span class="detail-label">rustc</span>
-                        <span class="detail-value">{status.rustc.installed ? (status.rustc.version ?? 'installed') : 'not found'}{rustcOutdated ? ` · needs ${status.rustc.min_version ?? '1.85.0'}+` : ''}</span>
+                        <span class="detail-value">{status.rustc.installed ? (status.rustc.version ?? 'installed') : 'not found'}{toolchainOutdated ? ` · needs ${minVer}+` : ''}</span>
                       </div>
                       <div class="detail-row">
                         <span class="detail-icon" class:ok={status.components.rustfmt} class:missing={!status.components.rustfmt}>{status.components.rustfmt ? '●' : '○'}</span>
