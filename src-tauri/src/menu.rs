@@ -395,6 +395,7 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
             &MenuItemBuilder::with_id("open_website", "Rustic Playground Website…")
                 .build(handle)?,
         )
+        .item(&MenuItemBuilder::with_id("open_discord", "Join Discord…").build(handle)?)
         .item(&MenuItemBuilder::with_id("open_github", "GitHub Repository…").build(handle)?);
     if language_help_menu.is_some() || top_level_book.is_some() {
         help_builder = help_builder.separator();

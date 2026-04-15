@@ -826,6 +826,12 @@ pub fn run() {
                         .spawn();
                     None
                 }
+                "open_discord" => {
+                    let _ = std::process::Command::new("open")
+                        .arg("https://discord.gg/ADTXvuVA")
+                        .spawn();
+                    None
+                }
                 _ => {
                     // Dynamic book events from language modules
                     let mut book_event = None;
