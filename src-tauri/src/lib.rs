@@ -616,13 +616,20 @@ async fn run_toolchain_fix(
             c
         }
         ToolchainFixAction::UpdateRust => {
-            // `rustup update stable` pulls the latest stable toolchain and
-            // keeps it as the default. If rustup itself is missing (standalone
-            // rustc installs), the spawn below fails cleanly with a message
-            // the frontend can surface — the wizard only shows UpdateRust when
-            // rustup_installed is true, so that path should be rare.
-            let mut c = Command::new(&rustup_bin);
-            c.args(["update", "stable"]);
+            // Two-step update. First pull the latest stable toolchain, then
+            // re-point the active default at it. The second step is critical
+            // when the user pinned a specific version via
+            // `rustup default 1.74.0` — without it, stable goes to latest but
+            // rustc keeps resolving to the pinned 1.74 and version_ok stays
+            // false (manifests as "done" with no version change). Chained via
+            // `sh -c` so both run in one streamed process and either failure
+            // surfaces to the user.
+            let rustup_q = rustup_bin.replace('\'', "'\\''");
+            let mut c = Command::new("sh");
+            c.arg("-c").arg(format!(
+                "'{0}' update stable && '{0}' default stable",
+                rustup_q
+            ));
             c
         }
     };
