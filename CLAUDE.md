@@ -122,6 +122,10 @@ Edition identifiers: `.rust`, `.power`, `.app` (dev builds without flag).
 
 ## Current Version Status
 
+**v0.3.5** — shipped (Rust Toolchain Version Gate: enforces rustc ≥ 1.85 floor for edition 2024, yellow `◐` pill + detail-row warning on rustc + cargo when outdated, in-app "Update Rust" button chains `rustup update stable && rustup default stable` via existing Channel streaming, matching manual-mode copy-paste command, edge case for rustc-without-rustup standalone installs).
+
+**v0.3.4** — shipped (In-App Toolchain Installer & Repair: guided + manual install paths, Xcode CLT auto-polling, Channel-based streaming infra, code-signed + notarized DMG distribution).
+
 **v0.3.2** — shipped (Welcome Wizard + Language Gating: 5-step first-launch wizard, language enable/disable, per-language hello projects, book management via explicit checkboxes, toolchain pill status, dual-mode ToolchainWizard/Settings component, native→clang rename, Apple HIG styling).
 
 **v0.3.1** — shipped (read-only book projects, per-playground locking, "Copy to Project" action, "Learn" menu, grouped project list with flyout submenus, empty-state book loading, Zig/Swift themes, auto theme matching, theme dropdown).
@@ -132,9 +136,9 @@ Edition identifiers: `.rust`, `.power`, `.app` (dev builds without flag).
 
 **v0.1.9** — shipped (renamed from playground-rs to rustic-playground, cleaned up src/bin).
 
-**v0.3.3** — in progress (Edition Builds + UI polish: Rust/C/Power Edition from same codebase via Tauri --config + VITE_EDITION. editions.ts registry, single-language editions skip language picker, filter themes/help/books. Saved snapshots (.saved/) with revert + undo-revert. Run lifecycle: Saving→Compiling→Running in console + status bar. Close-dirty-tab dialog. Book chapter "Read Online" links. Status bar below editor. Toolbar reorganization. Dynamic window title. Min width 900px. Update checker via GitHub Releases API. Official language logos (SVG) replacing text badges. Book auto-select + reactive labels. Build script: `scripts/build-editions.sh`).
+**v0.3.3** — shipped (Edition Builds + UI polish: Rust/C/Power Edition from same codebase via Tauri --config + VITE_EDITION. editions.ts registry, single-language editions skip language picker, filter themes/help/books. Saved snapshots (.saved/) with revert + undo-revert. Run lifecycle: Saving→Compiling→Running in console + status bar. Close-dirty-tab dialog. Book chapter "Read Online" links. Status bar below editor. Toolbar reorganization. Dynamic window title. Min width 900px. Update checker via GitHub Releases API. Official language logos (SVG) replacing text badges. Book auto-select + reactive labels. Build script: `scripts/build-editions.sh`).
 
-After v0.3.3: website (rustic-playground.app on GitHub Pages), DMG distribution (GitHub Releases), wiki, announcements.
+After v0.3.5: DMG distribution (GitHub Releases for v0.3.5), website update, wiki/FAQ, announcements.
 
 **Parked:** Linux Port (Rust Edition, low ROI for target audience), Windows Port (Rust Edition, high effort). See roadmap.md.
 

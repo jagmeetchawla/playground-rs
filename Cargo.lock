@@ -3142,7 +3142,7 @@ dependencies = [
 
 [[package]]
 name = "rustic-playground"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "dirs-next",
  "reqwest 0.12.28",

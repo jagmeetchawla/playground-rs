@@ -65,7 +65,7 @@
 |---|---|
 | macOS | 12 Monterey or later |
 | Xcode Command Line Tools | Required — Rust needs Apple's `cc` linker and SDK to build on macOS |
-| Rust toolchain | stable — install via [rustup.rs](https://rustup.rs) |
+| Rust toolchain | stable **1.85+** (edition 2024 floor) — install via [rustup.rs](https://rustup.rs) |
 | Node.js | 18+ |
 | pnpm | 8+ |
 | Tauri CLI | `cargo install tauri-cli --version "^2.0"` |
@@ -198,6 +198,7 @@ See the warning at the top of this file. Additionally:
 
 | Version | Highlights |
 |---|---|
+| v0.3.5 | Rust toolchain version gate — enforces rustc ≥ 1.85 (edition 2024 floor), yellow toolchain pill when outdated, in-app "Update Rust" button runs `rustup update stable && rustup default stable` with streamed output, manual-mode copy-paste command for Terminal users |
 | v0.3.4 | In-app Rust toolchain installer & repair with guided + manual install paths, Xcode CLT detection as prerequisite, FixWizard split layout with auto-polling, Help menu restructure (Website, GitHub, Rust Help, Rust Book top-level), Rust Toolchain help section, toolchain step skip indicator, code-signed + notarized DMG distribution |
 | v0.3.3 | Edition builds — Rust Edition, C Edition, Power Edition as separate DMGs from one codebase. Saved snapshots with revert, run lifecycle status, update checker, language logos, dynamic window title |
 | v0.3.2 | Welcome Wizard (5-step first-launch), language gating, per-language hello projects, native→clang rename, Apple HIG styling, dual-mode settings/wizard, book management via checkboxes, toolchain pill status |

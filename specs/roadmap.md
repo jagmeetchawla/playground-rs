@@ -40,9 +40,12 @@ v0.3 — Language Module Architecture + Zig & Swift Support
 NEXT UP
 ───────
 
-v0.3.5 — Rust Toolchain Version Gate + In-App Update (URGENT)
-  Status: planned — 2026-04-14
-  Priority: ASAP — ships before broader distribution push.
+v0.3.5 — Rust Toolchain Version Gate + In-App Update
+  Status: SHIPPED — 2026-04-15
+  See v0.3.5 entry under RELEASED (continued) below for the shipped summary.
+
+  (Historical plan preserved for reference.)
+  Priority: ASAP — shipped before broader distribution push.
 
   Problem:
   We display the rustc/cargo version in the toolchain pill and wizard, but
