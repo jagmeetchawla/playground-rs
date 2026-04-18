@@ -59,6 +59,17 @@ for edition in "${EDITIONS[@]}"; do
   echo ""
   VITE_EDITION="$edition" cargo tauri build --config "$config"
 
+  # Strip the custom volume icon from each DMG so the mounted volume shows
+  # macOS's default removable-disk icon (clearer drag-to-Applications UX
+  # than having the volume icon identical to the app inside it). This also
+  # re-signs the DMG since the modification invalidates the signature.
+  # Notarization is expected to run later as part of the release flow.
+  if compgen -G "$DMG_DIR/*.dmg" > /dev/null; then
+    for dmg in "$DMG_DIR"/*.dmg; do
+      ./scripts/strip-dmg-volume-icon.sh "$dmg"
+    done
+  fi
+
   # Move the fresh DMG(s) out of the bundle dir before the next edition's
   # build wipes it. Each edition gets its own subfolder.
   edition_out="$COLLECT_DIR/$edition"
