@@ -14,8 +14,11 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-# Cargo.toml — update version in [package] section (first occurrence only)
-sed -i '' "0,/^version = \".*\"/s//version = \"$VERSION\"/" "$ROOT/src-tauri/Cargo.toml"
+# Cargo.toml — update version in [package] section (first occurrence only).
+# Uses awk because BSD sed's `0,/.../` range is unreliable.
+awk -v v="$VERSION" 'BEGIN{done=0} /^version = / && !done {sub(/"[^"]+"/, "\"" v "\""); done=1} {print}' \
+  "$ROOT/src-tauri/Cargo.toml" > "$ROOT/src-tauri/Cargo.toml.tmp" \
+  && mv "$ROOT/src-tauri/Cargo.toml.tmp" "$ROOT/src-tauri/Cargo.toml"
 
 # tauri.conf.json — update top-level "version" field
 sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$ROOT/src-tauri/tauri.conf.json"
