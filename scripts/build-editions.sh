@@ -3,9 +3,17 @@
 # Each edition gets its own app name, bundle ID, and configuration.
 #
 # Usage:
-#   ./scripts/build-editions.sh              # build all editions
+#   ./scripts/build-editions.sh              # build all editions (no notarize)
 #   ./scripts/build-editions.sh rust         # build only the rust edition
 #   ./scripts/build-editions.sh rust power   # build rust and power editions
+#
+#   NOTARIZE=1 ./scripts/build-editions.sh rust    # full release flow:
+#                                                    build + strip + notarize + staple
+#
+# When to set NOTARIZE=1:
+#   Release builds only. Each notarization round-trip to Apple takes 1–3 min,
+#   so dev/test builds skip it. Set NOTARIZE=1 (or export it in your shell) when
+#   you're building the final DMG for a release.
 #
 # Why the collect step exists:
 #   Tauri's bundler wipes <target>/release/bundle/dmg/ at the start of every
@@ -63,11 +71,22 @@ for edition in "${EDITIONS[@]}"; do
   # macOS's default removable-disk icon (clearer drag-to-Applications UX
   # than having the volume icon identical to the app inside it). This also
   # re-signs the DMG since the modification invalidates the signature.
-  # Notarization is expected to run later as part of the release flow.
   if compgen -G "$DMG_DIR/*.dmg" > /dev/null; then
     for dmg in "$DMG_DIR"/*.dmg; do
       ./scripts/strip-dmg-volume-icon.sh "$dmg"
     done
+  fi
+
+  # Optional: notarize + staple. Opt-in via NOTARIZE=1 because each round-trip
+  # takes 1–3 min and isn't needed for dev/test builds. Required for release.
+  if [ "${NOTARIZE:-0}" = "1" ]; then
+    if compgen -G "$DMG_DIR/*.dmg" > /dev/null; then
+      for dmg in "$DMG_DIR"/*.dmg; do
+        ./scripts/notarize-and-staple.sh "$dmg"
+      done
+    fi
+  else
+    echo "  (skipping notarization — set NOTARIZE=1 to enable)"
   fi
 
   # Move the fresh DMG(s) out of the bundle dir before the next edition's
