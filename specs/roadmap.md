@@ -1817,4 +1817,186 @@ References
   - Runestone: https://github.com/simonbs/Runestone
   - WKScriptMessageHandler docs: Apple Developer Documentation
   - Nova (Panic) uses a similar hybrid native+web-component approach
+
+─────────────────────────────────────────────────────────────────────────────
+IDEA: Multi-Version Toolchain Picker
+─────────────────────────────────────────────────────────────────────────────
+Status: Parked — future feature
+Logged: 2026-04-15
+
+Background
+  The toolchain pill in the toolbar currently shows the installed rustc version
+  and health status (green/yellow/red). This pill could become a version picker:
+  click it to switch between installed Rust toolchains (stable, beta, nightly,
+  or pinned versions like 1.85.0).
+
+  rustup already manages multiple toolchains:
+  - `rustup toolchain list` → enumerate installed versions
+  - `rustup run <toolchain> cargo run ...` → run with a specific toolchain
+  - `rustup toolchain install <version>` → add a new version
+
+  The version picker extends this to a UI-first experience: the pill shows the
+  active toolchain, clicking opens a dropdown of installed toolchains, selecting
+  one switches the project's active toolchain. New toolchains can be installed
+  from the same dropdown.
+
+Proposed UX
+  1. Click the toolchain pill → dropdown appears
+  2. Dropdown shows installed toolchains with versions (e.g., stable 1.87.0,
+     nightly 2026-04-10, beta 1.88.0-beta.1)
+  3. Active toolchain has a checkmark
+  4. Click a different toolchain → switches immediately, pill updates
+  5. "Install Toolchain..." row at bottom → opens a dialog to install
+     stable/beta/nightly or a specific version
+  6. Scope: per-project — stored in project config (Cargo.toml metadata
+     or rust-toolchain.toml). Mirrors how real Rust projects pin toolchains.
+     Teaching this pattern is part of the "learn the toolchain" philosophy.
+
+Backend
+  - New command: list_rust_toolchains → parses `rustup toolchain list`
+  - New command: set_active_toolchain → updates project/app config
+  - Modify run_playground to use `rustup run <toolchain> cargo run ...`
+    instead of bare `cargo run` when a non-default toolchain is selected
+  - New command: install_toolchain → `rustup toolchain install <version>`,
+    streaming output via existing Channel infra
+
+Why It's Valuable
+  - Beginners: test code against stable vs nightly when The Book or a
+    crate requires it
+  - Advanced: verify code compiles on MSRV (minimum supported Rust version)
+  - Educators: demonstrate edition differences (2021 vs 2024)
+  - Natural extension of the existing pill — no new UI chrome needed
+
+Why It's Parked
+  Current version gate (v0.3.5) only enforces a minimum version. Multi-version
+  support is a different tier of complexity: per-project config, toolchain
+  state management, UI for install/switch. Ship the launch first, revisit
+  when there's user demand or when the toolchain pill UX feels limiting.
+
+Trigger Condition
+  User feedback requesting nightly/beta support, or educator use cases where
+  version pinning matters.
+
+─────────────────────────────────────────────────────────────────────────────
+IDEA: Native Embeddable Code Editor Crate
+─────────────────────────────────────────────────────────────────────────────
+Status: Parked — separate project, long-term
+Logged: 2026-04-15
+
+Background
+  No production-quality embeddable code editor component exists in Rust.
+  Every Rust desktop app that needs code editing either embeds Monaco via
+  a webview or builds from scratch. Xi (Google-backed) was abandoned.
+  Zed built one but welded it to GPUI. Nobody extracted the reusable widget.
+
+  The gap: a Rust crate that provides a code editor component with
+  tree-sitter syntax highlighting, rope buffer, and LSP client support —
+  platform-agnostic, renderable via any native backend.
+
+Proposed Shape
+  - Rust crate (library, not an app)
+  - Core: rope buffer + tree-sitter highlighting + LSP client
+  - Rendering trait: crate emits styled frames (spans, cursors, diagnostics,
+    line numbers); consumer renders via their framework (GPUI, SwiftUI,
+    iced, egui, wgpu)
+  - First consumer: Rustic Playground v2.0 replaces Monaco with it
+
+Research Before Starting
+  - COSMIC / System76: `cosmic-text` is a text layout engine. Check if
+    COSMIC's editor app extracted a reusable widget with tree-sitter/LSP.
+  - Lapce: Rust editor — check if their editor component is extractable
+  - Zed GPUI: check latest state of text input primitives
+
+Why It's Parked
+  Separate project from Rustic Playground, multi-year scope. Revisit after
+  launch traction is established. Could be the project that gets rust-lang's
+  serious attention more than the playground app alone.
+
+─────────────────────────────────────────────────────────────────────────────
+IDEA: Cloud-Substrate Playground (Native Apps + Remote Containers)
+─────────────────────────────────────────────────────────────────────────────
+Status: Parked — possible Phase 3 evolution, contingent on Phase 2 traction
+Logged: 2026-04-19
+
+Background
+  Market positioning between two existing product classes:
+    - Pure web playgrounds (play.rust-lang.org, old repl.it) — too thin,
+      ephemeral, single-file, can't persist real work.
+    - Full cloud IDEs (Replit, Codespaces, Gitpod) — drifted into
+      full-workstation territory, lost the "playground" discipline.
+  Neither holds the middle ground. Replit started as cloud REPL and got
+  pulled toward full IDE by user demand (files → folders → git → SSH →
+  deploy). Staying a playground is a harder product discipline than
+  becoming an IDE.
+
+  Gap: native app per platform, cloud as shared substrate. Analogous to
+  Dropbox, 1Password, Notion, Things, iA Writer — "native everywhere, cloud
+  is the sync layer." These win vs web competitors on UX because they can
+  use platform-specific affordances (keyboard shortcuts, gestures, menu
+  bar integrations, system share sheets, offline mode) that browser tabs
+  can't reach.
+
+  Apple's containerization framework is macOS-only and won't come to
+  iPadOS (JIT restrictions + app sandbox model). So local containers are
+  macOS-only structurally. Cloud containers remove that constraint and
+  open the door to iPad, Windows, Linux, even web-as-viewer.
+
+Proposed Shape
+  - Native frontend per platform (macOS first, iPad next, others later)
+  - Projects + user data persist in cloud (syncs across devices)
+  - Compile/run proxied to cloud containers (Firecracker or similar)
+  - Blank-container model preserves "learn the toolchain" angle — user
+    still runs rustup/cargo/etc. inside a fresh Linux env; not hidden,
+    just relocated. Ephemeral by default, persistent opt-in.
+  - Each platform gets a tailored native UX (⌘R on Mac, iPad gestures,
+    etc.) rather than one browser-based UI stretched everywhere.
+  - Web presence is view-only / sharing ("open this playground link on
+    any device"), not a full web app — that would collide with
+    play.rust-lang.org's space.
+
+What It's NOT
+  - Not a Replit clone. Stays playground, not workstation.
+  - Not a pure web product. Native-first is the differentiator.
+  - Not phase 2. Phase 2 (per project_strategy_2026) is native + local
+    containers + multi-language on macOS. This is phase 3: extend that
+    to other platforms via cloud.
+  - Not polyglot from day one. Systems-languages focus likely fits the
+    brand better than "every language."
+
+Sequencing (if traction proves out)
+  1. Phase 1 — ship Rustic Playground macOS (current). Build taste +
+     brand + user base. Validate desire for native-feel playgrounds.
+  2. Phase 2 — native rewrite + local containerization on macOS.
+     Monetization introduced. Still single-platform.
+  3. Phase 3a — add cloud backend as opt-in. Existing Mac app gets
+     "Rustic Cloud" toggle. Sync projects, remote compile option.
+     Works fully offline if disabled.
+  4. Phase 3b — iPad app, SwiftUI-shared with macOS. Same cloud backend.
+  5. Phase 3c — web viewer. "View shared playgrounds in any browser."
+     Read-only or very limited edit. Defensive, not primary.
+  6. Phase 3d (maybe never) — Windows/Linux. Tiny learning-audience,
+     big engineering burden; defer or skip.
+
+Why It's Parked
+  Entirely contingent on Phase 1 + 2 traction. Strong risk of
+  pre-optimizing for platform expansion that may not be worth it.
+  Capital-intensive (container compute = real money; abuse prevention
+  is a full-time concern). Fundamentally a different business than the
+  current free-open-source desktop app — requires SaaS ops, billing,
+  support, potentially team scale.
+
+  Not worth building toward architecturally right now. Even building
+  the macOS app as if this will happen would invite scope creep. Keep
+  the current product focused; re-evaluate this entry after Phase 1
+  launch lands and real user feedback tells us whether iPad / other
+  platforms are a genuine top-of-mind ask.
+
+Decision Trigger
+  Revisit when all three are true:
+    - Phase 1 traction established (stars, active users, organic
+      community growth, not just launch spike).
+    - Phase 2 shipped and monetized (proves people pay for polish).
+    - Repeated user feedback asking for iPad / cross-platform access.
+  If any of those is missing, this stays parked.
+
 ─────────────────────────────────────────────────────────────────────────────
