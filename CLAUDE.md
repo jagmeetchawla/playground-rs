@@ -122,6 +122,8 @@ Edition identifiers: `.rust`, `.power`, `.app` (dev builds without flag).
 
 ## Current Version Status
 
+**v0.3.6** — shipped 2026-04-19 (new app icon across app/website/in-app modals; DMG volume shows macOS default disk icon instead of duplicating app icon; code-signing certificate re-issued 2026-04-18, Team ID unchanged; notarize + staple automated in build pipeline via `NOTARIZE=1 ./scripts/build-editions.sh rust`; fixed silent `scripts/sync-version.sh` bug where BSD sed left `Cargo.toml` out of sync).
+
 **v0.3.5** — shipped (Rust Toolchain Version Gate: enforces rustc ≥ 1.85 floor for edition 2024, yellow `◐` pill + detail-row warning on rustc + cargo when outdated, in-app "Update Rust" button chains `rustup update stable && rustup default stable` via existing Channel streaming, matching manual-mode copy-paste command, edge case for rustc-without-rustup standalone installs).
 
 **v0.3.4** — shipped (In-App Toolchain Installer & Repair: guided + manual install paths, Xcode CLT auto-polling, Channel-based streaming infra, code-signed + notarized DMG distribution).
@@ -138,7 +140,7 @@ Edition identifiers: `.rust`, `.power`, `.app` (dev builds without flag).
 
 **v0.3.3** — shipped (Edition Builds + UI polish: Rust/C/Power Edition from same codebase via Tauri --config + VITE_EDITION. editions.ts registry, single-language editions skip language picker, filter themes/help/books. Saved snapshots (.saved/) with revert + undo-revert. Run lifecycle: Saving→Compiling→Running in console + status bar. Close-dirty-tab dialog. Book chapter "Read Online" links. Status bar below editor. Toolbar reorganization. Dynamic window title. Min width 900px. Update checker via GitHub Releases API. Official language logos (SVG) replacing text badges. Book auto-select + reactive labels. Build script: `scripts/build-editions.sh`).
 
-After v0.3.5: DMG distribution (GitHub Releases for v0.3.5), website update, wiki/FAQ, announcements.
+After v0.3.6: launch cadence (r/learnrust Mon 4/20, r/rust Thu 4/23, Show HN Tue 4/28 per `specs/release-plan.md`), then monitor + iterate.
 
 **Parked:** Linux Port (Rust Edition, low ROI for target audience), Windows Port (Rust Edition, high effort). See roadmap.md.
 

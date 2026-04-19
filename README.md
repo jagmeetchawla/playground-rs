@@ -202,6 +202,7 @@ See the warning at the top of this file. Additionally:
 
 | Version | Highlights |
 |---|---|
+| v0.3.6 | New app icon (richer illustrated artwork across app, website, in-app modals). DMG polish — mounted volume shows macOS's default disk icon instead of duplicating the app icon, making drag-to-Applications clearer. Code-signing certificate re-issued (Team ID unchanged). Notarize + staple automated in the build pipeline via `NOTARIZE=1` |
 | v0.3.5 | Rust toolchain version gate — enforces rustc ≥ 1.85 (edition 2024 floor), yellow toolchain pill when outdated, in-app "Update Rust" button runs `rustup update stable && rustup default stable` with streamed output, manual-mode copy-paste command for Terminal users |
 | v0.3.4 | In-app Rust toolchain installer & repair with guided + manual install paths, Xcode CLT detection as prerequisite, FixWizard split layout with auto-polling, Help menu restructure (Website, GitHub, Rust Help, Rust Book top-level), Rust Toolchain help section, toolchain step skip indicator, code-signed + notarized DMG distribution |
 | v0.3.3 | Edition builds — Rust Edition, C Edition, Power Edition as separate DMGs from one codebase. Saved snapshots with revert, run lifecycle status, update checker, language logos, dynamic window title |
