@@ -162,6 +162,20 @@
     }
     .nav-cta:hover { background: var(--accent-light); text-decoration: none !important; }
 
+    /* Right group: contains nav-links, Download CTA, and hamburger */
+    .nav-right { display: flex; align-items: center; gap: 16px; }
+
+    /* Hamburger: hidden on desktop, shown in mobile breakpoint */
+    .nav-hamburger {
+      display: none;
+      align-items: center; justify-content: center;
+      background: transparent; border: none; cursor: pointer;
+      padding: 6px 8px; color: var(--text);
+      border-radius: 6px; transition: background 0.15s;
+    }
+    .nav-hamburger:hover { background: var(--code-bg); }
+    .nav-hamburger svg { width: 22px; height: 22px; display: block; }
+
     /* ── Hero ── */
     .hero {
       text-align: center;
@@ -759,7 +773,10 @@
     }
 
     /* ── Responsive ── */
-    @media (max-width: 768px) {
+    /* 900px catches all iPhone landscape widths (SE 667 → Pro Max 932).
+       Switches nav to hamburger drawer; the inline links would otherwise
+       cramp and wrap on landscape iPhones. */
+    @media (max-width: 900px) {
       .hero { padding: 48px 20px 40px; }
       .hero h1 { font-size: 30px; }
       .hero .tagline { font-size: 16px; }
@@ -772,10 +789,39 @@
       .shortcuts-grid { grid-template-columns: 1fr; }
       .support-grid { grid-template-columns: 1fr; }
       .section-header h2 { font-size: 24px; }
-      .nav-links .nav-link-text { display: none; }
-      .site-theme-toggle { margin-right: 8px; }
-      .site-theme-btn { padding: 4px 7px; font-size: 11px; }
       .footer-inner { flex-direction: column; gap: 12px; }
+
+      /* Hamburger drawer */
+      .nav-hamburger { display: flex; }
+
+      /* Collapse inline links into a dropdown drawer below the nav bar */
+      .nav-links {
+        position: absolute;
+        top: 52px; left: 0; right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        padding: 8px 24px 16px;
+        background: var(--nav-bg);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border);
+        display: none;
+      }
+      .nav-links.open { display: flex; }
+      .nav-links .nav-link-text {
+        display: block;
+        padding: 14px 0;
+        font-size: 15px;
+        border-bottom: 1px solid var(--border);
+      }
+      .nav-links .nav-link-text:last-of-type { border-bottom: none; }
+      .nav-links .site-theme-toggle {
+        margin: 14px 0 0;
+        margin-right: 0;
+        align-self: flex-start;
+      }
+      .site-theme-btn { padding: 4px 10px; font-size: 12px; }
     }
   </style>
 </head>
@@ -788,20 +834,29 @@
         <img src="images/app-icon.png?v=0.3.6" alt="Rustic Playground icon">
         Rustic Playground
       </a>
-      <div class="nav-links">
-        <a href="#features" class="nav-link-text">Features</a>
-        <a href="#how-it-works" class="nav-link-text">How It Works</a>
-        <a href="#support" class="nav-link-text">Support</a>
-        <a href="blog/why-i-built-this/" class="nav-link-text">Blog</a>
-        <a href="https://github.com/jagmeetchawla/rustic-playground" class="nav-link-text">GitHub</a>
-        <div class="site-theme-toggle">
-          <button class="site-theme-btn" data-set-theme="dark" title="Dark theme">Dark</button>
-          <button class="site-theme-btn" data-set-theme="light" title="Light theme">Light</button>
-          <button class="site-theme-btn active" data-set-theme="rust" title="Rust theme">Rust</button>
+      <div class="nav-right">
+        <div class="nav-links" id="nav-links">
+          <a href="#features" class="nav-link-text">Features</a>
+          <a href="#how-it-works" class="nav-link-text">How It Works</a>
+          <a href="#support" class="nav-link-text">Support</a>
+          <a href="blog/why-i-built-this/" class="nav-link-text">Blog</a>
+          <a href="https://github.com/jagmeetchawla/rustic-playground" class="nav-link-text">GitHub</a>
+          <div class="site-theme-toggle">
+            <button class="site-theme-btn" data-set-theme="dark" title="Dark theme">Dark</button>
+            <button class="site-theme-btn" data-set-theme="light" title="Light theme">Light</button>
+            <button class="site-theme-btn active" data-set-theme="rust" title="Rust theme">Rust</button>
+          </div>
         </div>
         <a href="https://github.com/jagmeetchawla/rustic-playground/releases" class="nav-cta download-link">
           Download
         </a>
+        <button class="nav-hamburger" aria-label="Toggle menu" aria-expanded="false" aria-controls="nav-links">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
       </div>
     </div>
   </nav>
@@ -1367,6 +1422,40 @@
       if (e.key === 'ArrowLeft') lightboxPrev();
       if (e.key === 'ArrowRight') lightboxNext();
     });
+
+    // ── Hamburger menu (mobile nav drawer) ──
+    (function() {
+      var hamburger = document.querySelector('.nav-hamburger');
+      var navLinks = document.getElementById('nav-links');
+      if (!hamburger || !navLinks) return;
+
+      function closeDrawer() {
+        navLinks.classList.remove('open');
+        hamburger.setAttribute('aria-expanded', 'false');
+      }
+
+      hamburger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var open = navLinks.classList.toggle('open');
+        hamburger.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+
+      // Close when a link is tapped (but not when theme buttons are tapped)
+      navLinks.querySelectorAll('a').forEach(function(a) {
+        a.addEventListener('click', closeDrawer);
+      });
+
+      // Close when tapping outside the nav
+      document.addEventListener('click', function(e) {
+        if (!navLinks.classList.contains('open')) return;
+        if (!e.target.closest('nav')) closeDrawer();
+      });
+
+      // Close on Escape
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && navLinks.classList.contains('open')) closeDrawer();
+      });
+    })();
   </script>
 </body>
 </html>
