@@ -83,6 +83,64 @@
 
 ---
 
+## CS Program Outreach (Week 2+, after Reddit/HN results are in)
+
+> Status: **idea captured, figure out later.** Do NOT start during launch week —
+> it pulls focus from the Reddit/HN spike and educator emails land better with
+> "launched last week on HN / r/rust, here's the reception" as social proof.
+
+**Why this audience:** CS undergrads are the sharp-end "Swift Playgrounds for
+Rust" case — they're told to install rustup + pick an IDE + learn Cargo + learn
+the language simultaneously. The app collapses the first three so they focus on
+the fourth. First LinkedIn engagement (2026-04-20) came from a CS undergrad
+building AI agents, which fits the pattern even as a network-goodwill data point.
+
+**Warm-intro starting point (highest-leverage option):**
+- Jagmeet's daughters are at **Georgia Tech, UC Berkeley, and Columbia** —
+  three top CS programs with strong systems/Rust footprints. A student
+  introducing a tool to their own TA or professor is vastly higher-signal
+  than cold outreach from a stranger.
+- Pilot move: ask each daughter which course in their program touches Rust
+  (or systems programming more broadly), and whether they'd be willing to
+  mention the app to that course's TA or prof. No pressure — if they're
+  not comfortable, don't push.
+- If even one of three lands a "TA tried it, shared it in lab" moment,
+  that's a stronger footprint than 20 cold emails.
+
+**Broader who-to-target (once warm intros have run):**
+- Universities with Rust in CS curriculum: Stanford CS110L, Brown CSCI 1260,
+  CMU 15-410 variants, a few systems courses elsewhere. Enumerate before
+  broad outreach.
+- Professors teaching the specific Rust-adjacent courses (not department chairs).
+- **TAs running the labs** — underrated channel. Students listen to TAs, and
+  TAs are usually thrilled when someone reduces their office-hours burden.
+- Student Rust clubs and hackathons — lower-effort, lower-stakes parallel track.
+
+**The ask (important — don't pitch "teach with my tool"):**
+> "For office hours and students who can't get rustup installed on their
+> laptop — this removes ~2 hours of setup friction. Free, open source,
+> macOS-only for now. Not asking you to change your syllabus."
+
+Small footprint, easy yes. Positions the app as a support tool, not a
+curriculum replacement.
+
+**Timing:**
+- NOT during launch week (2026-04-20 to 2026-04-28). Would split attention.
+- Start Week 2–3 of post-launch, once there's a public launch story to
+  reference.
+- Aligns with north star (rust-lang.org / play.rust-lang.org complement):
+  the desktop/local counterpart to a hosted web playground.
+
+**Open questions (figure out when we pick this up):**
+- Which universities, concretely? Need a list of Rust-teaching CS programs
+  with professor + TA contact info.
+- Email templates — one for professors, one for TAs, one for student clubs.
+- Tracking: how do we know if outreach converts? UTM tags on website links?
+  Self-reported via signup form?
+- Do we want a "for educators" page on the website? Probably, eventually.
+
+---
+
 ## Tips
 
 - **Lead with the screenshot** — people scroll past text
