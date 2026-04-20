@@ -14,22 +14,20 @@
 
 ---
 
-## Prep — Mon 2026-04-20
+## Launch — Day 0 (Mon 2026-04-20) ✅
 
-- [ ] Clean up LinkedIn profile (headline, featured section, about line)
-- [ ] See `specs/linkedin-post.md` for plan
-- [ ] No public posts today — just prep
+- [x] Clean up LinkedIn profile (headline, featured section, about line)
+- [x] **LinkedIn launch post** (went up early — gets 24h compounding before Reddit traffic arrives)
 
 ---
 
 ## Launch — Day 1 (Tue 2026-04-21)
 
-- [ ] 8. **LinkedIn post** — launch announcement (draft in `specs/linkedin-post.md`)
-  - Post ~30 min before r/learnrust so fresh activity is on the profile
-
-- [ ] 9. **r/learnrust** — learner-first framing, drafts at `specs/reddit-drafts.md`
+- [ ] 8. **r/learnrust** — learner-first framing, drafts at `specs/reddit-drafts.md`
   - Emphasize: built-in Rust Book examples, no terminal required, Welcome Wizard
   - Lower-stakes dry run before the bigger subs
+  - ~9–10am ET; stay at keyboard 4–6h for comments
+  - Paste thread URL into the r/tauri and r/rust draft bodies
 
 ---
 
