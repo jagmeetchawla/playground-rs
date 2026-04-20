@@ -49,6 +49,11 @@
 - [ ] 12. **Rust Users Forum** — post at [users.rust-lang.org](https://users.rust-lang.org)
   - Showcase category. More detailed write-up OK here.
 
+- [ ] **Optional: small v0.3.7 release** — one commit, one tag, one GitHub release.
+  - Ideal content: fix or improvement from r/learnrust / r/tauri feedback (shows responsiveness). Fallback: extra template, shortcut, or polish item.
+  - Keeps the GitHub repo looking active ahead of r/rust (Mon) + Show HN (Tue). Dead-looking repos hurt trust.
+  - Full release flow: `NOTARIZE=1 ./scripts/build-editions.sh rust` → tag → push → gh release create. See `reference_release_checklist.md` memory.
+
 ---
 
 ## Launch — Day 7 (Mon 2026-04-27)
