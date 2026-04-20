@@ -1,9 +1,11 @@
 # Reddit Drafts — r/learnrust + r/tauri + r/rust
 
 > **Status:** Drafts. Three-sub staggered posting on peak Reddit days:
-> - **r/learnrust:** Monday 2026-04-20, ~9–10am ET (smaller, friendlier sub first — dry run for copy)
-> - **r/tauri:** Wednesday 2026-04-22, ~9–10am ET (Tauri-specific framing, stack + gotchas angle)
-> - **r/rust:** Thursday 2026-04-23, ~9–10am ET (peak traffic, 2–3 days to fold in r/learnrust learnings)
+> - **r/learnrust:** Tuesday 2026-04-21, ~9–10am ET (smaller, friendlier sub first — dry run for copy)
+> - **r/tauri:** Thursday 2026-04-23, ~9–10am ET (Tauri-specific framing, stack + gotchas angle)
+> - **r/rust:** Monday 2026-04-27, ~9–10am ET (peak traffic, most learnings folded in; leads directly into Show HN on Tue 4/28)
+>
+> Mon 4/20 is LinkedIn profile cleanup only (no public posts). More breathing room between posts = more time to absorb and fold in feedback from each.
 >
 > Each post is tailored — don't cross-post verbatim. r/learnrust leads with learner value, r/tauri leads with stack + gotchas, r/rust leads with positioning vs play.rust-lang.org.
 >
@@ -12,7 +14,7 @@
 
 ---
 
-## r/learnrust (Monday 2026-04-20)
+## r/learnrust (Tuesday 2026-04-21)
 
 **Target flair:** `project` or similar (check current options)
 
@@ -75,7 +77,7 @@ That's it.
 
 ---
 
-## r/tauri (Wednesday 2026-04-22)
+## r/tauri (Thursday 2026-04-23)
 
 **Target flair:** `Show & Tell` / `Project` / similar (check current options)
 
@@ -154,7 +156,7 @@ Happy to talk about any of the above — the build pipeline, the process-tree ki
 
 ---
 
-## r/rust (Thursday 2026-04-23)
+## r/rust (Monday 2026-04-27)
 
 **Target flair:** `show & tell` (or `project` / `announcement` — check current options)
 
@@ -209,16 +211,17 @@ Happy to answer questions about the Tauri build, how the book examples are shipp
 
 ## Staggered-post mechanics
 
-- **Monday 2026-04-20 ~9–10am ET: r/learnrust.** Lower-stakes dry run on a strong Reddit day. Then:
-  - Monitor comments, reply for 4–6h after posting, then check in daily Tue–Wed
+- **Tuesday 2026-04-21 ~9–10am ET: r/learnrust.** Lower-stakes dry run on a peak Reddit day. Then:
+  - Monitor comments, reply for 4–6h after posting
   - Note any wording that landed poorly or questions that came up repeatedly
-  - Fold learnings into the r/tauri and r/rust post copy
-- **Wednesday 2026-04-22 ~9–10am ET: r/tauri.** Different audience (Tauri devs, not Rust learners) — distinct framing around stack + gotchas. Can reference r/learnrust thread if the conversation went well.
-- **Thursday 2026-04-23 ~9–10am ET: r/rust.** Include links to both earlier threads as trust signals.
+  - Wed 4/22 = absorb / iterate. Fold learnings into the r/tauri post copy.
+- **Thursday 2026-04-23 ~9–10am ET: r/tauri.** Different audience (Tauri devs, not Rust learners) — distinct framing around stack + gotchas. Reference r/learnrust thread if that post went well.
+- **Fri–Sat 4/24–25:** TWiR submission + Rust Users Forum post. Then a weekend pause.
+- **Monday 2026-04-27 ~9–10am ET: r/rust.** Peak-traffic day. Include links to prior threads + TWiR mention as trust signals. Leads directly into Show HN on Tue 4/28.
 - **Don't cross-post verbatim** using Reddit's cross-post feature — each subreddit gets its own tailored post
 - Upload the hero screenshot directly to each post (image + text works now on Reddit)
 
-## Posting checklist (Monday, r/learnrust)
+## Posting checklist (Tuesday, r/learnrust)
 
 - [ ] Verify r/learnrust current rules (wiki + sidebar)
 - [ ] Hero screenshot ready (preferably the one from rustic-playground.app homepage)
@@ -227,7 +230,7 @@ Happy to answer questions about the Tauri build, how the book examples are shipp
 - [ ] Fresh browser session logged into Reddit account
 - [ ] Free 4–6h afterward to reply to comments
 
-## Posting checklist (Wednesday, r/tauri)
+## Posting checklist (Thursday, r/tauri)
 
 - [ ] Verify r/tauri current rules (small sub — likely permissive, but check)
 - [ ] Optionally insert r/learnrust thread URL if that post landed well ("also got thoughtful feedback on r/learnrust")
@@ -235,7 +238,7 @@ Happy to answer questions about the Tauri build, how the book examples are shipp
 - [ ] Flair selected correctly (Show & Tell / Project)
 - [ ] Free 4–6h afterward — r/tauri audience is technical and asks deep questions
 
-## Posting checklist (Thursday, r/rust)
+## Posting checklist (Monday, r/rust)
 
 - [ ] Re-check r/rust current self-promo rules
 - [ ] Insert r/learnrust AND r/tauri thread URLs into the body if both went well
