@@ -59,7 +59,12 @@ So I built **Rustic Playground**, a macOS desktop app.
 
 Free, open source, signed + notarized DMG: https://rustic-playground.app
 
-Happy to answer anything — especially from folks just starting out. **What tripped you up in the first few chapters?** That's the feedback that'll shape the next version.
+Two small asks if you find it valuable:
+
+1. Share feedback in the comments — what features would you like to see? What tripped you up in the first few chapters?
+2. Take a moment to star the repo: https://github.com/jagmeetchawla/rustic-playground
+
+That's it.
 ```
 
 ### Notes on r/learnrust tone
