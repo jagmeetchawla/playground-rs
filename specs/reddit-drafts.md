@@ -1,11 +1,14 @@
-# Reddit Drafts — r/learnrust + r/rust
+# Reddit Drafts — r/learnrust + r/tauri + r/rust
 
-> **Status:** Drafts. Split-day posting on peak Reddit days:
+> **Status:** Drafts. Three-sub staggered posting on peak Reddit days:
 > - **r/learnrust:** Monday 2026-04-20, ~9–10am ET (smaller, friendlier sub first — dry run for copy)
+> - **r/tauri:** Wednesday 2026-04-22, ~9–10am ET (Tauri-specific framing, stack + gotchas angle)
 > - **r/rust:** Thursday 2026-04-23, ~9–10am ET (peak traffic, 2–3 days to fold in r/learnrust learnings)
 >
+> Each post is tailored — don't cross-post verbatim. r/learnrust leads with learner value, r/tauri leads with stack + gotchas, r/rust leads with positioning vs play.rust-lang.org.
+>
 > **Pre-post checklist:** verify each subreddit's current self-promo rules, confirm flair options, have hero screenshot ready to upload.
-> **Last edit:** 2026-04-16
+> **Last edit:** 2026-04-20
 
 ---
 
@@ -66,6 +69,85 @@ Happy to answer anything — especially from folks just starting out. **What tri
 
 ---
 
+## r/tauri (Wednesday 2026-04-22)
+
+**Target flair:** `Show & Tell` / `Project` / similar (check current options)
+
+### Title
+
+```
+Shipped my first Tauri 2 app — macOS Rust learning playground (stack + gotchas)
+```
+
+Alt (punchier):
+
+```
+Built a Rust learning app with Tauri 2 + Svelte 5 + Monaco — some takeaways
+```
+
+### Body
+
+```
+Hey r/tauri — shipped my first real Tauri 2 app and wanted to share the stack + some things I learned the hard way.
+
+**App: Rustic Playground** — a macOS desktop app for learning Rust, inspired by Swift Playgrounds. Write a `.rs` file, press ⌘R, stdout/stderr streams live. Each playground is a real Cargo package with its own `fn main()`, not a sandbox.
+
+[hero screenshot]
+
+**Stack:**
+- Tauri 2 shell
+- Svelte 5 (runes: `$state`, `$derived`, `$effect`)
+- Monaco editor via ES module import
+- Rust backend (~1500 lines across 6 modules)
+- Signed + notarized DMG, fully automated in build pipeline
+
+**Tauri-specific gotchas that cost me hours:**
+
+1. **Capabilities fail silently.** Every `window.*`, `dialog.*` API call needs an explicit permission in `capabilities/default.json`. If you miss one, the call just… doesn't happen. Zero error in the console. Burned half a day on a broken resize handler before I realized.
+
+2. **WKWebView eats `window.confirm/alert/prompt`.** They appear to work in dev but do nothing. Use the Tauri dialog plugin or build a custom modal.
+
+3. **macOS menu items are baked at build time.** `MenuBuilder` constructs the menu once; can't toggle `.enabled()` after construction. I rebuild the entire menu on relevant state changes.
+
+4. **Killing `cargo run` needs the full process tree.** SIGTERM to the cargo PID leaves the compiled binary running. Walk the process group or recurse through children.
+
+5. **Serde u32 rejects JS floats silently.** JavaScript drag math produces `324.5`. Rust `u32` fails to deserialize without a clear error — the IPC call just throws. `Math.round()` everything before passing numeric values to commands.
+
+6. **Shared `target/` causes cargo lock conflicts.** If your app runs `cargo check` on user code in the same `target/` the main binary uses, `cargo build` and `cargo check` can deadlock. Separate target dirs per use case.
+
+**What Tauri 2 got right for me:**
+- IPC is fast and ergonomic once capabilities are sorted
+- Bundler produces clean signed DMGs with minimal config
+- Svelte 5 + Vite + Tauri hot-reload loop is solid
+- Plugin ecosystem is small but what's there works (dialog, shell, updater)
+
+**What I wish existed:**
+- A native embeddable code editor crate (I'm stuck on Monaco in a webview because no Rust equivalent has the features yet)
+- Better upfront docs on the capabilities list — it's long and mostly copy-paste from examples
+- A standard pattern for post-build DMG modification (I wrote my own volume-icon-strip + re-sign + notarize + staple script)
+
+Free, open source (MIT/Apache-2.0): https://rustic-playground.app
+Source: https://github.com/jagmeetchawla/rustic-playground
+
+Happy to talk about any of the above — the build pipeline, the process-tree kill dance, the capabilities rabbit hole, or why Rust + agentic dev turned out to pair surprisingly well.
+```
+
+### Notes on r/tauri tone
+
+- Audience is developers building Tauri apps, not end users. Lead with technical substance, not marketing.
+- Gotchas list is the most shareable part — "I hit this too" comments = engagement
+- Mention the stack combinations (Svelte 5 + Tauri + Monaco) since that's a common search
+- Keep the "what I wish existed" short but honest — invites the community to say "there's X" which you might not know about
+
+### Expected discussion topics to be ready for
+
+- **"Why Svelte 5 over React/Solid/Vue?"** — Tauri community skews pragmatic; Svelte 5 runes are still fresh, some devs haven't tried them.
+- **"How's Monaco performance in WKWebView?"** — it's fine for files <5k lines; larger files start to feel it.
+- **"Why not GPUI / Dioxus / Iced / egui?"** — honest answer: none of them has a code editor component with tree-sitter + LSP that matches Monaco, and building one is a multi-year project.
+- **"Any plans for Windows/Linux?"** — parked, low ROI for the target audience (macOS Rust learners). See roadmap.
+
+---
+
 ## r/rust (Thursday 2026-04-23)
 
 **Target flair:** `show & tell` (or `project` / `announcement` — check current options)
@@ -119,13 +201,14 @@ Happy to answer questions about the Tauri build, how the book examples are shipp
 
 ---
 
-## Split-day mechanics
+## Staggered-post mechanics
 
 - **Monday 2026-04-20 ~9–10am ET: r/learnrust.** Lower-stakes dry run on a strong Reddit day. Then:
   - Monitor comments, reply for 4–6h after posting, then check in daily Tue–Wed
   - Note any wording that landed poorly or questions that came up repeatedly
-  - Fold learnings into the r/rust post copy before Thursday
-- **Thursday 2026-04-23 ~9–10am ET: r/rust.** Include a link to the r/learnrust thread as a trust signal.
+  - Fold learnings into the r/tauri and r/rust post copy
+- **Wednesday 2026-04-22 ~9–10am ET: r/tauri.** Different audience (Tauri devs, not Rust learners) — distinct framing around stack + gotchas. Can reference r/learnrust thread if the conversation went well.
+- **Thursday 2026-04-23 ~9–10am ET: r/rust.** Include links to both earlier threads as trust signals.
 - **Don't cross-post verbatim** using Reddit's cross-post feature — each subreddit gets its own tailored post
 - Upload the hero screenshot directly to each post (image + text works now on Reddit)
 
@@ -138,16 +221,25 @@ Happy to answer questions about the Tauri build, how the book examples are shipp
 - [ ] Fresh browser session logged into Reddit account
 - [ ] Free 4–6h afterward to reply to comments
 
+## Posting checklist (Wednesday, r/tauri)
+
+- [ ] Verify r/tauri current rules (small sub — likely permissive, but check)
+- [ ] Optionally insert r/learnrust thread URL if that post landed well ("also got thoughtful feedback on r/learnrust")
+- [ ] Hero screenshot + maybe a dev-oriented shot (e.g., the app running with Tauri dev tools)
+- [ ] Flair selected correctly (Show & Tell / Project)
+- [ ] Free 4–6h afterward — r/tauri audience is technical and asks deep questions
+
 ## Posting checklist (Thursday, r/rust)
 
 - [ ] Re-check r/rust current self-promo rules
-- [ ] Insert r/learnrust thread URL into the body (line: "Also got good feedback on r/learnrust…")
-- [ ] Fold any r/learnrust learnings into the copy (wording, FAQ, etc.)
+- [ ] Insert r/learnrust AND r/tauri thread URLs into the body if both went well
+- [ ] Fold any r/learnrust / r/tauri learnings into the copy (wording, FAQ, etc.)
 - [ ] Flair selected correctly (show & tell)
 - [ ] Free 4–6h afterward to reply to comments
 
-## After posting (both)
+## After posting (all three)
 
-- **Update release-plan.md** — check off steps 8 and 9 once both are live
-- **Save the thread URLs** — you'll link them from the Show HN first-comment ("there's also ongoing discussion on r/rust: [link]")
+- **Update release-plan.md** — check off step 8 (r/rust), step 9 (r/learnrust), and note r/tauri as an added channel
+- **Save all thread URLs** — you'll link them from the Show HN first-comment ("also ongoing discussion on r/rust + r/tauri + r/learnrust: [links]")
 - **Watch for FAQs** — answers that come up repeatedly should be folded into the Show HN body + the site's FAQ
+- **Aggregate gotchas discussion** — r/tauri might surface additional Tauri pain points worth a follow-up blog post

@@ -14,43 +14,58 @@
 
 ---
 
-## Launch — Day 1
+## Launch — Day 1 (Mon 2026-04-20)
 
-- [ ] 8. **r/rust** — lead with screenshot, one-line pitch, link to website
-  - Title idea: *"I built a macOS playground for learning Rust, inspired by Swift Playgrounds"*
-  - Include: screenshot, website link, mention it's free + open source + MIT
-  - Don't link GitHub directly — link to rustic-playground.app
-
-- [ ] 9. **r/learnrust** — same post, tailored for beginners
+- [ ] 8. **r/learnrust** — learner-first framing, drafts at `specs/reddit-drafts.md`
   - Emphasize: built-in Rust Book examples, no terminal required, Welcome Wizard
+  - Lower-stakes dry run before the bigger subs
 
 ---
 
-## Launch — Day 2–3
+## Launch — Day 3 (Wed 2026-04-22)
 
-- [ ] 10. **This Week in Rust** — submit to the newsletter at [this-week-in-rust.org](https://this-week-in-rust.org)
+- [ ] 9. **r/tauri** — Tauri-dev framing, drafts at `specs/reddit-drafts.md`
+  - Different audience (Tauri devs, not Rust learners). Lead with stack + gotchas.
+  - Can reference r/learnrust thread as a trust signal if that post went well
+
+---
+
+## Launch — Day 4 (Thu 2026-04-23)
+
+- [ ] 10. **r/rust** — lead with screenshot, one-line pitch, link to website
+  - Title idea: *"I built a macOS playground for learning Rust, inspired by Swift Playgrounds"*
+  - Include: screenshot, website link, mention it's free + open source + MIT
+  - Link to r/learnrust and r/tauri threads if both went well
+  - Don't link GitHub directly — link to rustic-playground.app
+
+---
+
+## Launch — Day 5–6 (Fri–Sat 2026-04-24 to 25)
+
+- [ ] 11. **This Week in Rust** — submit to the newsletter at [this-week-in-rust.org](https://this-week-in-rust.org)
   - They feature community projects. Very high signal for Rust developers.
 
-- [ ] 11. **Rust Users Forum** — post at [users.rust-lang.org](https://users.rust-lang.org)
+- [ ] 12. **Rust Users Forum** — post at [users.rust-lang.org](https://users.rust-lang.org)
   - Showcase category. More detailed write-up OK here.
 
 ---
 
-## Launch — Day 3–5
+## Launch — Day 9 (Tue 2026-04-28)
 
-- [ ] 12. **Hacker News** — submit as Show HN
-  - Title: *"Show HN: Rustic Playground – a macOS desktop app for learning Rust"*
+- [ ] 13. **Hacker News** — submit as Show HN (draft at `specs/show-hn-draft.md`)
+  - Title: *"Show HN: Rustic Playground – Swift Playgrounds, but for Rust"*
   - HN likes: native apps, developer tools, thoughtful engineering
+  - Reference all prior community threads in the self-reply first comment
 
-- [ ] 13. **Twitter/X** — post with `#rustlang` hashtag and screenshot
+- [ ] 14. **Twitter/X** — post with `#rustlang` hashtag and screenshot
 
 ---
 
 ## Post-launch
 
-- [ ] 14. Monitor GitHub Issues and Discussions for feedback
-- [ ] 15. Update r/rust link on website to point to actual post
-- [ ] 16. Iterate based on feedback — prioritize bugs, then feature requests
+- [ ] 15. Monitor GitHub Issues and Discussions for feedback
+- [ ] 16. Update r/rust link on website to point to actual post
+- [ ] 17. Iterate based on feedback — prioritize bugs, then feature requests
 
 ---
 
