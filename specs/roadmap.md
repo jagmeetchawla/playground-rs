@@ -40,6 +40,77 @@ v0.3 — Language Module Architecture + Zig & Swift Support
 NEXT UP
 ───────
 
+Rustic Zig — The second (and final) edition
+  Status: strategic direction set 2026-04-20 — start post-launch
+  Decision trigger: 2–4 weeks after Show HN (2026-04-28), once Rust launch
+  reception data is in hand.
+
+  Committing to a two-edition future: Rustic Rust + Rustic Zig. C/C++/Swift
+  code stays in the codebase but never ships as standalone editions. Power
+  Edition stays shelved permanently.
+
+  Strategic thesis — "THE Zig playground" (not "also works for Zig"):
+    - Rustic Rust competes with play.rust-lang.org, rust-analyzer, etc.
+      We're a good tool among several.
+    - Rustic Zig would have no credible competitor. Zig has no
+      play.ziglang.org. Tooling gaps are bigger. Learning resources are
+      thinner. Every ecosystem weakness becomes our moat.
+    - "THE" positioning is positioning Rustic Rust cannot claim.
+
+  Four execution requirements:
+
+  1. Version management — DO NOT write our own zigup in Rust
+     - Zig community values Zig-written tooling (cultural landmine).
+     - Integrate with existing zigup (marler8997/zigup) or zvm, both
+       written in Zig. Orchestrate from our Rust backend.
+     - Our contribution is UX: in-app version picker, per-project
+       pinning, one-click upgrade — not the install mechanics.
+     - Upstream PRs to zigup are the highest-signal community move.
+
+  2. Zig-specific learning content
+     - Don't port Rust Book scaffolding. Zig needs its own shape.
+     - Options: adapt Ziglings (MIT, exercise-based) with permission,
+       or author original chapter-based material, or some hybrid.
+     - Being the canonical learning reference is a deeper moat than
+       being the runtime. This is a real content commitment.
+
+  3. Community engagement (gradual, respectful, not a pitch)
+     - Andrew Kelley + Loris Cro awareness matters.
+     - Andrew is responsive on Twitter/Zulip; early nod = category-defining.
+     - Show up in Zig forums first as a learner/contributor, not a
+       vendor. Earn the right to launch.
+
+  4. Zig 0.x treadmill
+     - Every 0.x bump maintains parity. 0.15 → 0.16 → 0.17 → ...
+     - This is the ongoing price of being THE tool, not a plan bug.
+     - Infrastructure already exists (v0.3 Lang enum, zig.rs module,
+       languages/zig_book.rs) — we're promoting an existing feature
+       to a first-class edition, not starting from scratch.
+
+  General principle for Zig-ecosystem interop:
+    Wherever we'd be tempted to build Zig-tooling-in-Rust, check if
+    the Zig community has built it. Use it, orchestrate it, contribute
+    to it. Our Rust codebase is the shell, not the ecosystem.
+
+  Open questions (figure out when we pick this up):
+    - Which Ziglearn/Ziglings content to include? License, attribution,
+      adapter vs authoring original chapters.
+    - Which zigup-class tool to integrate first? zigup vs zvm vs mach-zigup.
+    - How does a Rustic Zig DMG coexist with Rustic Rust? Same user, two
+      apps? Unified "Rustic" app with edition picker? Probably two apps,
+      matching current model.
+    - Website: separate rustic-playground.app/zig page, or its own domain?
+    - Distribution: follow same launch playbook (LinkedIn → r/Zig →
+      Ziggit → Zig Zulip → Show HN) or adapt.
+
+  Decision branches:
+    - Rust launch lands well → Rustic Zig is the natural sequel, start
+      planning in May, ship some time in summer 2026.
+    - Rust launch underperforms → Rustic Zig becomes the pivot, not an
+      addition. Same work, different framing.
+
+---
+
 v0.3.5 — Rust Toolchain Version Gate + In-App Update
   Status: SHIPPED — 2026-04-15
   See v0.3.5 entry under RELEASED (continued) below for the shipped summary.
