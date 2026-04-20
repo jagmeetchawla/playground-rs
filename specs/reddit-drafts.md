@@ -55,8 +55,9 @@ So I built **Rustic Playground**, a macOS desktop app.
 **What it doesn't do:**
 - Not a tutorial — you still read the Book (either via "Read Online" links in the app or your own copy)
 - Not a replacement for terminal skills you'll need eventually — the goal is to let you focus on Rust concepts first, and pick up the rest of the workflow later
+- No ads, no donation nags, no account sign-up. MIT/Apache-2.0, and staying that way.
 
-Free, open source (MIT/Apache-2.0), signed + notarized DMG: https://rustic-playground.app
+Free, open source, signed + notarized DMG: https://rustic-playground.app
 
 Happy to answer anything — especially from folks just starting out. **What tripped you up in the first few chapters?** That's the feedback that'll shape the next version.
 ```
