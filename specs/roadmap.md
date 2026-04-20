@@ -2012,63 +2012,71 @@ Background
   valid `.rs` source. Target use cases: Rust Book chapters, tutorials,
   teaching sessions, self-documenting experiments.
 
-Three Implementation Options (with tradeoffs)
+Proposed Direction: Two Complementary Features (B + C)
+  Rather than one big rewrite, do two smaller, orthogonal pieces:
 
-  A. True notebook — separate cells, cell-based UI
-     Effort: ~2–3 weeks of focused work.
-     - Replace Monaco's single-document view with a cell list; each code
-       cell is a small Monaco instance, prose cells render markdown.
-     - New file format (or encode cell boundaries as marker comments).
-     - Compile pipeline concatenates all code cells into one `fn main()`
-       (or wraps per-cell blocks).
-     - Hardest parts are NOT the UI:
-         * Error line mapping — rustc reports lines in the concatenated
-           file; must remap to cell-local lines for inline diagnostics.
-         * No REPL — Rust has no persistent-state cell execution. Either
-           run the whole program (concatenation) or run each cell as a
-           standalone program (loses shared state).
-     - Impacts: editor, file format, compile pipeline, diagnostics, output
-       streaming, export, undo/redo, .saved snapshots, every existing
-       playground in user projects and book content.
-
-  B. "Poor man's notebook" — inline prose blocks in a single file
+  B. Inline prose blocks inside `.rs` playgrounds
      Effort: ~few days.
-     - Keep single `.rs` file and Monaco. Render `/*md ... */` or `//!`
+     Scope: existing Rust (and other) playground project types.
+     - Keep single source file and Monaco. Render `/*md ... */` or `//!`
        blocks as inline prose via Monaco view zones / decorations.
      - No changes to compile pipeline, file format, error mapping, or
        exports. Fully backward compatible.
+     - Source file stays valid Rust — can still `cargo run` and export
+       like today. Teaching polish without changing the model.
      - Delivers ~70% of the teaching feel for ~10% of the cost.
-     - Tradeoff: visually less clean than real cells; prose and code still
-       live in the same text buffer.
+     - Tradeoff: prose and code share one text buffer — less clean than
+       true cells, but honest about what the underlying file is.
 
-  C. evcxr-based — Rust Jupyter kernel under the hood
-     Effort: ~2–4 weeks, but it's a different product.
-     - True per-cell execution with persistent state via evcxr.
-     - Loses the current model (a playground = `src/bin/<name>.rs` you
-       can `cargo run`). Dependencies via `:dep` magic. Different export
-       story. Different mental model for users.
+  C. "Rust Notebook" — a new project type, not a replacement
+     Effort: ~2–4 weeks once prioritized.
+     Scope: a distinct project type alongside Rust/Clang/Zig/Swift in the
+     `Lang` enum. New entry in the project switcher: "New Rust Notebook".
+     - Backed by evcxr as the Rust Jupyter kernel — true cell execution
+       with persistent state between cells.
+     - File format: one `.ipynb`-style document per notebook (or a
+       bespoke Rustic format that evcxr can read). NOT a `.rs` file.
+     - UI: real cell-based editor (cell list, per-cell Monaco, markdown
+       cells rendered, run-cell affordance, per-cell output).
+     - Dependencies: evcxr's `:dep` magic. Distinct from Cargo manifest.
+     - Export: notebook → `.ipynb` (Jupyter-compatible), or notebook →
+       flattened `.rs` for people who want to graduate to a playground.
+     - Sits next to regular playgrounds, doesn't replace them. Users
+       choose the right tool: `.rs` playground for building something,
+       notebook for exploring / teaching / stepping through.
+
+  Rejected: Option A — true notebook semantics forced onto `.rs` files
+     Concatenation-into-`fn main()` + rustc-line-remapping is a lot of
+     infrastructure to build a worse version of what evcxr already does.
+     If we want real cells, use evcxr (Option C). If we want teaching
+     polish in regular playgrounds, do Option B. No middle ground worth
+     the engineering.
 
 Why It's Parked
   Launch-week-sensitive. Current priority is shipping v0.3.6 and running
   the staggered community launch (r/learnrust Tue, r/tauri Thu, r/rust
-  next Mon, Show HN Tue). A large editor rewrite mid-launch is the wrong
-  shape of risk.
+  next Mon, Show HN Tue). Editor work mid-launch is the wrong shape of
+  risk.
 
-  Beyond launch timing: unclear whether this is real user demand or a
-  "cool idea." Plenty of teaching playgrounds today get by with rich
-  `//` comments — HelpModal + Rust Book chapter playgrounds already read
-  well without cell structure. Validate demand before investing.
+  Beyond launch timing: validate demand first. Plenty of teaching
+  playgrounds today get by with rich `//` comments — HelpModal + Rust
+  Book chapter playgrounds already read well without cell structure.
 
-Trigger Condition
-  Revisit after launch when BOTH are true:
-    - Multiple independent users/reviewers request notebook-style
-      teaching mode (not a one-off ask).
-    - Current `//`-comment-heavy teaching playgrounds are demonstrably
-      insufficient for the use case (e.g. specific chapters feel cramped,
-      educators report it as a blocker).
-  If both hit, start with Option B — it's reversible, compatible with
-  every existing playground, and buys time to see whether cell structure
-  is actually the right abstraction before committing to Option A's
-  architectural overhaul.
+Trigger Conditions (independent for each piece)
+  Option B — inline prose blocks:
+    Revisit when a book chapter or tutorial playground starts feeling
+    cramped inside plain `//` comments, or multiple users ask for
+    "richer explanations alongside the code." Low-risk, reversible,
+    ship when the itch shows up.
+
+  Option C — Rust Notebook project type:
+    Higher bar. Revisit only when BOTH are true:
+      - Multiple independent users request true notebook-style
+        exploration (not a one-off ask).
+      - Option B has shipped and confirmed that inline prose isn't
+        sufficient for the use case — i.e. users specifically want
+        per-cell execution and persistent state, not just better
+        prose rendering.
+    evcxr integration is enough work that it needs real demand behind it.
 
 ─────────────────────────────────────────────────────────────────────────────
