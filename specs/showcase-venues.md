@@ -1,28 +1,134 @@
-# Showcase-Friendly Venue Strategy (Draft)
+# Showcase-Friendly Venue Strategy
 
-> **Status:** Draft, written 2026-04-21 after r/learnrust post landed quiet.
-> Purpose: narrow the distribution plan to venues where showcase is welcome,
-> and adopt a slow-burn cadence over a spike. **For review — revisit tomorrow.**
+> **Status:** Strategic framing doc (v2, updated 2026-04-21 evening).
+> Tactical week-by-week schedule lives in `specs/release-plan.md`.
+> This doc captures the *why* behind venue tiering and cadence.
 
 ---
 
-## Why this draft exists
+## Why this doc exists
 
-The r/learnrust post (2026-04-21, ~noon ET) drew ~1K feed impressions, 0–1
-upvotes, 0 comments in the first 90 min. Evening ET traffic may improve the
-numbers, but even the best case here is "okay, not great." During that lull
-we realized:
+The r/learnrust post (2026-04-21) landed quiet — ~1K feed impressions, 0–1
+upvotes, 0 comments after hours. Evening traffic didn't dramatically change
+the picture. During the lull, two things crystallized:
 
-- Many large dev subs (r/learnprogramming, r/programming, r/cpp) have 10:1
-  self-promo rules we don't meet with an ~empty new Reddit account.
-- Reddit's `/new` fuzzing + first-time-poster trust penalties make it hard
-  to establish momentum without karma history, regardless of post quality.
-- The staggered "launch week spike" framing puts unhelpful pressure on each
-  post. Product is good; distribution doesn't need to be frantic.
+1. **Reddit isn't the primary launch engine for a cold-launch dev tool.**
+   The 10:1 self-promo rules, karma gates, and `/new` fuzzing on major subs
+   (r/programming, r/learnprogramming, r/cpp, r/rust for a new account) mean
+   those channels are effectively closed until genuine community participation
+   builds cred — a 2-3 month slow investment.
 
-**Revised posture:** narrow to venues where showcase is welcome, spread
-posts over weeks (not days), lean into evergreen/organic channels that
-compound.
+2. **The real engines are HN + Product Hunt + owned channels (website,
+   email list, blog) + direct outreach (press, podcasts, creators).**
+   Reddit rides that wave 2-3 weeks later, not the other way around.
+
+The implication: **narrow to venues where showcase is welcome, tier them
+by primacy, and treat this launch as a live testbed for strategies we'll
+reuse on future products** (Rustic Zig, and beyond). Not every tactic has
+to succeed — outcomes are data for the next launch too.
+
+---
+
+## Tiered venue framework
+
+### Tier 1 — Primary launch engines
+
+These carry the weight. Cold-launch success routes through these, not
+through Reddit.
+
+- **Show HN** — the single highest-leverage post type for dev tools.
+  Welcomes showcase by design. No karma gate. Rewards craft + substance.
+  A successful Show HN drives 10K+ visits in a day and lasting GitHub
+  star momentum. **This is the anchor launch moment.**
+- **Product Hunt** — equal-tier with HN for dev tools. Monday launches
+  are convention. Requires dedicated prep (gallery, tagline, first
+  comment, hunter). A distinct launch moment, not a same-day double.
+- **Owned channels** — your website, blog, and email list. Compound over
+  months. Without an email list, every visitor leaves un-capturable,
+  which means each launch starts from zero. Email capture is foundational.
+
+### Tier 2 — Direct outreach (parallel track)
+
+Often overlooked, surprisingly effective. Personal, specific outreach
+to 15-30 individuals rather than 1 mass post.
+
+- **Podcast hosts** in your space (Rust, macOS dev, indie tooling)
+- **Dev-tool journalists** (TechCrunch dev beat, The Register, MacStories)
+- **Smaller creators** reviewing dev tools on YouTube / Bluesky / blogs
+- **Newsletter authors** — not just major ones; niche newsletters have
+  high-intent audiences and are easier to land in
+- **Key figures in the community** whose nod amplifies reach (e.g.,
+  Andrew Kelley for Zig-adjacent work, core Rust team members for Rust
+  work — approached thoughtfully, not as promotion)
+
+### Tier 3 — Permissive showcase subs / channels
+
+Smaller, welcoming, low-karma-gate venues. Ride the HN/PH wave.
+
+- **r/tauri** — tiny but on-brand, welcomes stack + gotchas posts
+- **r/learnrust** — already posted; quiet but harmless
+- **Rust Users Forum** (users.rust-lang.org) — Showcase category
+  explicitly welcomes this
+- **Tauri Discord / Zulip** — #showcase channels by design
+- **Rust Zulip** — announce after genuine participation, not as entry point
+- **Lobsters** — invitation-only, earned through community participation
+  over months
+- **dev.to** — self-publish, cross-post, canonical link back to site
+- **This Week in Rust** newsletter — one-time mention, high signal
+- **Indie Hackers** — journey + product combo posts welcome
+
+### Tier 4 — Karma-gated subs (deferred to Month 3+)
+
+Can't enter cold. Require genuine community participation first.
+
+- **r/rust** — big sub, adversarial toward new-account self-promo.
+  Worth earning access to (200+ karma from comments helps). Month 3+.
+- **r/programming, r/learnprogramming, r/cpp, r/coding** — 10:1 rules,
+  enforced. Save for months after consistent non-promo participation.
+
+**These aren't lost opportunities.** They're traps for cold-launchers.
+Save them for after 2-3 months of consistent commenting (not posting)
+in the sub. When you finally do post, the 10:1 math works and mods
+see you as a community member.
+
+---
+
+## Cadence — slow burn over spike
+
+- **This week (4/21–4/28):** tactical plan in `specs/release-plan.md`.
+  Summary: Show HN on Tue 4/28 is the anchor. Wed 4/22 = email list +
+  outreach list. Thu = r/tauri. Fri = ecosystem carpet-bomb. Sat-Sun =
+  rest. Mon = HN prep. Tue = HN launch day.
+- **Weeks 2-4:** Product Hunt on Mon 5/11. Educator outreach via
+  daughters at GT/Berkeley/Columbia. Blog cadence begins.
+- **Month 2+:** 1 substantive venue post per week max. Mostly organic
+  growth through search, word-of-mouth, GitHub discovery. Community
+  participation in chosen Discord/Zulip is weekly.
+- **Month 3+:** Reddit re-entry becomes possible (big subs). Second
+  product launch preparation (Rustic Zig) leverages the email list
+  built in Month 1.
+
+---
+
+## Orientation for this launch
+
+**This launch is a live testbed for distribution strategies we'll
+reuse.** Rustic Playground works with or without a viral moment. Product
+compounds through quality + search + word-of-mouth regardless of Week 1
+numbers. The learning is the point.
+
+Specifically we're testing:
+- Whether HN-anchored launch works for the positioning ("complement to
+  play.rust-lang.org")
+- Whether direct outreach (press, podcasts, creators) produces more
+  returns than Reddit at this scale
+- Whether owned channels (email list) produce real future leverage
+- Whether the 2-3 month community-cred investment actually unlocks
+  the karma-gated subs
+
+All of this applies directly to Rustic Zig (next launch), v0.4 of
+Rustic Playground, and any future product. **Even "failure" here is
+data worth having.**
 
 ---
 

@@ -32,55 +32,183 @@
 
 ---
 
+## Strategic Reframe — 2026-04-21 Evening
+
+After r/learnrust landed quiet and digesting a sharper framing from a parallel
+thinking session — *"HN + Product Hunt + owned channels + direct outreach carry
+launch weight; Reddit rides the wave 2-3 weeks later after genuine community
+cred is built"* — the remainder of this week's plan is restructured:
+
+- **Show HN is the primary launch moment** (Tue 4/28). It's the anchor day,
+  not the cascade climax.
+- **Reddit is supporting, not primary.** r/tauri still worth doing (permissive
+  showcase sub). **r/rust dropped** — karma gap too large; defer to Month 3+
+  after genuine community participation builds cred.
+- **Product Hunt deferred to Mon 5/11** — worth doing right, not cramming
+  alongside HN.
+- **Owned channels (email list) and direct outreach (press, podcasts, creators)
+  added as parallel tracks** — previously absent from the plan; the missing
+  pillars of the reframe.
+- **Orientation:** Rustic Playground launch is also a live testbed for
+  distribution strategies that apply to future products. Not every tactic
+  needs to succeed — outcomes are data. This frame reduces pressure and
+  makes the plan more honest.
+
+---
+
+## Launch — Day 2 (Wed 2026-04-22) — Foundation
+
+- [ ] 10. **Set up email capture on rustic-playground.app** (~45 min)
+  - Buttondown free tier (≤100 subscribers free, indie-friendly)
+  - Add signup form to `docs/index.html` — likely near the hero CTA or footer
+  - Two frames: *"Notify me of Rustic Playground updates"* + *"Be first to know
+    when Rustic Zig ships"* (captures Zig-curious too)
+  - Rationale: every visitor from now through HN/PH launches is a capturable
+    email; list compounds for future launches (especially Rustic Zig)
+
+- [ ] 11. **Assemble press / podcast / creator outreach list** (~1–2h)
+  - Rust / systems-lang / macOS-dev podcasts (e.g., Rustacean Station, Filter
+    Podcast if still active, MacGenius, Dev Tool Deep Dives)
+  - Indie-dev / developer-tool journalists (TechCrunch-lite tier: The Register
+    dev beats, MacStories, Daring Fireball quick-link)
+  - Smaller Mac-dev creators reviewing developer tools on YouTube / Bluesky
+  - Rust newsletter authors (This Week in Rust is step 12, but there are
+    several Substack-era Rust newsletters worth pinging)
+  - Target: 15–20 names + their contact channels (email or DM)
+  - Output: simple Google Sheet or local markdown — name, channel, why they'd
+    care, contact, sent/not-sent status
+
+- [ ] Check r/learnrust post state one final time (accept whatever it is)
+
+---
+
 ## Launch — Day 3 (Thu 2026-04-23)
 
-- [ ] 10. **r/tauri** — Tauri-dev framing, drafts at `specs/reddit-drafts.md`
-  - Different audience (Tauri devs, not Rust learners). Lead with stack + gotchas.
-  - Can reference r/learnrust thread as a trust signal if that post went well
+- [ ] 12. **r/tauri** — Tauri-dev framing, drafts at `specs/reddit-drafts.md`
+  - Tauri devs, not Rust learners. Lead with stack + gotchas.
+  - Small, permissive, showcase-friendly sub — Tier 3 in the reframe
+  - Target: ~9–10am ET; 4–6h at keyboard for comments after posting
+  - Can reference r/learnrust thread for continuity (not trust signal
+    if that post stayed quiet)
+
+- [ ] 13. **Send first 5–10 press / creator pitch emails** (parallel track)
+  - Short, personal, specific. Not a mass blast.
+  - Template: "I built X, I think it'd fit your [specific coverage / audience],
+    here's a DMG, here's why I thought you'd care specifically."
 
 ---
 
-## Launch — Day 4–5 (Fri–Sat 2026-04-24 to 25)
+## Launch — Day 4 (Fri 2026-04-24) — Ecosystem Carpet-Bomb
 
-- [ ] 11. **This Week in Rust** — submit to the newsletter at [this-week-in-rust.org](https://this-week-in-rust.org)
-  - They feature community projects. Very high signal for Rust developers.
+Multiple permissive venues in one day. Reuse r/tauri copy with tweaks for each.
+Low cognitive load per venue.
 
-- [ ] 12. **Rust Users Forum** — post at [users.rust-lang.org](https://users.rust-lang.org)
-  - Showcase category. More detailed write-up OK here.
+- [ ] 14. **This Week in Rust** submission — [this-week-in-rust.org](https://this-week-in-rust.org)
 
-- [ ] **Optional: small v0.3.7 release** — one commit, one tag, one GitHub release.
-  - Ideal content: fix or improvement from r/learnrust / r/tauri feedback (shows responsiveness). Fallback: extra template, shortcut, or polish item.
-  - Keeps the GitHub repo looking active ahead of r/rust (Mon) + Show HN (Tue). Dead-looking repos hurt trust.
-  - Full release flow: `NOTARIZE=1 ./scripts/build-editions.sh rust` → tag → push → gh release create. See `reference_release_checklist.md` memory.
+- [ ] 15. **Rust Users Forum** — Showcase category at [users.rust-lang.org](https://users.rust-lang.org). Detailed write-up OK here.
 
----
+- [ ] 16. **Tauri Discord / Zulip** — #showcase channel, short friendly announcement
 
-## Launch — Day 7 (Mon 2026-04-27)
+- [ ] 17. **dev.to article** — repurpose the origin-story blog post
+  (`docs/blog/why-i-built-this/index.html`). Canonical link back to
+  rustic-playground.app. Zero additional writing cost.
 
-- [ ] 13. **r/rust** — lead with screenshot, one-line pitch, link to website
-  - Title idea: *"I built a macOS playground for learning Rust, inspired by Swift Playgrounds"*
-  - Include: screenshot, website link, mention it's free + open source + MIT
-  - Link to r/learnrust and r/tauri threads + TWiR mention if all went well
-  - Don't link GitHub directly — link to rustic-playground.app
+- [ ] Follow up on first press/creator pitches; send second batch if needed
+
+- [ ] **Optional: small v0.3.7 release** (same as before, but lower priority
+  now that Show HN is the anchor). One commit, one tag, one GitHub release.
+  Shows repo activity ahead of HN. Skip if energy is needed elsewhere.
 
 ---
 
-## Launch — Day 8 (Tue 2026-04-28)
+## Launch — Day 5–6 (Sat–Sun 2026-04-25 to 26) — Rest / Buffer
 
-- [ ] 14. **Hacker News** — submit as Show HN (draft at `specs/show-hn-draft.md`)
-  - Title: *"Show HN: Rustic Playground – Swift Playgrounds, but for Rust"*
-  - HN likes: native apps, developer tools, thoughtful engineering
-  - Reference all prior community threads in the self-reply first comment
-
-- [ ] 15. **Twitter/X** — post with `#rustlang` hashtag and screenshot
+- [ ] Rest. Don't post anything new. Protect energy for Tuesday.
+- [ ] Optional: polish Show HN post (`specs/show-hn-draft.md`) — re-read aloud,
+  trim, tighten.
+- [ ] Optional: check email signups, respond to any outreach replies that came in
+- [ ] Optional: glance at Cloudflare dashboard for weekend traffic patterns
 
 ---
 
-## Post-launch
+## Launch — Day 7 (Mon 2026-04-27) — Show HN Prep Day
 
-- [ ] 16. Monitor GitHub Issues and Discussions for feedback
-- [ ] 17. Update r/rust link on website to point to actual post
-- [ ] 18. Iterate based on feedback — prioritize bugs, then feature requests
+- [ ] ~~18. r/rust~~ — **DROPPED.** Karma gap too large for a zero-history
+  account; would likely be mod-filtered or buried. Defer to Month 3+ after
+  genuine Rust community participation builds cred.
+
+- [ ] 18. **Final Show HN post polish** — re-read draft aloud, trim, tighten
+  - Title locked before posting (HN doesn't let you edit titles)
+  - Verify all links work, hero screenshot displays in HN preview
+  - Test the first-self-reply comment copy with ongoing community thread URLs
+
+- [ ] 19. **Verify launch-day assets** working
+  - rustic-playground.app loads fast
+  - DMG download link works
+  - Demo videos on site play correctly
+  - GitHub Discussions visible and welcoming
+
+- [ ] 20. **Prep "ask list"** — people to alert about the HN post after it goes live
+  - LinkedIn connections who engaged with launch-day post
+  - Tauri Discord / Rust Users Forum threads where you already posted
+  - Email list subscribers (if the list has anyone by Monday)
+
+---
+
+## Launch — Day 8 (Tue 2026-04-28) — THE ANCHOR DAY
+
+- [ ] 21. **Hacker News Show HN** (draft at `specs/show-hn-draft.md`)
+  - Target time: **8–10am ET** (peak HN traffic, most front-page activity)
+  - Title: *"Show HN: Rustic Playground — Swift Playgrounds, but for Rust"*
+  - Reference ongoing community threads in first self-reply comment
+  - **FULL-DAY COMMITMENT** — reply to every comment, stay engaged all day
+  - No multitasking. This is the day.
+
+- [ ] 22. **Amplify on LinkedIn** once HN post goes live (not before)
+  - Short post: "Launched on Show HN — [link]. Thoughts welcome."
+
+- [ ] 23. **Short announcement in Tauri Discord** with HN link
+
+- [ ] 24. **Email list subscribers** get a "Show HN is live" note (if list exists)
+
+- [ ] 25. **Twitter/X** — SKIP. You don't use it; forcing a tweet is
+  inauthentic and zero ROI without a following.
+
+---
+
+## Post-launch (Week 2+, 2026-04-29 onward)
+
+### Mon 2026-05-11 — Product Hunt launch (deferred from original plan)
+
+- [ ] Assemble PH assets — tagline, gallery images, demo video, first-comment
+  copy, tagline variations
+- [ ] Line up a hunter (established PH user to submit on your behalf; optional
+  but lifts ceiling)
+- [ ] Pre-launch notification list — email subs + LinkedIn + Tauri Discord
+- [ ] Launch day — full-day commitment, similar to Show HN
+
+### Ongoing — slow-burn infrastructure
+
+- [ ] **Blog cadence** on rustic-playground.app/blog — 1 post every 2-3 weeks
+  - Topic ideas: Tauri 2 gotchas (can repurpose r/tauri content), how Welcome
+    Wizard works, shipping notarized DMGs in 2026, the journey back to
+    hands-on coding after years of management
+- [ ] **Community participation** — pick ONE (Tauri Discord or Rust Zulip)
+  - Show up weekly, help newcomers, answer questions
+  - No self-promotion for first 2-3 months; build presence as a participant
+  - After 3 months: r/rust karma will be there + Lobsters invitation possible
+- [ ] **OSS contributions** — small PRs to Rust/Tauri ecosystem as you encounter
+  real bugs. Natural, not forced.
+
+### Post-launch monitoring
+
+- [ ] Monitor GitHub Issues + Discussions for feedback
+- [ ] Update rustic-playground.app links to point to HN / PH / active threads
+  as they land
+- [ ] Iterate on product based on feedback — prioritize bugs, then requests
+- [ ] Track in `project_launch_traction.md` memory: what channels drove what
+  traffic, which tactics produced what outcomes (this is the "testing for
+  future products" data)
 
 ---
 
