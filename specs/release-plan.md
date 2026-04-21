@@ -23,11 +23,12 @@
 
 ## Launch — Day 1 (Tue 2026-04-21)
 
-- [ ] 8. **r/learnrust** — learner-first framing, drafts at `specs/reddit-drafts.md`
+- [x] 8. **r/learnrust** — learner-first framing, drafts at `specs/reddit-drafts.md`
   - Emphasize: built-in Rust Book examples, no terminal required, Welcome Wizard
   - Lower-stakes dry run before the bigger subs
   - ~9–10am ET; stay at keyboard 4–6h for comments
   - Paste thread URL into the r/tauri and r/rust draft bodies
+  - **POSTED 2026-04-21:** https://www.reddit.com/r/learnrust/comments/1srp94a/built_a_macos_playground_app_while_learning_rust/
 
 ---
 
