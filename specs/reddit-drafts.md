@@ -44,8 +44,9 @@ So I built **Rustic Playground**, a macOS desktop app.
 **What it does:**
 - All 20 Rust Book chapters pre-loaded as read-only playgrounds — click to read the code, click "Copy to Project" to hack on your own version
 - Welcome Wizard sets up `rustup` for you on first launch (or repairs it if something's broken)
+- 11 starter templates when you want to build your own — from "Hello, world!" up to a full HTTP request (dependencies added automatically), plus a blank template when you want to start clean
 - Each playground is a real `.rs` file in a real Cargo project — so you're learning the actual toolchain, not a sandboxed imitation
-- Press ⌘R, stdout streams live in a panel below the editor
+- Press ⌘R, stdout streams live in a panel below the editor — edit, save, ⌘R, see output, iterate. No tab switching, no terminal context loss
 - Live error highlighting as you type, via `cargo check`
 
 **What it helps with:**
