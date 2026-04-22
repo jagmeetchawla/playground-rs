@@ -19,11 +19,50 @@
     })();
   </script>
 
+  <!-- Canonical -->
+  <link rel="canonical" href="https://rustic-playground.app/">
+
   <!-- Open Graph -->
   <meta property="og:title" content="Rustic Playground — The Rust Edition">
   <meta property="og:description" content="A macOS desktop app for learning Rust. Write code, press ⌘R, see output stream live.">
-  <meta property="og:image" content="images/screenshot-themes.png">
+  <meta property="og:image" content="https://rustic-playground.app/images/screenshot-themes.png">
+  <meta property="og:url" content="https://rustic-playground.app/">
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Rustic Playground">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Rustic Playground — The Rust Edition">
+  <meta name="twitter:description" content="A macOS desktop app for learning Rust. Write code, press ⌘R, see output stream live. Inspired by Swift Playgrounds.">
+  <meta name="twitter:image" content="https://rustic-playground.app/images/screenshot-themes.png">
+
+  <!-- Structured Data (Schema.org SoftwareApplication) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Rustic Playground",
+    "applicationCategory": "DeveloperApplication",
+    "applicationSubCategory": "Code Editor",
+    "operatingSystem": "macOS 12.0 or later",
+    "url": "https://rustic-playground.app/",
+    "downloadUrl": "https://github.com/jagmeetchawla/rustic-playground/releases/latest",
+    "softwareVersion": "0.3.6",
+    "description": "A macOS desktop app for learning Rust. Each project is a real Cargo package; each playground is a .rs file. Press ⌘R, see output stream live. No terminal required. Inspired by Swift Playgrounds.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "license": "https://opensource.org/licenses/MIT",
+    "author": {
+      "@type": "Person",
+      "name": "Jagmeet Chawla"
+    },
+    "image": "https://rustic-playground.app/images/screenshot-themes.png",
+    "screenshot": "https://rustic-playground.app/images/screenshot-rust.png"
+  }
+  </script>
 
   <style>
     /* ── Reset ── */
