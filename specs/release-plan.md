@@ -56,7 +56,20 @@ cred is built"* — the remainder of this week's plan is restructured:
 
 ---
 
-## Launch — Day 2 (Wed 2026-04-22) — Foundation
+## Schedule Slide — 2026-04-22
+
+Foundation work shifted from Wed 4/22 → Thu 4/23 (life). Cascading shift
+keeps Show HN anchored on Tue 4/28. r/tauri moves Thu → Fri; ecosystem
+carpet-bomb moves Fri → Sat (which actually aligns TWiR submission with
+its Tuesday issue cutoff — same-day amplification with Show HN).
+
+---
+
+## Launch — Day 2 (Thu 2026-04-23) — Foundation
+
+Three "owned channels" pillars: email capture, direct outreach list, SEO
+foundation. All foundational, all should be in place before Show HN traffic
+arrives Tuesday.
 
 - [ ] 10. **Set up email capture on rustic-playground.app** (~45 min)
   - Buttondown free tier (≤100 subscribers free, indie-friendly)
@@ -78,11 +91,37 @@ cred is built"* — the remainder of this week's plan is restructured:
   - Output: simple Google Sheet or local markdown — name, channel, why they'd
     care, contact, sent/not-sent status
 
+- [ ] 11a. **SEO foundation for rustic-playground.app** (~1h technical + 30 min submissions)
+  - **Why now:** Google isn't finding the site. New domains hit a "sandbox"
+    effect (2-4 weeks minimum natural indexing); without Search Console
+    submission and proper crawl guidance, that window stretches longer. Show
+    HN spike will drive traffic; long-tail SEO captures the trickle that
+    follows for months/years.
+  - **Technical pieces** (can be done in this session — Claude implements):
+    - [ ] Create `docs/robots.txt` — explicit crawl guidance, points to sitemap
+    - [ ] Create `docs/sitemap.xml` — lists home + blog post + future pages
+    - [ ] Add `<link rel="canonical">` to home page meta
+    - [ ] Add Twitter card meta tags (`twitter:card`, `twitter:title`, etc.) to
+      both home and blog
+    - [ ] Add JSON-LD structured data (Schema.org `SoftwareApplication`) to home
+      page — helps Google understand what the page IS (a downloadable Mac app)
+  - **Submissions** (require user action — Google + Microsoft accounts):
+    - [ ] Submit to Google Search Console at [search.google.com/search-console](https://search.google.com/search-console)
+      - Add property `rustic-playground.app`
+      - Verify ownership (TXT record at Namecheap OR HTML file upload)
+      - Submit sitemap once verified
+    - [ ] Submit to Bing Webmaster Tools at [bing.com/webmasters](https://www.bing.com/webmasters)
+      - Same flow; Bing covers Bing + DuckDuckGo + ~10% of US searches
+  - **Quick wins for backlinks** (low effort, high SEO value):
+    - [ ] Add a one-line "Featured in" block to README.md if/when posts go up
+    - [ ] Make sure GitHub README links to rustic-playground.app prominently
+    - [ ] dev.to article (Friday's task) — adds quality backlink
+
 - [ ] Check r/learnrust post state one final time (accept whatever it is)
 
 ---
 
-## Launch — Day 3 (Thu 2026-04-23)
+## Launch — Day 3 (Fri 2026-04-24)
 
 - [ ] 12. **r/tauri** — Tauri-dev framing, drafts at `specs/reddit-drafts.md`
   - Tauri devs, not Rust learners. Lead with stack + gotchas.
@@ -98,12 +137,16 @@ cred is built"* — the remainder of this week's plan is restructured:
 
 ---
 
-## Launch — Day 4 (Fri 2026-04-24) — Ecosystem Carpet-Bomb
+## Launch — Day 4 (Sat 2026-04-25) — Ecosystem Carpet-Bomb
 
 Multiple permissive venues in one day. Reuse r/tauri copy with tweaks for each.
-Low cognitive load per venue.
+Low cognitive load per venue. Saturday timing is mostly submission-style work
+(not heavy posting), and **TWiR submission Saturday lands in the Tuesday 4/28
+issue — same-day amplification with Show HN.**
 
 - [ ] 14. **This Week in Rust** submission — [this-week-in-rust.org](https://this-week-in-rust.org)
+  - **Critical timing:** Sat submission = Tue 4/28 issue = same-day boost as Show HN
+  - Don't miss the Sun deadline
 
 - [ ] 15. **Rust Users Forum** — Showcase category at [users.rust-lang.org](https://users.rust-lang.org). Detailed write-up OK here.
 
@@ -121,7 +164,7 @@ Low cognitive load per venue.
 
 ---
 
-## Launch — Day 5–6 (Sat–Sun 2026-04-25 to 26) — Rest / Buffer
+## Launch — Day 5 (Sun 2026-04-26) — Rest / Buffer
 
 - [ ] Rest. Don't post anything new. Protect energy for Tuesday.
 - [ ] Optional: polish Show HN post (`specs/show-hn-draft.md`) — re-read aloud,
@@ -131,7 +174,7 @@ Low cognitive load per venue.
 
 ---
 
-## Launch — Day 7 (Mon 2026-04-27) — Show HN Prep Day
+## Launch — Day 6 (Mon 2026-04-27) — Show HN Prep Day
 
 - [ ] ~~18. r/rust~~ — **DROPPED.** Karma gap too large for a zero-history
   account; would likely be mod-filtered or buried. Defer to Month 3+ after
@@ -155,7 +198,7 @@ Low cognitive load per venue.
 
 ---
 
-## Launch — Day 8 (Tue 2026-04-28) — THE ANCHOR DAY
+## Launch — Day 7 (Tue 2026-04-28) — THE ANCHOR DAY
 
 - [ ] 21. **Hacker News Show HN** (draft at `specs/show-hn-draft.md`)
   - Target time: **8–10am ET** (peak HN traffic, most front-page activity)
