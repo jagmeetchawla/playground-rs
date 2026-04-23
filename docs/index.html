@@ -571,6 +571,67 @@
     }
 
     /* ── Community ── */
+    /* ── Newsletter signup (Buttondown) ── */
+    .newsletter-signup {
+      max-width: 480px;
+      margin: 0 auto 32px;
+      text-align: center;
+    }
+    .newsletter-tagline {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+    .newsletter-form {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .newsletter-form input[type="email"] {
+      flex: 1; min-width: 200px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      transition: border-color 0.15s;
+    }
+    .newsletter-form input[type="email"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .newsletter-form input[type="email"]::placeholder {
+      color: var(--text-tertiary);
+    }
+    .newsletter-form button[type="submit"] {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 15px; font-weight: 600;
+      padding: 12px 24px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .newsletter-form button[type="submit"]:hover {
+      background: var(--accent-light);
+    }
+    .newsletter-fineprint {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 10px;
+    }
+    .newsletter-fineprint a {
+      color: var(--text-tertiary);
+      text-decoration: underline;
+      text-decoration-color: var(--text-tertiary);
+    }
+    .newsletter-fineprint a:hover {
+      color: var(--text-secondary);
+    }
+
     .community-links {
       margin-top: 20px;
     }
@@ -1230,6 +1291,16 @@
           <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           View Source
         </a>
+      </div>
+      <div class="newsletter-signup">
+        <p class="newsletter-tagline">Get occasional updates &mdash; and be first to know when Rustic Zig ships.</p>
+        <form action="https://buttondown.com/api/emails/embed-subscribe/jagmeetchawla"
+              method="post"
+              class="newsletter-form">
+          <input type="email" name="email" placeholder="you@example.com" required aria-label="Email address">
+          <button type="submit">Subscribe</button>
+        </form>
+        <p class="newsletter-fineprint">No spam. Unsubscribe anytime. Powered by <a href="https://buttondown.com/refer/jagmeetchawla" target="_blank" rel="noopener">Buttondown</a>.</p>
       </div>
       <div class="community-links">
         <p>Enjoy Rustic Playground? <a href="https://github.com/jagmeetchawla/rustic-playground">Star it on GitHub</a>, join the <a href="https://discord.gg/AqPUgNfb">Discord community</a>, or jump in on <a href="https://www.reddit.com/r/rust/">r/rust</a>.</p>
