@@ -878,7 +878,7 @@
           <a href="#features" class="nav-link-text">Features</a>
           <a href="#how-it-works" class="nav-link-text">How It Works</a>
           <a href="#support" class="nav-link-text">Support</a>
-          <a href="blog/why-i-built-this/" class="nav-link-text">Blog</a>
+          <a href="https://jagmeet.dev/blog/" class="nav-link-text ext-blog-link-index">Blog</a>
           <a href="https://github.com/jagmeetchawla/rustic-playground" class="nav-link-text">GitHub</a>
           <div class="site-theme-toggle">
             <button class="site-theme-btn" data-set-theme="dark" title="Dark theme">Dark</button>
@@ -902,7 +902,7 @@
 
   <!-- ── Hero ── -->
   <section class="hero">
-    <a href="blog/why-i-built-this/" style="display: inline-block; font-size: 13px; font-weight: 500; color: var(--accent-light); margin-bottom: 24px; padding: 6px 14px; border: 1px solid color-mix(in srgb, var(--accent-light) 30%, transparent); border-radius: 999px; background: var(--accent-glow); transition: all 0.15s;">
+    <a href="https://jagmeet.dev/blog/why-i-built-rustic-playground/" class="ext-blog-link-post" style="display: inline-block; font-size: 13px; font-weight: 500; color: var(--accent-light); margin-bottom: 24px; padding: 6px 14px; border: 1px solid color-mix(in srgb, var(--accent-light) 30%, transparent); border-radius: 999px; background: var(--accent-glow); transition: all 0.15s;">
       New &middot; Why I built Rustic Playground &rarr;
     </a>
     <img class="hero-icon" src="images/app-icon.png?v=0.3.6" alt="Rustic Playground icon">
@@ -1245,7 +1245,7 @@
         Rustic Playground &mdash; MIT License
       </div>
       <div class="footer-links">
-        <a href="blog/why-i-built-this/">Blog</a>
+        <a href="https://jagmeet.dev/blog/" class="ext-blog-link-index">Blog</a>
         <a href="https://github.com/jagmeetchawla/rustic-playground">GitHub</a>
         <a href="https://github.com/jagmeetchawla/rustic-playground/releases">Releases</a>
         <a href="https://github.com/jagmeetchawla/rustic-playground/issues">Issues</a>
@@ -1275,6 +1275,18 @@
       localStorage.setItem('site-theme', theme);
       document.querySelectorAll('.site-theme-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.setTheme === theme);
+      });
+      updateExternalBlogLinks();
+    }
+    // Pass current --bg color to jagmeet.dev so the external blog visually integrates
+    function updateExternalBlogLinks() {
+      const bg = getComputedStyle(document.body).getPropertyValue('--bg').trim();
+      const bgParam = encodeURIComponent(bg);
+      document.querySelectorAll('a.ext-blog-link-index').forEach(a => {
+        a.href = `https://jagmeet.dev/blog/?bg=${bgParam}`;
+      });
+      document.querySelectorAll('a.ext-blog-link-post').forEach(a => {
+        a.href = `https://jagmeet.dev/blog/why-i-built-rustic-playground/?bg=${bgParam}`;
       });
     }
     // Sync button state with theme set by head script, then wire up clicks
