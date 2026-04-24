@@ -56,12 +56,24 @@ cred is built"* — the remainder of this week's plan is restructured:
 
 ---
 
-## Schedule Slide — 2026-04-22
+## Schedule Slide — 2026-04-22 (original) + 2026-04-24 (full-week push)
 
-Foundation work shifted from Wed 4/22 → Thu 4/23 (life). Cascading shift
-keeps Show HN anchored on Tue 4/28. r/tauri moves Thu → Fri; ecosystem
-carpet-bomb moves Fri → Sat (which actually aligns TWiR submission with
-its Tuesday issue cutoff — same-day amplification with Show HN).
+**2026-04-22:** Foundation work shifted from Wed 4/22 → Thu 4/23 (life).
+
+**2026-04-24 (this revision):** Full +1 week push. Personal-life load made
+it the wrong week to launch. No change to the sequence or content — just
+dates. Foundation work (done 4/23) carries forward. Everything from
+r/tauri onward shifts by exactly 7 days:
+
+- r/tauri: Fri 4/24 → **Fri 5/1**
+- Ecosystem carpet-bomb: Sat 4/25 → **Sat 5/2**
+- Rest: Sun 4/26 → **Sun 5/3**
+- HN prep: Mon 4/27 → **Mon 5/4**
+- Show HN anchor: Tue 4/28 → **Tue 5/5**
+- Product Hunt: Mon 5/11 → **Mon 5/18**
+
+TWiR-with-HN timing alignment still works (Sat 5/2 submission → Tue 5/5
+issue → same-day amplification with Show HN).
 
 ---
 
@@ -121,7 +133,7 @@ arrives Tuesday.
 
 ---
 
-## Launch — Day 3 (Fri 2026-04-24)
+## Launch — Day 3 (Fri 2026-05-01)
 
 - [ ] 12. **r/tauri** — Tauri-dev framing, drafts at `specs/reddit-drafts.md`
   - Tauri devs, not Rust learners. Lead with stack + gotchas.
@@ -137,11 +149,11 @@ arrives Tuesday.
 
 ---
 
-## Launch — Day 4 (Sat 2026-04-25) — Ecosystem Carpet-Bomb
+## Launch — Day 4 (Sat 2026-05-02) — Ecosystem Carpet-Bomb
 
 Multiple permissive venues in one day. Reuse r/tauri copy with tweaks for each.
 Low cognitive load per venue. Saturday timing is mostly submission-style work
-(not heavy posting), and **TWiR submission Saturday lands in the Tuesday 4/28
+(not heavy posting), and **TWiR submission Saturday lands in the Tuesday 5/5
 issue — same-day amplification with Show HN.**
 
 - [ ] 14. **This Week in Rust** submission — [this-week-in-rust.org](https://this-week-in-rust.org)
@@ -164,7 +176,7 @@ issue — same-day amplification with Show HN.**
 
 ---
 
-## Launch — Day 5 (Sun 2026-04-26) — Rest / Buffer
+## Launch — Day 5 (Sun 2026-05-03) — Rest / Buffer
 
 - [ ] Rest. Don't post anything new. Protect energy for Tuesday.
 - [ ] Optional: polish Show HN post (`specs/show-hn-draft.md`) — re-read aloud,
@@ -174,7 +186,7 @@ issue — same-day amplification with Show HN.**
 
 ---
 
-## Launch — Day 6 (Mon 2026-04-27) — Show HN Prep Day
+## Launch — Day 6 (Mon 2026-05-04) — Show HN Prep Day
 
 - [ ] ~~18. r/rust~~ — **DROPPED.** Karma gap too large for a zero-history
   account; would likely be mod-filtered or buried. Defer to Month 3+ after
@@ -198,7 +210,7 @@ issue — same-day amplification with Show HN.**
 
 ---
 
-## Launch — Day 7 (Tue 2026-04-28) — THE ANCHOR DAY
+## Launch — Day 7 (Tue 2026-05-05) — THE ANCHOR DAY
 
 - [ ] 21. **Hacker News Show HN** (draft at `specs/show-hn-draft.md`)
   - Target time: **8–10am ET** (peak HN traffic, most front-page activity)
@@ -221,7 +233,7 @@ issue — same-day amplification with Show HN.**
 
 ## Post-launch (Week 2+, 2026-04-29 onward)
 
-### Mon 2026-05-11 — Product Hunt launch (deferred from original plan)
+### Mon 2026-05-18 — Product Hunt launch
 
 - [ ] Assemble PH assets — tagline, gallery images, demo video, first-comment
   copy, tagline variations
