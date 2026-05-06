@@ -60,7 +60,7 @@ So I built **Rustic Playground**, a macOS desktop app.
 - Not a replacement for terminal skills you'll need eventually — the goal is to let you focus on Rust concepts first, and pick up the rest of the workflow later
 - No ads, no donation nags, no account sign-up. MIT/Apache-2.0, and staying that way.
 
-Free, open source, signed + notarized DMG: https://rustic-playground.app
+Free, open source, signed + notarized DMG: https://rusticplayground.dev
 
 Two small asks if you find it valuable:
 
@@ -135,7 +135,7 @@ Hey r/tauri — shipped my first real Tauri 2 app and wanted to share the stack 
 - Better upfront docs on the capabilities list — it's long and mostly copy-paste from examples
 - A standard pattern for post-build DMG modification (I wrote my own volume-icon-strip + re-sign + notarize + staple script)
 
-Free, open source (MIT/Apache-2.0): https://rustic-playground.app
+Free, open source (MIT/Apache-2.0): https://rusticplayground.dev
 Source: https://github.com/jagmeetchawla/rustic-playground
 
 Happy to talk about any of the above — the build pipeline, the process-tree kill dance, the capabilities rabbit hole, or why Rust + agentic dev turned out to pair surprisingly well.
@@ -194,7 +194,7 @@ Hey r/rust — I'm Jagmeet, solo dev on Rustic Playground.
 
 **Stack:** Tauri 2 + Svelte 5 + Monaco + Rust backend. macOS-only on purpose — I'd rather one platform be excellent than three mediocre.
 
-Free, open source (MIT/Apache-2.0): https://rustic-playground.app
+Free, open source (MIT/Apache-2.0): https://rusticplayground.dev
 
 Also got good feedback on r/learnrust earlier this week: [PASTE r/learnrust THREAD URL AFTER MONDAY'S POST]
 
@@ -225,7 +225,7 @@ Happy to answer questions about the Tauri build, how the book examples are shipp
 ## Posting checklist (Tuesday, r/learnrust)
 
 - [ ] Verify r/learnrust current rules (wiki + sidebar)
-- [ ] Hero screenshot ready (preferably the one from rustic-playground.app homepage)
+- [ ] Hero screenshot ready (preferably the one from rusticplayground.dev homepage)
 - [ ] Flair selected correctly
 - [ ] Post title matches current convention (check recent top posts in the sub)
 - [ ] Fresh browser session logged into Reddit account

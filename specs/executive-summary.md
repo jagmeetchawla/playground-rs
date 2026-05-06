@@ -97,7 +97,7 @@ The web playground is perfect for "try this snippet." Rustic Playground is for w
 - **License:** MIT / Apache-2.0
 - **Tech stack:** Tauri 2 · Svelte 5 (runes) · Monaco editor · Rust backend (~1,500 lines)
 - **Minimum OS:** macOS 12 (Monterey) on Apple Silicon
-- **Distribution:** Direct download from [rustic-playground.app](https://rustic-playground.app) → GitHub Releases; update checker via GitHub Releases API
+- **Distribution:** Direct download from [rusticplayground.dev](https://rusticplayground.dev) → GitHub Releases; update checker via GitHub Releases API
 - **Release cadence:** ~monthly since v0.1.7 (Feb 2026)
 - **Discord community:** live, with Discord invite in app + site
 
@@ -133,10 +133,10 @@ Built with substantial help from Claude Code (Anthropic) during a sabbatical —
 
 Rustic Playground is free and open source. If you find it valuable:
 
-1. **Try it.** Download at [rustic-playground.app](https://rustic-playground.app)
+1. **Try it.** Download at [rusticplayground.dev](https://rusticplayground.dev)
 2. **Share feedback.** What features would you like to see? What tripped you up?
    - [GitHub Issues](https://github.com/jagmeetchawla/rustic-playground/issues)
-   - [Discord community](https://rustic-playground.app) (link in app + site)
+   - [Discord community](https://rusticplayground.dev) (link in app + site)
 3. **Star the repo** on [GitHub](https://github.com/jagmeetchawla/rustic-playground) — visibility helps reach more learners.
 
 ---

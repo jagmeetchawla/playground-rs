@@ -28,7 +28,7 @@ v0.3 — Language Module Architecture + Zig & Swift Support
   13. Apple's Swift Programming Language book examples (8 chapters, 14 playgrounds)
   14. Dynamic Help menu: book items generated from language modules
 
-  After v0.3: website (rustic-playground.app), DMG distribution, wiki, announcements.
+  After v0.3: website (rusticplayground.dev), DMG distribution, wiki, announcements.
   Website/FAQ/wiki content source: HelpModal.svelte (Apple-style user guide).
   When building the website: extract HelpModal content into shared markdown files that
   both the Svelte app and the static site generator consume. Until then, HelpModal.svelte
@@ -99,7 +99,7 @@ Rustic Zig — The second (and final) edition
     - How does a Rustic Zig DMG coexist with Rustic Rust? Same user, two
       apps? Unified "Rustic" app with edition picker? Probably two apps,
       matching current model.
-    - Website: separate rustic-playground.app/zig page, or its own domain?
+    - Website: separate rusticplayground.dev/zig page, or its own domain?
     - Distribution: follow same launch playbook (LinkedIn → r/Zig →
       Ziggit → Zig Zulip → Show HN) or adapt.
 
@@ -186,7 +186,7 @@ Distribution & Launch (post v0.3.4)
   - Build DMGs via scripts/build-editions.sh (Rust Edition + Power Edition)
   - Code-sign + notarize DMGs (macOS Gatekeeper requirement)
   - GitHub Releases: upload DMGs as v0.3.4 release assets
-  - Website launch: rustic-playground.app on GitHub Pages
+  - Website launch: rusticplayground.dev on GitHub Pages
   - Website videos (2026-04-12): 5 Focusee screen recordings (30-45s each)
     for the "How it works" section. One video per step:
       1. Create a project
@@ -218,7 +218,7 @@ Distribution & Launch (post v0.3.4)
           GitHub account + OAuth flow, gists are public or require paid GitHub.
       (b) Custom share service — lightweight API (e.g. Cloudflare Workers +
           KV store) that accepts code payloads, returns a short URL like
-          rustic-playground.app/s/<id>. Pros: branded, no GitHub dependency,
+          rusticplayground.dev/s/<id>. Pros: branded, no GitHub dependency,
           can add features (expiry, edit, fork). Cons: we run a service, need
           abuse controls, storage costs.
       (c) iCloud-backed sharing — store shared snippets in the user's iCloud
@@ -226,7 +226,7 @@ Distribution & Launch (post v0.3.4)
           accounts, Apple-native. Cons: recipient needs iCloud, complex API,
           CloudKit sharing is designed for collaboration not public links.
       (d) URL-encoded (no backend) — compress code with gzip, base64-encode,
-          embed in URL fragment: rustic-playground.app/share#<payload>. Website
+          embed in URL fragment: rusticplayground.dev/share#<payload>. Website
           decodes and renders. Pros: zero infrastructure, truly permanent (it's
           in the URL). Cons: URL length limits (~2000 chars safe, ~8000 max in
           modern browsers), won't work for large playgrounds, ugly URLs.
@@ -244,7 +244,7 @@ Distribution & Launch (post v0.3.4)
          how it will look to recipients
 
     Receive flow (website):
-      • rustic-playground.app/share#<payload> or /s/<id>
+      • rusticplayground.dev/share#<payload> or /s/<id>
       • Website renders the code with syntax highlighting (Monaco or Prism.js)
       • "Open in Rustic Playground" button (deep link via custom URL scheme)
       • "Copy Code" button for users without the app
@@ -309,8 +309,8 @@ Distribution & Launch (post v0.3.4)
         src/bin/*.rs, content/*) stored server-side. NOT build artifacts.
       • User accounts — at minimum, identify who owns a project. Could
         piggyback on GitHub OAuth (same as Gist sharing) or Apple Sign In.
-      • Project URLs — rustic-playground.app/p/<owner>/<project> or
-        rustic-playground.app/p/<short-id>
+      • Project URLs — rusticplayground.dev/p/<owner>/<project> or
+        rusticplayground.dev/p/<short-id>
       • Access control — public (anyone can view/fork), unlisted (link-only),
         private (owner only). Start with public + unlisted.
       • Forking — "Fork to My Projects" downloads the cloud project into
@@ -362,7 +362,7 @@ Distribution & Launch (post v0.3.4)
       7. Updates: "Update Published Project" pushes latest local state
 
     UX flow — consuming:
-      1. Recipient clicks rustic-playground.app/p/<owner>/<project>
+      1. Recipient clicks rusticplayground.dev/p/<owner>/<project>
       2. Website renders: project overview, playground list, code preview
       3. "Open in Rustic Playground" button (deep link → app imports project)
       4. "Fork to My Projects" button (downloads as new local project)

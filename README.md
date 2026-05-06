@@ -9,7 +9,7 @@
   <br><br>
   Built with <a href="https://www.rust-lang.org">Rust</a> + <a href="https://tauri.app">Tauri 2</a> + <a href="https://svelte.dev">Svelte 5</a> + <a href="https://microsoft.github.io/monaco-editor/">Monaco Editor</a>.
   <br><br>
-  <a href="https://rustic-playground.app">Website</a> ·
+  <a href="https://rusticplayground.dev">Website</a> ·
   <a href="https://discord.gg/AqPUgNfb">Discord</a> ·
   <a href="https://github.com/jagmeetchawla/rustic-playground/releases">Releases</a>
   <br><br>

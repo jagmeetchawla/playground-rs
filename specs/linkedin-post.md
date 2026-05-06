@@ -25,14 +25,14 @@ If you go with A, visitors see "Rustic Playground" in the first 3 words — usef
 ### Featured section
 Pin 1–2 items at the top of your profile:
 
-1. **Primary pin:** Link to `rustic-playground.app` — LinkedIn will auto-fetch the OG image (hero icon + title). Add caption: *"Rustic Playground — Swift Playgrounds for Rust, on macOS."*
+1. **Primary pin:** Link to `rusticplayground.dev` — LinkedIn will auto-fetch the OG image (hero icon + title). Add caption: *"Rustic Playground — Swift Playgrounds for Rust, on macOS."*
 
-2. **Secondary pin (optional):** The blog post `rustic-playground.app/blog/why-i-built-this/`. Caption: *"Why I built it — origin story."*
+2. **Secondary pin (optional):** The blog post `jagmeet.dev/blog/why-i-built-rustic-playground/`. Caption: *"Why I built it — origin story."*
 
 ### About section
 Keep it close to what you have; add a single line near the end:
 
-> *Currently building [Rustic Playground](https://rustic-playground.app) — a macOS desktop app for learning Rust, inspired by Swift Playgrounds.*
+> *Currently building [Rustic Playground](https://rusticplayground.dev) — a macOS desktop app for learning Rust, inspired by Swift Playgrounds.*
 
 Don't rewrite the whole About. Minimal edit keeps it genuine.
 
@@ -43,7 +43,7 @@ Don't rewrite the whole About. Minimal edit keeps it genuine.
 Post this ~30 min before the r/learnrust post goes up. Reason: if the Reddit post sends traffic to your LinkedIn, the newest thing on your activity feed is the launch, not whatever was there from months ago.
 
 ### Visual
-Attach the hero screenshot from `rustic-playground.app`. LinkedIn rewards image-heavy posts algorithmically.
+Attach the hero screenshot from `rusticplayground.dev`. LinkedIn rewards image-heavy posts algorithmically.
 
 ### Body (~220 words)
 
@@ -59,10 +59,10 @@ macOS-only on purpose — rather one platform be excellent than three mediocre.
 One thing I didn't expect: Rust + AI-assisted dev (Claude Code) turned out to pair surprisingly well. The compiler's strictness catches a class of AI slip-ups before they ever run.
 
 Free, open source, signed + notarized:
-→ https://rustic-playground.app
+→ https://rusticplayground.dev
 
 Full origin story (why now, why macOS, what I learned):
-→ https://rustic-playground.app/blog/why-i-built-this/
+→ https://jagmeet.dev/blog/why-i-built-rustic-playground/
 
 If you're learning Rust on a Mac, I'd love for you to try it. Feedback and feature requests welcome.
 

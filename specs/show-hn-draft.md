@@ -19,7 +19,7 @@ HN cap is 80 chars; this leaves room. The "Swift Playgrounds for Rust" framing i
 
 Rustic Playground is a macOS desktop app for learning Rust — written because the Rust Book experience was a constant shuttle between terminal, editor, and terminal. Each project is a real Cargo package; each playground is a `.rs` file with its own `fn main()`. Press ⌘R, stdout/stderr streams live. No terminal required, but the toolchain isn't hidden — it's just `cargo` underneath.
 
-The closest I'd had to "fun while learning a language" was Swift Playgrounds back in 2015, so I built the same shape for Rust. Full origin story: https://rustic-playground.app/blog/why-i-built-this/
+The closest I'd had to "fun while learning a language" was Swift Playgrounds back in 2015, so I built the same shape for Rust. Full origin story: https://jagmeet.dev/blog/why-i-built-rustic-playground/
 
 Positioning: meant as a **complement** to play.rust-lang.org, not a replacement. The web playground is perfect for "try this snippet." Rustic Playground is for working through The Book, keeping your experiments, and building multi-file projects locally.
 
@@ -31,7 +31,7 @@ What's in it:
 
 macOS-only on purpose — Linux/Windows GUI ports are parked. Target audience is learners; rather one platform be excellent than three mediocre.
 
-Download + source: https://rustic-playground.app
+Download + source: https://rusticplayground.dev
 
 Happy to answer questions on the Tauri stack, the book-examples pipeline, or why Rust + agentic dev turned out to be a surprisingly good pairing.
 

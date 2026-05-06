@@ -9,8 +9,8 @@
 - [ ] 3. Upload DMG to GitHub Releases with release notes
 - [ ] 4. Enable GitHub Discussions in repo settings (Settings → General → Features → Discussions)
 - [ ] 5. Configure GitHub Pages (Settings → Pages → Source: main branch, /docs folder)
-- [ ] 6. Set up DNS for rustic-playground.app → GitHub Pages
-- [ ] 7. Verify website is live at rustic-playground.app
+- [ ] 6. Set up DNS for rusticplayground.dev → GitHub Pages
+- [ ] 7. Verify website is live at rusticplayground.dev
 
 ---
 
@@ -83,7 +83,7 @@ Three "owned channels" pillars: email capture, direct outreach list, SEO
 foundation. All foundational, all should be in place before Show HN traffic
 arrives Tuesday.
 
-- [ ] 10. **Set up email capture on rustic-playground.app** (~45 min)
+- [ ] 10. **Set up email capture on rusticplayground.dev** (~45 min)
   - Buttondown free tier (≤100 subscribers free, indie-friendly)
   - Add signup form to `docs/index.html` — likely near the hero CTA or footer
   - Two frames: *"Notify me of Rustic Playground updates"* + *"Be first to know
@@ -103,7 +103,7 @@ arrives Tuesday.
   - Output: simple Google Sheet or local markdown — name, channel, why they'd
     care, contact, sent/not-sent status
 
-- [ ] 11a. **SEO foundation for rustic-playground.app** (~1h technical + 30 min submissions)
+- [ ] 11a. **SEO foundation for rusticplayground.dev** (~1h technical + 30 min submissions)
   - **Why now:** Google isn't finding the site. New domains hit a "sandbox"
     effect (2-4 weeks minimum natural indexing); without Search Console
     submission and proper crawl guidance, that window stretches longer. Show
@@ -119,14 +119,14 @@ arrives Tuesday.
       page — helps Google understand what the page IS (a downloadable Mac app)
   - **Submissions** (require user action — Google + Microsoft accounts):
     - [ ] Submit to Google Search Console at [search.google.com/search-console](https://search.google.com/search-console)
-      - Add property `rustic-playground.app`
+      - Add property `rusticplayground.dev`
       - Verify ownership (TXT record at Namecheap OR HTML file upload)
       - Submit sitemap once verified
     - [ ] Submit to Bing Webmaster Tools at [bing.com/webmasters](https://www.bing.com/webmasters)
       - Same flow; Bing covers Bing + DuckDuckGo + ~10% of US searches
   - **Quick wins for backlinks** (low effort, high SEO value):
     - [ ] Add a one-line "Featured in" block to README.md if/when posts go up
-    - [ ] Make sure GitHub README links to rustic-playground.app prominently
+    - [ ] Make sure GitHub README links to rusticplayground.dev prominently
     - [ ] dev.to article (Friday's task) — adds quality backlink
 
 - [ ] Check r/learnrust post state one final time (accept whatever it is)
@@ -166,7 +166,7 @@ issue — same-day amplification with Show HN.**
 
 - [ ] 17. **dev.to article** — repurpose the origin-story blog post
   (`docs/blog/why-i-built-this/index.html`). Canonical link back to
-  rustic-playground.app. Zero additional writing cost.
+  rusticplayground.dev. Zero additional writing cost.
 
 - [ ] Follow up on first press/creator pitches; send second batch if needed
 
@@ -198,7 +198,7 @@ issue — same-day amplification with Show HN.**
   - Test the first-self-reply comment copy with ongoing community thread URLs
 
 - [ ] 19. **Verify launch-day assets** working
-  - rustic-playground.app loads fast
+  - rusticplayground.dev loads fast
   - DMG download link works
   - Demo videos on site play correctly
   - GitHub Discussions visible and welcoming
@@ -244,7 +244,7 @@ issue — same-day amplification with Show HN.**
 
 ### Ongoing — slow-burn infrastructure
 
-- [ ] **Blog cadence** on rustic-playground.app/blog — 1 post every 2-3 weeks
+- [ ] **Blog cadence** on jagmeet.dev/blog — 1 post every 2-3 weeks
   - Topic ideas: Tauri 2 gotchas (can repurpose r/tauri content), how Welcome
     Wizard works, shipping notarized DMGs in 2026, the journey back to
     hands-on coding after years of management
@@ -258,7 +258,7 @@ issue — same-day amplification with Show HN.**
 ### Post-launch monitoring
 
 - [ ] Monitor GitHub Issues + Discussions for feedback
-- [ ] Update rustic-playground.app links to point to HN / PH / active threads
+- [ ] Update rusticplayground.dev links to point to HN / PH / active threads
   as they land
 - [ ] Iterate on product based on feedback — prioritize bugs, then requests
 - [ ] Track in `project_launch_traction.md` memory: what channels drove what

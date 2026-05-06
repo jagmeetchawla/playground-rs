@@ -195,7 +195,7 @@ a distinct audience slice. Some examples, in rough priority order:
 - **This Week in Rust mentions** — one-time announcement post is the
   ceiling; ongoing mentions happen naturally if users star/fork.
 
-- **Blog cadence on rustic-playground.app/blog** — 1 post per 2–3
+- **Blog cadence on jagmeet.dev/blog** — 1 post per 2–3
   weeks keeps the site "alive" for SEO + gives you something to link to.
   Post ideas: "gotchas building a Tauri 2 app", "how the Welcome Wizard
   works", "shipping a code-signed + notarized macOS DMG in 2026".
