@@ -17,6 +17,7 @@
   import NewPlaygroundModal from './lib/NewPlaygroundModal.svelte'
   import ToolchainWizard from './lib/ToolchainWizard.svelte'
   import ToolchainFixWizard from './lib/ToolchainFixWizard.svelte'
+  import ToolchainPicker from './lib/ToolchainPicker.svelte'
   import CopyToProjectModal from './lib/CopyToProjectModal.svelte'
   import type { Settings } from './lib/SettingsModal.svelte'
   import type { Template } from './lib/templates'
@@ -184,6 +185,14 @@
   let showWizard:      boolean       = $state(false)
   let wizardMode:      'wizard' | 'settings' = $state('wizard')
   let showFixWizard:   boolean       = $state(false)
+  // v0.4+: Install Toolchain dialog — null = closed, string = preferred version
+  // to pre-fill (from the "install newer stable?" hint), '' = open with no
+  // preference. Task 8 will implement the dialog component; this is the state.
+  let showInstallToolchain: string | null = $state(null)
+  // v0.4+: absolute path to the active project directory. Passed to
+  // ToolchainPicker so it can write rust-toolchain.toml when the user
+  // switches. Recomputed via $effect when activeProject changes.
+  let activeProjectPath: string | null = $state(null)
   // Bumped after a successful in-app toolchain fix so the underlying
   // Settings/Wizard Toolchains panel re-runs check_toolchain.
   let toolchainRefreshKey = $state(0)
@@ -533,7 +542,29 @@
     cargoToml   = projectType === 'rust'
       ? await invoke<string>('get_cargo_toml').catch(() => '')
       : ''
+    // v0.4+: keep activeProjectPath in sync for the ToolchainPicker so it
+    // can write rust-toolchain.toml when the user switches toolchain.
+    activeProjectPath = await invoke<string>('workspace_path').catch(() => null)
     await refreshProjectTypes()
+  }
+
+  // v0.4+: shared refresh triggered after a toolchain switch (via the picker)
+  // or fix (via ToolchainFixWizard). Re-runs check_toolchain and updates the
+  // fields that drive the pill display so the UI reflects the new state
+  // immediately.
+  async function refreshToolchainInfo() {
+    try {
+      const tc = await invoke<any>('check_toolchain')
+      if (tc.rust_state) rustState = tc.rust_state
+      const baseInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+      toolchainInfo = {
+        ...toolchainInfo,
+        ...baseInfo,
+        version_ok: tc.rustc?.version_ok ?? true,
+        min_version: tc.rustc?.min_version ?? '1.85.0',
+      }
+    } catch {}
+    toolchainRefreshKey++
   }
 
   async function refreshProjectTypes() {
@@ -1256,12 +1287,13 @@
         bind:pendingMode={switcherPendingMode}
       />
 
-      <button
-        class="toolchain-info"
-        class:pill-red={pillStatus === 'not-enabled' || pillStatus === 'missing'}
-        class:pill-yellow={pillStatus === 'partial'}
-        title={projectType === 'rust' ? 'Check Rust toolchain status…' : (pillStatus === 'not-enabled' ? 'Language support not enabled in Settings' : (activeToolchain.path ?? ''))}
-        onclick={() => {
+      <ToolchainPicker
+        {projectType}
+        projectPath={activeProjectPath}
+        {pillStatus}
+        {pillIcon}
+        {pillText}
+        onOpenFixWizard={() => {
           if (projectType === 'rust') {
             showFixWizard = true
           } else {
@@ -1269,11 +1301,17 @@
             showWizard = true
           }
         }}
-      >
-        <LanguageLogo type={projectType === 'rust' ? 'cargo' : projectType} size={16} />
-        <span class="pill-dot">{pillIcon}</span>
-        <span class="toolchain-text">{pillText}</span>
-      </button>
+        onOpenInstallDialog={(preferredVersion) => {
+          // v0.4 task 8 will render an actual InstallToolchainDialog that
+          // reads showInstallToolchain (null = closed, string = preferred
+          // version to pre-fill). For task 7, we fall back to the
+          // ToolchainFixWizard so the user still gets a functional install
+          // path — no regression from pre-v0.4.
+          showInstallToolchain = preferredVersion ?? ''
+          showFixWizard = true
+        }}
+        onToolchainSwitched={refreshToolchainInfo}
+      />
     </div>
 
     <div class="toolbar-right">
