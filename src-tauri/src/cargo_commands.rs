@@ -921,6 +921,120 @@ mod tests {
         assert_eq!(short_name_from_full("weird-name"), "weird-name");
         assert_eq!(short_name_from_full(""), "");
     }
+
+    // ── read_project_toolchain / write_project_toolchain ─────────────────
+
+    #[test]
+    fn read_project_toolchain_none_when_no_file() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(read_project_toolchain(dir.path()), None);
+    }
+
+    #[test]
+    fn read_project_toolchain_parses_channel() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("rust-toolchain.toml"),
+            "[toolchain]\nchannel = \"stable\"\n",
+        )
+        .unwrap();
+        assert_eq!(read_project_toolchain(dir.path()), Some("stable".to_string()));
+    }
+
+    #[test]
+    fn read_project_toolchain_parses_pinned_version() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("rust-toolchain.toml"),
+            "[toolchain]\nchannel = \"1.90.0\"\ncomponents = [\"rustfmt\"]\n",
+        )
+        .unwrap();
+        assert_eq!(read_project_toolchain(dir.path()), Some("1.90.0".to_string()));
+    }
+
+    #[test]
+    fn read_project_toolchain_none_when_no_channel_field() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("rust-toolchain.toml"),
+            "[toolchain]\ncomponents = [\"rustfmt\"]\n",
+        )
+        .unwrap();
+        assert_eq!(read_project_toolchain(dir.path()), None);
+    }
+
+    #[test]
+    fn read_project_toolchain_none_when_malformed_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("rust-toolchain.toml"),
+            "this is not valid toml [[[",
+        )
+        .unwrap();
+        assert_eq!(read_project_toolchain(dir.path()), None);
+    }
+
+    #[test]
+    fn read_project_toolchain_none_when_empty_channel() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("rust-toolchain.toml"),
+            "[toolchain]\nchannel = \"\"\n",
+        )
+        .unwrap();
+        assert_eq!(read_project_toolchain(dir.path()), None);
+    }
+
+    #[test]
+    fn write_project_toolchain_creates_file() {
+        let dir = tempfile::tempdir().unwrap();
+        write_project_toolchain(dir.path(), "stable").unwrap();
+        let content = std::fs::read_to_string(dir.path().join("rust-toolchain.toml")).unwrap();
+        assert!(content.contains("[toolchain]"));
+        assert!(content.contains("channel = \"stable\""));
+        // Read back through our own reader
+        assert_eq!(read_project_toolchain(dir.path()), Some("stable".to_string()));
+    }
+
+    #[test]
+    fn write_project_toolchain_preserves_other_fields() {
+        let dir = tempfile::tempdir().unwrap();
+        // Pre-existing file with components and profile
+        std::fs::write(
+            dir.path().join("rust-toolchain.toml"),
+            "[toolchain]\nchannel = \"stable\"\ncomponents = [\"rustfmt\", \"clippy\"]\nprofile = \"minimal\"\n",
+        )
+        .unwrap();
+        // Overwrite channel
+        write_project_toolchain(dir.path(), "1.90.0").unwrap();
+        let content = std::fs::read_to_string(dir.path().join("rust-toolchain.toml")).unwrap();
+        assert!(content.contains("channel = \"1.90.0\""));
+        assert!(content.contains("rustfmt")); // preserved
+        assert!(content.contains("clippy")); // preserved
+        assert!(content.contains("minimal")); // preserved
+    }
+
+    // ── wrap_with_rustup ─────────────────────────────────────────────────
+
+    #[test]
+    fn wrap_with_rustup_passthrough_when_no_toolchain() {
+        let (program, args) = wrap_with_rustup("cargo", &["run".to_string()], None);
+        assert_eq!(program, "cargo");
+        assert_eq!(args, vec!["run"]);
+    }
+
+    #[test]
+    fn wrap_with_rustup_prepends_rustup_run() {
+        let cargo_args = vec!["run".to_string(), "--bin".to_string(), "hello".to_string()];
+        let (program, args) = wrap_with_rustup("/path/to/cargo", &cargo_args, Some("1.90.0"));
+        // Program becomes rustup (path resolved via resolve_tool)
+        assert!(program.ends_with("rustup"));
+        // Args are: run, <toolchain>, <original program>, <original args...>
+        assert_eq!(args[0], "run");
+        assert_eq!(args[1], "1.90.0");
+        assert_eq!(args[2], "/path/to/cargo");
+        assert_eq!(&args[3..], &["run", "--bin", "hello"]);
+    }
 }
 
 /// Mark the toolchain wizard as completed and persist enabled languages.
@@ -937,4 +1051,139 @@ pub fn complete_wizard(enabled_languages: Vec<String>, app: AppHandle) -> Result
         .map_err(|e| format!("Failed to serialise config: {}", e))?;
     std::fs::write(config_path(&app), json)
         .map_err(|e| format!("Failed to write config.json: {}", e))
+}
+
+// ── rust-toolchain.toml helpers (v0.4+) ──────────────────────────────────────
+
+/// Read a project's rust-toolchain.toml and return the [toolchain].channel
+/// value if the file exists and is parseable. Returns None if:
+///   - The file doesn't exist
+///   - The file is unreadable
+///   - The TOML is malformed
+///   - There's no [toolchain] table or no channel field
+///
+/// This intentionally swallows all errors — the caller then falls back to
+/// the app's active toolchain, which is the correct behaviour when a project
+/// has no valid pin.
+pub(crate) fn read_project_toolchain(project_path: &std::path::Path) -> Option<String> {
+    let toml_path = project_path.join("rust-toolchain.toml");
+    let content = std::fs::read_to_string(&toml_path).ok()?;
+    let doc: toml_edit::DocumentMut = content.parse().ok()?;
+    let channel = doc
+        .get("toolchain")?
+        .as_table_like()?
+        .get("channel")?
+        .as_value()?
+        .as_str()?
+        .to_string();
+    if channel.is_empty() {
+        None
+    } else {
+        Some(channel)
+    }
+}
+
+/// Write a project's rust-toolchain.toml with `[toolchain]\nchannel = "<name>"`.
+///
+/// If the file already exists with additional fields (components, targets,
+/// profile), those are preserved by merging into the existing document.
+/// If the file doesn't exist, a minimal one is created.
+pub(crate) fn write_project_toolchain(
+    project_path: &std::path::Path,
+    name: &str,
+) -> Result<(), String> {
+    let toml_path = project_path.join("rust-toolchain.toml");
+
+    let mut doc: toml_edit::DocumentMut = if toml_path.exists() {
+        std::fs::read_to_string(&toml_path)
+            .map_err(|e| format!("Failed to read rust-toolchain.toml: {}", e))?
+            .parse()
+            .map_err(|e| format!("Malformed rust-toolchain.toml: {}", e))?
+    } else {
+        "[toolchain]\n".parse().unwrap()
+    };
+
+    // Ensure [toolchain] table exists
+    if !doc.contains_key("toolchain") {
+        doc["toolchain"] = toml_edit::Item::Table(toml_edit::Table::new());
+    }
+    doc["toolchain"]["channel"] = toml_edit::value(name);
+
+    std::fs::write(&toml_path, doc.to_string())
+        .map_err(|e| format!("Failed to write rust-toolchain.toml: {}", e))
+}
+
+/// Tauri command: read a project's pinned toolchain (if any).
+#[tauri::command]
+pub fn get_project_toolchain(project_path: String) -> Option<String> {
+    read_project_toolchain(std::path::Path::new(&project_path))
+}
+
+/// Tauri command: write a project's pinned toolchain.
+#[tauri::command]
+pub fn set_project_toolchain(project_path: String, name: String) -> Result<(), String> {
+    write_project_toolchain(std::path::Path::new(&project_path), &name)
+}
+
+/// Check whether rustup has a given toolchain installed. Uses cached
+/// `list_rust_toolchains` output; falls back to false if rustup fails.
+pub(crate) fn is_toolchain_installed(name: &str, app: &AppHandle) -> bool {
+    list_rust_toolchains(app.clone())
+        .map(|list| {
+            list.iter()
+                .any(|t| t.name == name || t.short_name == name)
+        })
+        .unwrap_or(false)
+}
+
+/// Resolve which Rust toolchain to use for a given project directory.
+///
+/// Fallback chain (matches the user's spec — see specifications.md v0.4):
+///   1. Project's rust-toolchain.toml pin, IF that toolchain is installed
+///   2. App's config.active_toolchain, IF that toolchain is installed
+///   3. None → caller should fall back to bare `cargo` (respects rustup default)
+///
+/// Returning None is a valid, healthy state — many projects have no pin and
+/// the app just hasn't tracked an explicit active yet on first launch.
+pub(crate) fn resolve_toolchain_for_project(
+    project_path: &std::path::Path,
+    app: &AppHandle,
+) -> Option<String> {
+    if let Some(pinned) = read_project_toolchain(project_path) {
+        if is_toolchain_installed(&pinned, app) {
+            return Some(pinned);
+        }
+    }
+    let active = load_config(app).active_toolchain?;
+    if is_toolchain_installed(&active, app) {
+        Some(active)
+    } else {
+        None
+    }
+}
+
+/// Wrap a cargo/rustc command invocation with `rustup run <toolchain>` if a
+/// toolchain is provided. Returns (program, args) ready for Command::new.
+///
+/// Example:
+///   wrap_with_rustup("/Users/x/.cargo/bin/cargo",
+///                     &["run", "--bin", "hello"], Some("1.90.0"))
+///   → ("/Users/x/.cargo/bin/rustup",
+///      ["run", "1.90.0", "/Users/x/.cargo/bin/cargo", "run", "--bin", "hello"])
+///
+/// When toolchain is None, returns the original program + args unchanged.
+pub(crate) fn wrap_with_rustup(
+    program: &str,
+    args: &[String],
+    toolchain: Option<&str>,
+) -> (String, Vec<String>) {
+    match toolchain {
+        None => (program.to_string(), args.to_vec()),
+        Some(tc) => {
+            let rustup = resolve_tool("rustup");
+            let mut new_args = vec!["run".to_string(), tc.to_string(), program.to_string()];
+            new_args.extend(args.iter().cloned());
+            (rustup, new_args)
+        }
+    }
 }

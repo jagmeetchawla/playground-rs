@@ -949,6 +949,8 @@ pub fn run() {
             // Multi-version toolchain picker (v0.4+)
             cargo_commands::list_rust_toolchains,
             cargo_commands::set_active_toolchain,
+            cargo_commands::get_project_toolchain,
+            cargo_commands::set_project_toolchain,
             // Content files
             content_commands::list_content_files,
             content_commands::create_content_file,

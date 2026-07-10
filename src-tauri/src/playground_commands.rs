@@ -325,6 +325,15 @@ pub async fn run_playground(
 
     let config = lang.build_run_command(&name, &source_path, &workspace, &manifest)?;
 
+    // v0.4+: for Rust, wrap cargo invocations with `rustup run <toolchain>`
+    // when the project pins a toolchain (via rust-toolchain.toml) or the app
+    // has an active toolchain configured. Zig/Clang/Swift are untouched.
+    let config = if matches!(lang, Lang::Rust) {
+        wrap_rust_run_config(config, &workspace, &app)
+    } else {
+        config
+    };
+
     match config {
         RunConfig::Direct {
             program,
@@ -350,6 +359,34 @@ pub async fn run_playground(
             )
             .await
         }
+    }
+}
+
+/// v0.4+: Rewrap a Rust RunConfig so that cargo runs through
+/// `rustup run <toolchain>` when the project or app config resolves a
+/// toolchain. Non-Rust RunConfigs pass through untouched.
+///
+/// Only touches RunConfig::Direct (Rust's cargo run path). Rust doesn't use
+/// CompileThenRun, so this is safe — if that ever changes, we'd extend here.
+fn wrap_rust_run_config(config: RunConfig, workspace: &std::path::Path, app: &AppHandle) -> RunConfig {
+    let toolchain = crate::cargo_commands::resolve_toolchain_for_project(workspace, app);
+    match config {
+        RunConfig::Direct {
+            program,
+            args,
+            env,
+            cwd,
+        } => {
+            let (new_program, new_args) =
+                crate::cargo_commands::wrap_with_rustup(&program, &args, toolchain.as_deref());
+            RunConfig::Direct {
+                program: new_program,
+                args: new_args,
+                env,
+                cwd,
+            }
+        }
+        other => other,
     }
 }
 
@@ -627,22 +664,30 @@ pub async fn check_playground(
     let cargo = crate::cargo_path();
     let check_target = workspace.join("target").join("check-runs");
 
+    // v0.4+: wrap with `rustup run <toolchain>` if the project pins one
+    // (via rust-toolchain.toml) or the app has an active toolchain configured
+    // — otherwise invoke cargo bare (uses rustup's default).
+    let toolchain = crate::cargo_commands::resolve_toolchain_for_project(&workspace, &app);
+    let cargo_args: Vec<String> = vec![
+        "check".to_string(),
+        "--bin".to_string(),
+        name.clone(),
+        "--message-format".to_string(),
+        "json".to_string(),
+        "--target-dir".to_string(),
+        check_target.to_str().unwrap().to_string(),
+    ];
+    let (program, args) =
+        crate::cargo_commands::wrap_with_rustup(&cargo, &cargo_args, toolchain.as_deref());
+
     // RUSTUP_AUTO_INSTALL=0 — live check runs automatically on every edit and
     // on editor mount. We don't want it to silently re-download a missing
     // default toolchain in the background; the user should see the broken
     // state via the toolchain pill instead. The Run button (run_playground)
     // intentionally omits this so an explicit run can still trigger install.
-    let mut child = Command::new(&cargo)
+    let mut child = Command::new(&program)
         .env("RUSTUP_AUTO_INSTALL", "0")
-        .args([
-            "check",
-            "--bin",
-            &name,
-            "--message-format",
-            "json",
-            "--target-dir",
-            check_target.to_str().unwrap(),
-        ])
+        .args(&args)
         .current_dir(&workspace)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
