@@ -162,6 +162,25 @@ Toolchain pill dropdown
 
   Click "Install Toolchain…" → opens InstallToolchainDialog.
 
+  Soft "install newer stable?" hint (v0.4 addition):
+    Prepended to the dropdown ONLY when the user has no stable-channel or
+    pinned-semver toolchain at or above LATEST_KNOWN_STABLE (a backend
+    constant, e.g. "1.96.0", bumped each Rustic Playground release).
+
+    Semantics:
+      - Compare installed versions, not just the active toolchain
+        (someone deliberately using 1.85 for MSRV testing while having
+        1.96 installed elsewhere → NO hint)
+      - Skip beta/nightly when computing "have latest stable"
+      - Hint appears above the toolchain list; clicking it opens the
+        Install Toolchain dialog pre-filled with the recommended version
+      - Never surfaced outside the dropdown — no unsolicited nag
+
+    Backend commands used:
+      - get_latest_known_stable() → "1.96.0"
+      - list_rust_toolchains() → each ToolchainInfo has .version populated
+      - frontend does the max-version comparison
+
 Install Toolchain dialog
   Modal with:
     - Radio: stable / beta / nightly / specific version
