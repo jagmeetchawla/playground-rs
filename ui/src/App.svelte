@@ -194,6 +194,12 @@
   // ToolchainPicker so it can write rust-toolchain.toml when the user
   // switches. Recomputed via $effect when activeProject changes.
   let activeProjectPath: string | null = $state(null)
+  // v0.4+: name of the toolchain the current project pins in rust-toolchain.toml
+  // if that toolchain isn't currently installed. When set, refreshToolchainInfo
+  // falls back to app-active (silent), but the picker surfaces this so the
+  // user can install the missing toolchain in one click instead of wondering
+  // why their pin is being ignored.
+  let missingProjectPin: string | null = $state(null)
   // Bumped after a successful in-app toolchain fix so the underlying
   // Settings/Wizard Toolchains panel re-runs check_toolchain.
   let toolchainRefreshKey = $state(0)
@@ -581,6 +587,7 @@
 
         // Step 1: project pin (if any + installed)
         let matched: (typeof list)[number] | undefined
+        let observedMissingPin: string | null = null
         if (activeProjectPath) {
           const projectPin = await invoke<string | null>('get_project_toolchain', {
             projectPath: activeProjectPath,
@@ -589,8 +596,12 @@
             matched = list.find(t =>
               t.short_name === projectPin || t.name === projectPin
             )
+            // Pin exists but wasn't found in the installed list → surface it
+            // so the picker can offer an "install and use" prompt.
+            if (!matched) observedMissingPin = projectPin
           }
         }
+        missingProjectPin = observedMissingPin
         // Step 2: app active
         if (!matched) {
           matched = list.find(t => t.is_active)
@@ -1336,6 +1347,7 @@
       <ToolchainPicker
         {projectType}
         projectPath={activeProjectPath}
+        {missingProjectPin}
         {pillStatus}
         {pillIcon}
         {pillText}

@@ -16,6 +16,7 @@
   let {
     projectType,
     projectPath,
+    missingProjectPin,
     pillStatus,
     pillIcon,
     pillText,
@@ -26,6 +27,11 @@
     projectType: ProjectType
     /** Absolute path to the active project directory, or null if none loaded. */
     projectPath: string | null
+    /** v0.4+: name of the toolchain the active project pins in
+        rust-toolchain.toml, IF that toolchain isn't installed. When set, the
+        dropdown surfaces a prominent "install and use it" prompt, and the
+        pill tooltip explains the silent fallback. */
+    missingProjectPin: string | null
     pillStatus: 'not-enabled' | 'missing' | 'partial' | 'ok'
     pillIcon: string
     pillText: string
@@ -152,9 +158,13 @@
   <button
     class="toolchain-info"
     class:pill-red={pillStatus === 'not-enabled' || pillStatus === 'missing'}
-    class:pill-yellow={pillStatus === 'partial'}
+    class:pill-yellow={pillStatus === 'partial' || !!missingProjectPin}
     class:open
-    title={projectType === 'rust' ? 'Manage Rust toolchains…' : (pillStatus === 'not-enabled' ? 'Language support not enabled in Settings' : '')}
+    title={projectType === 'rust'
+      ? (missingProjectPin
+          ? `Project pins ${missingProjectPin}, but it's not installed — using fallback. Click to install.`
+          : 'Manage Rust toolchains…')
+      : (pillStatus === 'not-enabled' ? 'Language support not enabled in Settings' : '')}
     onclick={toggle}
   >
     <LanguageLogo type={projectType === 'rust' ? 'cargo' : projectType} size={16} />
@@ -199,7 +209,18 @@
         </button>
 
       {:else}
-        {#if showUpgradeHint}
+        {#if missingProjectPin}
+          <!-- Highest-priority hint: project pins a toolchain that isn't
+               installed. One click installs and switches to it. -->
+          <button
+            class="menu-item hint hint-warning"
+            onclick={() => { close(); onOpenInstallDialog(missingProjectPin) }}
+          >
+            <span class="hint-title">This project pins {missingProjectPin} — not installed</span>
+            <span class="hint-sub">Install and use it? (Currently using fallback.)</span>
+          </button>
+          <div class="separator"></div>
+        {:else if showUpgradeHint}
           <button
             class="menu-item hint"
             onclick={() => { close(); onOpenInstallDialog(latestKnownStable) }}
@@ -321,6 +342,13 @@
   .menu-item.hint:hover { background: rgba(206, 66, 43, 0.08); }
   .hint-title { font-weight: 600; color: var(--accent, #ce422b); }
   .hint-sub { font-size: 11px; color: var(--text-secondary); }
+
+  /* Warning variant for the "project pins X but not installed" prompt —
+     distinct color from the upgrade hint so a user seeing both across
+     sessions can tell them apart. Yellow signals action-required rather
+     than just recommendation. */
+  .menu-item.hint-warning:hover { background: rgba(232, 168, 32, 0.10); }
+  .menu-item.hint-warning .hint-title { color: #e8a820; }
 
   .separator { height: 1px; background: var(--border, #333); margin: 4px 0; }
 
