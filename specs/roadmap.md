@@ -40,6 +40,69 @@ v0.3 — Language Module Architecture + Zig & Swift Support
 NEXT UP
 ───────
 
+v0.5 — Stack modernization + visual polish
+  Status: Scoped 2026-07-10 — start after v0.4 ships and stabilizes
+  Positioning: Keep the stack current, apply Apple's latest window
+  material where the user's OS supports it. No feature story — this
+  is a maintenance-and-polish release.
+
+  Scope
+
+  1. Dependency upgrades — the maintenance story
+     - Tauri: bump from 2.10.3 to latest 2.x
+     - Svelte: bump within v5.x line to latest
+     - Vite: evaluate Vite 6 major bump (bigger scoping decision)
+     - Other npm + Cargo deps via `cargo update` + `pnpm update`
+     - Fix any deprecation warnings introduced by the bumps
+     - Full E2E on VMs — this is the release where drift-introduced
+       regressions get caught
+
+  2. Liquid Glass window effect (conditional, macOS 26 Tahoe only)
+     - Add tauri-plugin-liquid-glass dependency
+     - Apply Liquid Glass at runtime IF operatingSystemVersion.major >= 26
+     - Graceful fallback for macOS 12-25 (current plain-Tauri look
+       stays intact — same as today, no regression)
+     - Verify plugin gracefully no-ops on <26 (not crashy) before
+       committing to it
+     - Evaluate: does the rust-orange theme palette need shifts for
+       Liquid Glass? If so, extend v0.5 to include a small theme pass;
+       if not, keep the existing palette and let translucent material
+       do the work.
+     - Capability audit for any new permissions the plugin needs
+
+  3. Quarterly-audit discipline (not code, just a note)
+     - `cargo audit` + `npm audit` sweep as part of this release
+     - Establish the cadence: run these before every subsequent
+       feature release, quarterly at minimum
+
+  Testing gates before shipping v0.5
+     - Vanilla-VM first-launch on macOS 12, 13, 14, 15, 26
+       (existing test rig per reference_test_rig)
+     - Verify Liquid Glass appears on 26 and looks correct
+     - Verify NO visual regression on 12-25 (still the current look)
+     - Verify no runtime errors from plugin on <26 (safe no-op)
+     - Full playground CRUD + toolchain picker (v0.4 features) still
+       work after the upgrades
+
+  Why It's Separate From v0.4
+     v0.4's story is Multi-Version Toolchain Picker + Rust 1.9 support.
+     Mashing in Tauri/Svelte/Vite bumps and a visual overhaul would:
+       - Muddy release notes (three distinct stories collapsed)
+       - Expand regression surface at exactly the wrong moment
+       - Split testing focus
+     Ship v0.4 clean, absorb any feedback for a week or two, then
+     start v0.5 with a fresh mental model.
+
+  Why Not Later Than v0.5
+     Dependency drift compounds. Rust/Tauri/Svelte all move fast; letting
+     3+ minor versions of anything accumulate turns future bumps into
+     multi-hour regression-hunts instead of half-hour sweeps.
+
+     Also: Liquid Glass adoption is time-sensitive — early adoption
+     signals "we care about modern macOS" to the audience most likely
+     to try Rustic Playground on macOS 26. Waiting a year means Tahoe
+     is no longer novel.
+
 Rustic Zig — The second (and final) edition
   Status: strategic direction set 2026-04-20 — start post-launch
   Decision trigger: 2–4 weeks after Show HN (2026-04-28), once Rust launch
@@ -2149,72 +2212,5 @@ Trigger Conditions (independent for each piece)
         per-cell execution and persistent state, not just better
         prose rendering.
     evcxr integration is enough work that it needs real demand behind it.
-
-─────────────────────────────────────────────────────────────────────────────
-IDEA: Liquid Glass window effect (macOS 26+)
-─────────────────────────────────────────────────────────────────────────────
-Status: Parked — needs conditional-application design + minor testing
-Logged: 2026-07-10
-
-Background
-  tauri-plugin-liquid-glass (crates.io) exposes Apple's Liquid Glass window
-  material introduced in macOS Tahoe (26, WWDC 2025) to Tauri v2 apps.
-  We don't currently use window-vibrancy either — our windows are plain
-  Tauri defaults with theme colors — so this would be adding a new visual
-  capability, not replacing one.
-
-Why It's Parked
-  1. macOS floor conflict — our minimum is Monterey 12 (per
-     project_macos_minimum memory). Liquid Glass is 26+. Any adoption
-     requires runtime detection of the macOS version and graceful
-     fallback for 12-25, which is non-trivial.
-  2. Scope creep — visual overhauls don't fit within a feature release
-     narrative (v0.4 = toolchain picker). Deserves its own scoping.
-  3. Aesthetic evaluation — does Liquid Glass match Rustic's warm
-     rust-orange theme? Might need theme rework alongside.
-  4. Third-party plugin — worth diligence on maturity, maintainer,
-     fallback safety, capability model before adopting.
-
-Trigger Condition
-  A dedicated "visual polish" release cycle (v0.5 or later) where the
-  scope is explicitly aesthetic modernization. Or user demand from
-  macOS 26 early adopters who notice the app looks dated compared to
-  first-party Apple tools.
-
-When we pick it up, checklist:
-  - Verify plugin gracefully no-ops on < macOS 26 (not crashy)
-  - Runtime OS version check + conditional application
-  - Test on VMs at every macOS version 12-26 (existing test rig covers
-    12/13/14/15 + native 26 per reference_test_rig memory)
-  - Evaluate: does theme color palette need to shift for Liquid Glass?
-  - Capability audit: any new permissions needed?
-
-─────────────────────────────────────────────────────────────────────────────
-IDEA: Dependency maintenance cadence
-─────────────────────────────────────────────────────────────────────────────
-Status: Discipline task — not a feature, needs a rhythm
-Logged: 2026-07-10
-
-Background
-  Cargo.toml declares Tauri as `"2"` and package.json declares Svelte as
-  `^5.0.0`, so lockfiles already track latest compatible on any explicit
-  `cargo update` / `pnpm update`. Still, drift happens: as of 2026-07-10
-  we're on tauri 2.10.3, Svelte 5.x. Rust/Tauri/Svelte all move fast.
-
-Practice
-  - Between feature releases, run a dedicated maintenance session
-    (call it v0.4.1 / v0.5 / whatever fits): cargo update, pnpm update,
-    fix deprecation warnings, full E2E on VMs, ship as "chore: dep
-    bumps" with no feature narrative
-  - Quarterly `cargo audit` + `npm audit` sweep — catches security
-    advisories without depending on incidental discovery
-  - Vite 6 (bigger jump than the minors) deserves its own scoping when
-    we get to it
-
-Why It's Not a Feature
-  This is maintenance discipline, not a product roadmap item. Adding
-  it here so it doesn't get forgotten as we ship features. Consider
-  scheduling the first maintenance sweep for the release AFTER v0.4
-  stabilizes.
 
 ─────────────────────────────────────────────────────────────────────────────
