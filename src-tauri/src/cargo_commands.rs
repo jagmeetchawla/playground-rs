@@ -506,6 +506,18 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
 
 // ── Multi-version toolchain support (v0.4+) ──────────────────────────────────
 
+/// Latest Rust stable version this release of Rustic Playground knows about.
+///
+/// Used by the picker to surface a subtle "install newer stable?" hint when the
+/// user has *no* stable toolchain at or above this version installed. The hint
+/// is only shown when the user opens the pill dropdown — never unsolicited.
+///
+/// Update this constant each release of Rustic Playground to whatever the
+/// latest Rust stable is at build time. Rust releases every ~6 weeks, so this
+/// will go stale between our releases — that's fine. Staleness just means we
+/// don't hint at users who are ahead of us, which is the correct behaviour.
+pub const LATEST_KNOWN_STABLE: (u32, u32, u32) = (1, 96, 0);
+
 /// Resolve a rustup-managed tool (rustup, cargo, rustc, rustfmt, cargo-clippy)
 /// to an absolute path via the cargo bin dir, with PATH fallback.
 ///
@@ -534,6 +546,11 @@ pub struct ToolchainInfo {
     /// Human-friendly short form: channel ("stable", "beta", "nightly") or
     /// pinned version ("1.90.0"). Derived from `name` by stripping the host triple.
     pub short_name: String,
+    /// Actual rustc semantic version this toolchain resolves to, e.g. "1.96.0".
+    /// For pinned toolchains (name starts with a version) we parse from name.
+    /// For channels (stable/beta/nightly) we run `rustup run <name> rustc --version`.
+    /// None only when the subprocess fails or the name doesn't produce a version.
+    pub version: Option<String>,
     /// True when rustup's `list` marks this as "(default)". This is rustup's
     /// fallback when no rust-toolchain.toml or override is present.
     pub is_rustup_default: bool,
@@ -615,9 +632,11 @@ pub fn list_rust_toolchains(app: AppHandle) -> Result<Vec<ToolchainInfo>, String
                 .as_deref()
                 .map(|a| a == name || a == short_name)
                 .unwrap_or(false);
+            let version = resolve_toolchain_version(&name, &short_name, &rustup_bin);
             Some(ToolchainInfo {
                 name,
                 short_name,
+                version,
                 is_rustup_default: is_default,
                 is_active,
             })
@@ -625,6 +644,50 @@ pub fn list_rust_toolchains(app: AppHandle) -> Result<Vec<ToolchainInfo>, String
         .collect();
 
     Ok(toolchains)
+}
+
+/// Find the rustc semver for a given toolchain. Two fast paths + one subprocess:
+///   - If short_name is a bare "X.Y.Z" (pinned toolchain), return it directly.
+///   - If it starts with "1." followed by a version (dated nightly, e.g.
+///     "1.96.0-nightly"), extract the version.
+///   - Otherwise (channel names: stable, beta, nightly) shell out to
+///     `rustup run <name> rustc --version` and parse the result.
+///
+/// Returns None if the subprocess fails or parsing doesn't produce a version.
+/// A None here doesn't block anything — the picker just won't show a version
+/// number next to that toolchain.
+fn resolve_toolchain_version(name: &str, short_name: &str, rustup_bin: &str) -> Option<String> {
+    // Fast path: pinned version (short_name is exactly "X.Y.Z")
+    if short_name.split('.').all(|p| p.chars().all(|c| c.is_ascii_digit())) {
+        let parts: Vec<&str> = short_name.split('.').collect();
+        if parts.len() == 3 {
+            return Some(short_name.to_string());
+        }
+    }
+    // Fallback: ask rustc directly through rustup
+    let output = std::process::Command::new(rustup_bin)
+        .env("RUSTUP_AUTO_INSTALL", "0")
+        .args(["run", name, "rustc", "--version"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    let (major, minor, patch) = parse_rust_version(stdout.trim())?;
+    Some(format!("{}.{}.{}", major, minor, patch))
+}
+
+/// Return the version of Rust stable that this release of Rustic Playground
+/// knows about, formatted as "X.Y.Z". The frontend picker compares this
+/// against installed toolchains to decide whether to show an "install newer
+/// stable?" hint.
+#[tauri::command]
+pub fn get_latest_known_stable() -> String {
+    format!(
+        "{}.{}.{}",
+        LATEST_KNOWN_STABLE.0, LATEST_KNOWN_STABLE.1, LATEST_KNOWN_STABLE.2
+    )
 }
 
 /// Set the app's session-level active toolchain. Pass None to clear (so we
