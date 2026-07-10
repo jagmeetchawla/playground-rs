@@ -633,6 +633,91 @@ mod tests {
         let doc = toml.parse::<toml_edit::DocumentMut>().unwrap();
         assert!(doc["dependencies"].get("serde").is_some());
     }
+
+    // ── parse_rust_version ───────────────────────────────────────────────
+
+    #[test]
+    fn parse_rust_version_stable_rustc() {
+        assert_eq!(
+            parse_rust_version("rustc 1.85.0 (4eb161250 2025-03-15)"),
+            Some((1, 85, 0))
+        );
+    }
+
+    #[test]
+    fn parse_rust_version_stable_cargo() {
+        assert_eq!(
+            parse_rust_version("cargo 1.85.0 (d73d2caf9 2024-12-31)"),
+            Some((1, 85, 0))
+        );
+    }
+
+    #[test]
+    fn parse_rust_version_1_90_stable() {
+        assert_eq!(
+            parse_rust_version("rustc 1.90.0 (abcdef123 2025-09-15)"),
+            Some((1, 90, 0))
+        );
+    }
+
+    #[test]
+    fn parse_rust_version_nightly() {
+        assert_eq!(
+            parse_rust_version("rustc 1.90.0-nightly (abcdef 2025-06-01)"),
+            Some((1, 90, 0))
+        );
+    }
+
+    #[test]
+    fn parse_rust_version_beta() {
+        assert_eq!(
+            parse_rust_version("rustc 1.90.0-beta.1 (abcdef 2025-06-01)"),
+            Some((1, 90, 0))
+        );
+    }
+
+    #[test]
+    fn parse_rust_version_high_patch() {
+        assert_eq!(
+            parse_rust_version("rustc 1.90.15 (abcdef 2026-01-01)"),
+            Some((1, 90, 15))
+        );
+    }
+
+    #[test]
+    fn parse_rust_version_three_digit_minor() {
+        // Rust's minor version has grown from 1.x — this locks in future-proofing
+        assert_eq!(
+            parse_rust_version("rustc 1.100.5 (abcdef 2027-01-01)"),
+            Some((1, 100, 5))
+        );
+    }
+
+    #[test]
+    fn parse_rust_version_bare_version() {
+        // Some rustup outputs don't include the commit hash
+        assert_eq!(parse_rust_version("rustc 1.90.0"), Some((1, 90, 0)));
+    }
+
+    #[test]
+    fn parse_rust_version_garbage_returns_none() {
+        assert_eq!(parse_rust_version("this is not a version line"), None);
+        assert_eq!(parse_rust_version(""), None);
+        assert_eq!(parse_rust_version("rustc"), None);
+        assert_eq!(parse_rust_version("rustc 1"), None);
+        assert_eq!(parse_rust_version("rustc 1.90"), None); // missing patch
+    }
+
+    #[test]
+    fn version_tuple_comparison_matches_min_rust() {
+        // Lock in the semantic that (major, minor, patch) tuple comparison
+        // does what we mean for version gating.
+        assert!((1, 90, 0) >= MIN_RUST); // 1.90.0 >= 1.85.0
+        assert!((1, 85, 0) >= MIN_RUST); // 1.85.0 == floor, allowed
+        assert!((1, 85, 5) >= MIN_RUST); // patch above floor
+        assert!(!((1, 84, 999) >= MIN_RUST)); // just below floor
+        assert!(!((1, 0, 0) >= MIN_RUST)); // clearly below
+    }
 }
 
 /// Mark the toolchain wizard as completed and persist enabled languages.
