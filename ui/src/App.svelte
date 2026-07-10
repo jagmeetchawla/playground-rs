@@ -553,14 +553,39 @@
   // or fix (via ToolchainFixWizard). Re-runs check_toolchain and updates the
   // fields that drive the pill display so the UI reflects the new state
   // immediately.
+  //
+  // Subtle but important: check_toolchain and get_toolchain_info both invoke
+  // `rustc --version` bare, so they always return the SYSTEM active toolchain
+  // (whatever rustup considers active for the process — typically the rustup
+  // default). That's NOT necessarily the app's tracked active_toolchain when
+  // the user has switched via the picker. To keep the pill honest, we ALSO
+  // query list_rust_toolchains and, if it reports one as `is_active` (i.e.
+  // matches Config.active_toolchain), we prefer THAT toolchain's resolved
+  // version for the display. Falls back to baseInfo.version when nothing is
+  // marked active (fresh install, no picker use yet).
   async function refreshToolchainInfo() {
     try {
       const tc = await invoke<any>('check_toolchain')
       if (tc.rust_state) rustState = tc.rust_state
       const baseInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
+      let effectiveVersion = baseInfo.version
+      try {
+        const list = await invoke<{
+          name: string; short_name: string;
+          version: string | null;
+          is_rustup_default: boolean; is_active: boolean;
+        }[]>('list_rust_toolchains')
+        const active = list.find(t => t.is_active)
+        if (active?.version) {
+          // Prefix with "rustc " to match the shape get_toolchain_info returns,
+          // so downstream regex extractions (pill "1.90.0" label) still work.
+          effectiveVersion = `rustc ${active.version}`
+        }
+      } catch { /* non-fatal — fall back to baseInfo.version */ }
       toolchainInfo = {
         ...toolchainInfo,
         ...baseInfo,
+        version: effectiveVersion,
         version_ok: tc.rustc?.version_ok ?? true,
         min_version: tc.rustc?.min_version ?? '1.85.0',
       }
