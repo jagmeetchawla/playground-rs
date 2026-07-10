@@ -100,7 +100,12 @@
   }
 
   async function selectToolchain(t: ToolchainInfo) {
-    if (t.is_active) { close(); return }
+    // Skip the switch when the user clicks the toolchain that's already
+    // effectively in use — no need to write config or rust-toolchain.toml
+    // if nothing would change. Uses the same "effective" resolution the ✓
+    // marker uses, so what the user sees == what selectToolchain treats as
+    // "already active".
+    if (isEffectiveToolchain(t)) { close(); return }
     try {
       // 1. Persist as the app's session-level active toolchain (config.json).
       //    Used as default for new projects and as fallback when a project's
@@ -167,6 +172,27 @@
   function isPinnedForProject(t: ToolchainInfo): boolean {
     if (!projectPinnedName) return false
     return t.short_name === projectPinnedName || t.name === projectPinnedName
+  }
+
+  // Which toolchain is ACTUALLY in use for run/check RIGHT NOW? This is what
+  // drives the ✓ checkmark in the dropdown. It mirrors the backend's
+  // resolve_toolchain_for_project resolution order:
+  //   1. Project pin, IF that pin is installed (not in missingProjectPin state)
+  //   2. Config.active_toolchain (backend's is_active flag)
+  //
+  // Without this, opening the picker in a project pinned to nightly (with
+  // config.active_toolchain still set to stable) would show ✓ next to stable
+  // even though nightly is what's actually running — a visible inconsistency
+  // with the pill display, which already resolves the pin correctly.
+  function isEffectiveToolchain(t: ToolchainInfo): boolean {
+    if (projectPinnedName && !missingProjectPin) {
+      // Pin is set AND installed → the pin is what run/check will use.
+      return t.short_name === projectPinnedName || t.name === projectPinnedName
+    }
+    // Otherwise (no pin, or pinned toolchain not installed) → fall back to
+    // Config.active_toolchain, which is what the backend's is_active flag
+    // already reports.
+    return t.is_active
   }
 </script>
 
@@ -253,11 +279,11 @@
             <li>
               <button
                 class="menu-item toolchain-row"
-                class:active={t.is_active}
+                class:active={isEffectiveToolchain(t)}
                 onclick={() => selectToolchain(t)}
                 title={t.name}
               >
-                <span class="checkmark">{t.is_active ? '✓' : ''}</span>
+                <span class="checkmark">{isEffectiveToolchain(t) ? '✓' : ''}</span>
                 <span class="tc-name">
                   {t.short_name}{#if isPinnedForProject(t)}<span class="pin-marker" title="Pinned to this project via rust-toolchain.toml">📌</span>{/if}
                 </span>
