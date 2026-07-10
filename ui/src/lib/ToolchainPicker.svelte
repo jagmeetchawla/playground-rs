@@ -17,12 +17,14 @@
     projectType,
     projectPath,
     missingProjectPin,
+    projectPinnedName,
     pillStatus,
     pillIcon,
     pillText,
     onOpenFixWizard,
     onOpenInstallDialog,
     onToolchainSwitched,
+    onRemovePin,
   }: {
     projectType: ProjectType
     /** Absolute path to the active project directory, or null if none loaded. */
@@ -32,6 +34,10 @@
         dropdown surfaces a prominent "install and use it" prompt, and the
         pill tooltip explains the silent fallback. */
     missingProjectPin: string | null
+    /** v0.4+: name of the toolchain the active project pins (whether it's
+        installed or not). Used to render 📌 next to the row that matches
+        this name, and to conditionally show the "Remove pin" action. */
+    projectPinnedName: string | null
     pillStatus: 'not-enabled' | 'missing' | 'partial' | 'ok'
     pillIcon: string
     pillText: string
@@ -43,6 +49,9 @@
     /** Called after a successful toolchain switch so the parent can refresh
         toolchainInfo (which drives the pill display). */
     onToolchainSwitched: () => Promise<void>
+    /** v0.4+: called when the user clicks "Remove pin" — parent should delete
+        rust-toolchain.toml and refresh toolchainInfo. */
+    onRemovePin: () => Promise<void>
   } = $props()
 
   // ── State ────────────────────────────────────────────────────────────────
@@ -152,6 +161,13 @@
     if (t.version === t.short_name) return null
     return t.version
   }
+
+  // Does the given toolchain match the current project's rust-toolchain.toml
+  // pin? Used to render 📌 next to that row in the dropdown.
+  function isPinnedForProject(t: ToolchainInfo): boolean {
+    if (!projectPinnedName) return false
+    return t.short_name === projectPinnedName || t.name === projectPinnedName
+  }
 </script>
 
 <div class="toolchain-picker">
@@ -242,7 +258,9 @@
                 title={t.name}
               >
                 <span class="checkmark">{t.is_active ? '✓' : ''}</span>
-                <span class="tc-name">{t.short_name}</span>
+                <span class="tc-name">
+                  {t.short_name}{#if isPinnedForProject(t)}<span class="pin-marker" title="Pinned to this project via rust-toolchain.toml">📌</span>{/if}
+                </span>
                 {#if versionLabel(t)}
                   <span class="tc-version">{versionLabel(t)}</span>
                 {:else}
@@ -259,6 +277,15 @@
         </ul>
 
         <div class="separator"></div>
+        {#if projectPinnedName && projectPath}
+          <button
+            class="menu-item subtle"
+            onclick={async () => { close(); await onRemovePin() }}
+            title="Delete rust-toolchain.toml from this project"
+          >
+            Remove pin ({projectPinnedName})
+          </button>
+        {/if}
         <button class="menu-item" onclick={() => { close(); onOpenInstallDialog() }}>
           Install Toolchain…
         </button>
@@ -381,6 +408,16 @@
     justify-self: end;
   }
   .tag-spacer { display: block; }
+
+  /* Small pushpin next to whichever row matches the project's
+     rust-toolchain.toml pin. font-size stays tight so it reads as a badge
+     rather than a large emoji. */
+  .pin-marker {
+    margin-left: 6px;
+    font-size: 10px;
+    filter: saturate(0.8);
+    display: inline-block;
+  }
 
   .empty-msg, .loading, .error {
     padding: 12px;

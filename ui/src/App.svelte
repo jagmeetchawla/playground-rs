@@ -200,6 +200,10 @@
   // user can install the missing toolchain in one click instead of wondering
   // why their pin is being ignored.
   let missingProjectPin: string | null = $state(null)
+  // v0.4+: name of the toolchain the current project pins in rust-toolchain.toml
+  // (whether it's installed or not — the picker's dropdown uses this to render
+  // a 📌 indicator next to that toolchain and to enable the "Remove pin" row).
+  let projectPinnedName: string | null = $state(null)
   // Bumped after a successful in-app toolchain fix so the underlying
   // Settings/Wizard Toolchains panel re-runs check_toolchain.
   let toolchainRefreshKey = $state(0)
@@ -588,11 +592,13 @@
         // Step 1: project pin (if any + installed)
         let matched: (typeof list)[number] | undefined
         let observedMissingPin: string | null = null
+        let observedPinnedName: string | null = null
         if (activeProjectPath) {
           const projectPin = await invoke<string | null>('get_project_toolchain', {
             projectPath: activeProjectPath,
           }).catch(() => null)
           if (projectPin) {
+            observedPinnedName = projectPin
             matched = list.find(t =>
               t.short_name === projectPin || t.name === projectPin
             )
@@ -602,6 +608,7 @@
           }
         }
         missingProjectPin = observedMissingPin
+        projectPinnedName = observedPinnedName
         // Step 2: app active
         if (!matched) {
           matched = list.find(t => t.is_active)
@@ -1348,6 +1355,7 @@
         {projectType}
         projectPath={activeProjectPath}
         {missingProjectPin}
+        {projectPinnedName}
         {pillStatus}
         {pillIcon}
         {pillText}
@@ -1366,6 +1374,13 @@
           showInstallToolchain = preferredVersion ?? ''
         }}
         onToolchainSwitched={refreshToolchainInfo}
+        onRemovePin={async () => {
+          if (!activeProjectPath) return
+          try {
+            await invoke('remove_project_toolchain', { projectPath: activeProjectPath })
+          } catch {}
+          await refreshToolchainInfo()
+        }}
       />
     </div>
 

@@ -1193,6 +1193,21 @@ pub fn set_project_toolchain(project_path: String, name: String) -> Result<(), S
     write_project_toolchain(std::path::Path::new(&project_path), &name)
 }
 
+/// Tauri command: remove a project's rust-toolchain.toml, unpinning it. No-op
+/// if the file doesn't exist. Called from the picker's "Remove pin" action.
+///
+/// After removal, resolve_toolchain_for_project falls through to the app's
+/// active_toolchain — same behaviour as any project without a pin.
+#[tauri::command]
+pub fn remove_project_toolchain(project_path: String) -> Result<(), String> {
+    let toml_path = std::path::Path::new(&project_path).join("rust-toolchain.toml");
+    if !toml_path.exists() {
+        return Ok(()); // No-op: nothing to remove
+    }
+    std::fs::remove_file(&toml_path)
+        .map_err(|e| format!("Failed to remove rust-toolchain.toml: {}", e))
+}
+
 /// Check whether rustup has a given toolchain installed. Uses cached
 /// `list_rust_toolchains` output; falls back to false if rustup fails.
 pub(crate) fn is_toolchain_installed(name: &str, app: &AppHandle) -> bool {

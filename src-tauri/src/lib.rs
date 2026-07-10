@@ -951,6 +951,7 @@ pub fn run() {
             cargo_commands::set_active_toolchain,
             cargo_commands::get_project_toolchain,
             cargo_commands::set_project_toolchain,
+            cargo_commands::remove_project_toolchain,
             cargo_commands::get_latest_known_stable,
             // Content files
             content_commands::list_content_files,
