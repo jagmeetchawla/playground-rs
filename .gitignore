@@ -9,3 +9,6 @@
 # Source video originals — compressed copies live in docs/videos/
 /assets/Vidoes
 /assets/Videos
+
+# Personal drafts (kept locally, not tracked)
+/blog-draft.md
