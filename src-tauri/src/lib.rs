@@ -1199,7 +1199,7 @@ mod tests {
         let toml = project_cargo_toml("test");
         assert!(toml.contains("[package]"));
         assert!(toml.contains("[dependencies]"));
-        assert!(toml.contains("edition = \"2021\""));
+        assert!(toml.contains("edition = \"2024\""));
     }
 
     #[test]

@@ -45,7 +45,24 @@ pub fn new_project(
 
     let ptype = project_type.as_deref().unwrap_or("rust");
     let lang = Lang::from_str(ptype);
-    lang.scaffold_project(&project_path, &name)
+    lang.scaffold_project(&project_path, &name)?;
+
+    // v0.4+: for new Rust projects, seed rust-toolchain.toml with the app's
+    // active toolchain so this project inherits the current session default.
+    // If there's no active_toolchain configured yet (first launch, or user
+    // hasn't touched the picker), skip the seed — project runs bare cargo
+    // and picks up rustup's default, which is the pre-v0.4 behaviour.
+    //
+    // Best-effort: a failed write here shouldn't fail project creation. If
+    // it fails, the user still has a working project; they just don't get
+    // an explicit pin. They can add one via the picker.
+    if matches!(lang, Lang::Rust) {
+        if let Some(active) = crate::load_config(&app).active_toolchain {
+            let _ = crate::cargo_commands::write_project_toolchain(&project_path, &active);
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
