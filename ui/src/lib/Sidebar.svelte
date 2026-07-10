@@ -597,6 +597,7 @@
     {:else}
       <button onclick={() => startRename(contextMenu!.name)}>Rename</button>
       <button onclick={() => { dispatch('duplicate', contextMenu!.name); contextMenu = null }}>Duplicate</button>
+      <button onclick={() => { dispatch('copyToProject', contextMenu!.name); contextMenu = null }}>Copy to Project…</button>
       <hr />
       <button class="danger" onclick={() => { dispatch('delete', contextMenu!.name); contextMenu = null }}>Delete</button>
     {/if}

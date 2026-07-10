@@ -1370,9 +1370,7 @@
             <button class="export-item" onclick={() => { showExportMenu = false; exportProject() }}>Export Project…</button>
             {#if activeTab && tabMeta[activeTab]?.type === 'playground'}
               <button class="export-item" onclick={() => { showExportMenu = false; copyCodeToClipboard() }}>Copy Code to Clipboard</button>
-              {#if isReadOnly}
-                <button class="export-item" onclick={() => { showExportMenu = false; copyToProjectPlayground = activeTab; showCopyToProject = true }}>Copy to Project…</button>
-              {/if}
+              <button class="export-item" onclick={() => { showExportMenu = false; copyToProjectPlayground = activeTab; showCopyToProject = true }}>Copy to Project…</button>
             {/if}
           </div>
           <div class="export-backdrop" onclick={() => showExportMenu = false} aria-hidden="true"></div>
