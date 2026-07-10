@@ -1696,10 +1696,27 @@
   <InstallToolchainDialog
     preferredVersion={showInstallToolchain}
     onclose={() => { showInstallToolchain = null }}
-    oninstalled={async () => {
-      // After a successful install, refresh the pill display so any
-      // freshly-installed toolchain shows up in the picker next time
-      // it's opened.
+    oninstalled={async (installedName) => {
+      // Install-and-switch as one motion — matches user mental model
+      // (bug feedback from local testing: pill didn't update because we
+      // installed but didn't activate). Order:
+      //   1. Persist as session-level active in config.json so future
+      //      new projects inherit it.
+      //   2. If a project is open, write rust-toolchain.toml so the
+      //      current project runs against it immediately.
+      //   3. Refresh pill display.
+      try {
+        await invoke('set_active_toolchain', {
+          toolchain: installedName,
+          applyToActiveProject: !!activeProjectPath,
+        })
+        if (activeProjectPath) {
+          await invoke('set_project_toolchain', {
+            projectPath: activeProjectPath,
+            name: installedName,
+          })
+        }
+      } catch {}
       await refreshToolchainInfo()
     }}
   />

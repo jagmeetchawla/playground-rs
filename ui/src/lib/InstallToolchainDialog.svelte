@@ -21,9 +21,12 @@
         string like "1.96.0" when opened from the picker's upgrade hint. */
     preferredVersion: string
     onclose: () => void
-    /** Success callback — parent should refresh the toolchain list + pill
-        display. Non-blocking; we call it and continue. */
-    oninstalled: () => Promise<void>
+    /** Called on successful install, with the toolchain name that was
+        installed (e.g. "stable", "nightly", "1.90.0"). Parent should
+        typically set it active and refresh the pill — the user's mental
+        model is "install this and use it", not "install this and leave it
+        sitting there". Non-blocking. */
+    oninstalled: (name: string) => Promise<void>
   } = $props()
 
   // If we opened with a preferred version, jump straight to "specific version"
@@ -60,11 +63,11 @@
         installing = false
         complete = (msg.code ?? -1) === 0 ? 'success' : 'error'
         if (complete === 'success') {
-          // Fire and forget — parent's refreshToolchainInfo() shouldn't
-          // block our success UI transition. Any refresh error is ignored
-          // because the install itself succeeded and the app is still
-          // functional even if the pill hasn't visually updated yet.
-          oninstalled().catch(() => {})
+          // Fire and forget — parent's switch-and-refresh shouldn't block
+          // our success UI transition. Any error there is ignored because
+          // the install itself succeeded and the app is still functional
+          // even if the pill hasn't visually updated yet.
+          oninstalled(toolchainName).catch(() => {})
         }
       } else if (msg.line !== undefined) {
         output = [...output, msg.line]
