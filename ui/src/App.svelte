@@ -18,6 +18,7 @@
   import ToolchainWizard from './lib/ToolchainWizard.svelte'
   import ToolchainFixWizard from './lib/ToolchainFixWizard.svelte'
   import ToolchainPicker from './lib/ToolchainPicker.svelte'
+  import InstallToolchainDialog from './lib/InstallToolchainDialog.svelte'
   import CopyToProjectModal from './lib/CopyToProjectModal.svelte'
   import type { Settings } from './lib/SettingsModal.svelte'
   import type { Template } from './lib/templates'
@@ -1302,13 +1303,10 @@
           }
         }}
         onOpenInstallDialog={(preferredVersion) => {
-          // v0.4 task 8 will render an actual InstallToolchainDialog that
-          // reads showInstallToolchain (null = closed, string = preferred
-          // version to pre-fill). For task 7, we fall back to the
-          // ToolchainFixWizard so the user still gets a functional install
-          // path — no regression from pre-v0.4.
+          // v0.4: open the InstallToolchainDialog with the picker's
+          // preferred version (from the "install newer stable?" hint)
+          // or empty string when opened without a preference.
           showInstallToolchain = preferredVersion ?? ''
-          showFixWizard = true
         }}
         onToolchainSwitched={refreshToolchainInfo}
       />
@@ -1690,6 +1688,19 @@
       } catch {}
       // Bump key so any open ToolchainWizard panel re-checks too.
       toolchainRefreshKey++
+    }}
+  />
+{/if}
+
+{#if showInstallToolchain !== null}
+  <InstallToolchainDialog
+    preferredVersion={showInstallToolchain}
+    onclose={() => { showInstallToolchain = null }}
+    oninstalled={async () => {
+      // After a successful install, refresh the pill display so any
+      // freshly-installed toolchain shows up in the picker next time
+      // it's opened.
+      await refreshToolchainInfo()
     }}
   />
 {/if}
