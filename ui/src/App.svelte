@@ -360,8 +360,13 @@
         invoke<string[]>('list_projects'),
       ])
       await loadProjectData()
+      // loadProjectData() → refreshToolchainInfo() already sets toolchainInfo
+      // (including version, resolved against the project's rust-toolchain.toml
+      // pin). Fetch baseInfo again only to seed the path field for the pill
+      // tooltip — do NOT spread version, which would clobber the resolved
+      // pin-honoring value with the system rustc default.
       const baseInfo = await invoke<{ path: string; version: string }>('get_toolchain_info')
-      toolchainInfo = { ...toolchainInfo, ...baseInfo }
+      toolchainInfo = { ...toolchainInfo, path: baseInfo.path }
       settings = await invoke<Settings>('get_settings')
       enabledLangs = await invoke<string[]>('get_enabled_languages')
 
