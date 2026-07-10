@@ -163,23 +163,31 @@ Toolchain pill dropdown
   Click "Install Toolchain…" → opens InstallToolchainDialog.
 
   Soft "install newer stable?" hint (v0.4 addition):
-    Prepended to the dropdown ONLY when the user has no stable-channel or
-    pinned-semver toolchain at or above LATEST_KNOWN_STABLE (a backend
-    constant, e.g. "1.96.0", bumped each Rustic Playground release).
+    Prepended to the dropdown ONLY when NONE of the user's installed
+    toolchains — across ANY channel (stable, beta, nightly, pinned semver)
+    — is at or above LATEST_KNOWN_STABLE (backend constant, e.g. "1.96.0",
+    bumped each Rustic Playground release).
 
-    Semantics:
-      - Compare installed versions, not just the active toolchain
-        (someone deliberately using 1.85 for MSRV testing while having
-        1.96 installed elsewhere → NO hint)
-      - Skip beta/nightly when computing "have latest stable"
-      - Hint appears above the toolchain list; clicking it opens the
+    Rule: `show_hint = max(t.version for t in toolchains) < LATEST_KNOWN_STABLE`
+
+    Handles cleanly:
+      - Someone on stable 1.96 → no hint (they're current)
+      - Someone on stable 1.85 only → hint (behind)
+      - MSRV tester with stable 1.85 + stable 1.96 → no hint (they have it)
+      - Nightly developer with nightly 1.99 only → no hint (they're ahead)
+      - Beta tester with beta 1.98 → no hint
+      - Only-ancient-nightly (nightly-2024-06-01 at 1.80) → hint (they're
+        genuinely behind and probably should update)
+
+    UX:
+      - Hint appears above the toolchain list; clicking opens the
         Install Toolchain dialog pre-filled with the recommended version
       - Never surfaced outside the dropdown — no unsolicited nag
 
     Backend commands used:
       - get_latest_known_stable() → "1.96.0"
       - list_rust_toolchains() → each ToolchainInfo has .version populated
-      - frontend does the max-version comparison
+      - Frontend does the max-across-all-channels comparison
 
 Install Toolchain dialog
   Modal with:

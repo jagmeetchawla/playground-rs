@@ -508,9 +508,14 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
 
 /// Latest Rust stable version this release of Rustic Playground knows about.
 ///
-/// Used by the picker to surface a subtle "install newer stable?" hint when the
-/// user has *no* stable toolchain at or above this version installed. The hint
-/// is only shown when the user opens the pill dropdown — never unsolicited.
+/// Used by the picker to surface a subtle "install newer stable?" hint when
+/// none of the user's installed toolchains — across ANY channel (stable,
+/// beta, nightly, or pinned semver) — is at or above this version. Users on
+/// nightly, beta, or a newer pinned version are clearly not asleep at the
+/// wheel; only the truly-behind get the hint.
+///
+/// The hint is only shown when the user opens the pill dropdown — never
+/// unsolicited.
 ///
 /// Update this constant each release of Rustic Playground to whatever the
 /// latest Rust stable is at build time. Rust releases every ~6 weeks, so this
