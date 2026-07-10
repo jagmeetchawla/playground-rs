@@ -2009,32 +2009,8 @@
     color: var(--text); background: rgba(255,255,255,0.1);
   }
 
-  .toolchain-info {
-    display: flex; align-items: center; gap: 5px;
-    font-size: 11px; font-family: var(--font-mono);
-    color: var(--text-secondary);
-    white-space: nowrap;
-    background: none; border: 1px solid transparent;
-    padding: 3px 8px; border-radius: 12px;
-    cursor: pointer;
-    transition: background 0.12s, border-color 0.12s;
-  }
-  .toolchain-info:hover {
-    background: rgba(255,255,255,0.05);
-    border-color: var(--border);
-  }
-  .toolchain-text { line-height: 1; }
-  .pill-dot {
-    font-size: 8px; line-height: 1;
-    color: var(--green);
-    margin-bottom: 1px;
-  }
-  .toolchain-info.pill-red { color: #f44; }
-  .toolchain-info.pill-red .toolchain-text { color: #f44; }
-  .toolchain-info.pill-red .pill-dot { color: #f44; }
-  .toolchain-info.pill-yellow { color: #e8a820; }
-  .toolchain-info.pill-yellow .toolchain-text { color: #e8a820; }
-  .toolchain-info.pill-yellow .pill-dot { color: #e8a820; }
+  /* Toolchain pill styles now live in ToolchainPicker.svelte — this section
+     was moved with the component in v0.4 (task 7). */
 
   /* ── Main layout ── */
   .main {
