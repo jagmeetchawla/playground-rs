@@ -594,6 +594,10 @@ enum ToolchainFixAction {
     /// `rustup update stable` — bumps the stable toolchain when the installed
     /// rustc is below MIN_RUST (edition 2024 needs 1.85+).
     UpdateRust,
+    /// `rustup toolchain install <name>` — installs a specific toolchain by
+    /// name ("stable", "nightly", "beta", "1.90.0", "nightly-2026-06-01").
+    /// Used by the v0.4+ multi-version picker.
+    InstallToolchain { name: String },
 }
 
 #[tauri::command]
@@ -657,6 +661,20 @@ async fn run_toolchain_fix(
                 "'{0}' update stable && '{0}' default stable",
                 rustup_q
             ));
+            c
+        }
+        ToolchainFixAction::InstallToolchain { name } => {
+            // `rustup toolchain install <name>` — no chained default change.
+            // The user's intent when installing a new toolchain is "add it to
+            // my available set", not "switch to it". Switching (if desired) is
+            // done separately via set_active_toolchain, which writes app
+            // config and optionally the project's rust-toolchain.toml.
+            //
+            // Direct argv (no sh -c), so shell metacharacters in `name`
+            // can't do anything even if user input were somehow malicious.
+            // Rustup itself validates the name and errors cleanly on typos.
+            let mut c = Command::new(&rustup_bin);
+            c.args(["toolchain", "install", name]);
             c
         }
     };
