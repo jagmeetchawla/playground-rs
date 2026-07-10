@@ -439,6 +439,138 @@ fn main() {
 }
 `,
   },
+  // ── Modern Rust showcase (v0.4+) ────────────────────────────────────────
+  // These templates highlight features that stabilised in relatively recent
+  // Rust versions. They compile on Rust 1.85+ (edition 2024, our MIN_RUST),
+  // and are especially expressive on the newer channels the picker lets
+  // users install.
+  {
+    id: 'let_chains',
+    name: 'Let-chains (Rust 1.88+)',
+    description: 'if let with && for readable pattern matching',
+    code: `//! Let-chains stabilised in Rust 1.88 (2025). They let you combine
+//! \`if let\` pattern binding with boolean conditions via \`&&\` — turning
+//! rightward-drifting nested \`if let Some(x) = foo { if x > 0 {\` chains
+//! into a single flat expression.
+
+fn parse_port(s: &str) -> Option<u16> {
+    s.parse().ok()
+}
+
+fn main() {
+    let inputs = ["8080", "http", "22", "0", "65535", "not-a-port"];
+
+    for s in inputs {
+        // Old style would nest \`if let Some(p) = parse_port(s)\` and then
+        // \`if p > 0 && p < 1024\`. With let-chains it flattens beautifully:
+        if let Some(port) = parse_port(s) && port > 0 && port < 1024 {
+            println!("{s:>12} → privileged port {port}");
+        } else if let Some(port) = parse_port(s) && port >= 1024 {
+            println!("{s:>12} → user port {port}");
+        } else {
+            println!("{s:>12} → not a usable port");
+        }
+    }
+
+    // Works in \`while let\` too — pull items only while they satisfy a check.
+    let mut queue = vec![Some(1), Some(2), Some(3), None, Some(4)];
+    while let Some(head) = queue.pop() && let Some(n) = head {
+        println!("popped {n}");
+    }
+    println!("stopped at: {:?}", queue);
+}
+`,
+  },
+  {
+    id: 'let_else',
+    name: 'Let-else patterns',
+    description: 'Early-return refactoring with let ... else { ... }',
+    code: `//! \`let ... else\` (stabilised in Rust 1.65) is a cleaner alternative to
+//! matching-then-returning. It binds a pattern in the current scope, and
+//! the \`else\` branch must diverge (\`return\`, \`continue\`, \`break\`,
+//! \`panic!\`, or \`std::process::exit\`) — the compiler enforces this.
+
+/// Parse "key=value" or return None. Traditional \`match\` version below
+/// for comparison — the let-else version scales far better as pipelines grow.
+fn parse_pair_match(s: &str) -> Option<(String, String)> {
+    match s.split_once('=') {
+        Some((k, v)) => match k.trim() {
+            "" => None,
+            k => Some((k.to_string(), v.trim().to_string())),
+        },
+        None => None,
+    }
+}
+
+fn parse_pair_let_else(s: &str) -> Option<(String, String)> {
+    let Some((k, v)) = s.split_once('=') else { return None; };
+    let k = k.trim();
+    if k.is_empty() { return None; }
+    Some((k.to_string(), v.trim().to_string()))
+}
+
+fn main() {
+    let inputs = ["  name = alice  ", "empty=", "no-equals", "=lonely"];
+
+    for s in inputs {
+        // Both versions produce the same result — let-else is just flatter.
+        let a = parse_pair_match(s);
+        let b = parse_pair_let_else(s);
+        assert_eq!(a, b);
+        println!("{s:>22} → {b:?}");
+    }
+}
+`,
+  },
+  {
+    id: 'modern_std',
+    name: 'Modern std tour',
+    description: 'Recent std combinators: is_some_and, inspect, array windows',
+    code: `//! A short tour of small std additions that landed in Rust 1.70–1.80.
+//! Each of these replaces a common awkward pattern with something clearer.
+//!
+//! - Option::is_some_and / Result::is_ok_and  (1.70)
+//! - Option::inspect / Result::inspect         (1.76)
+//! - <[T]>::windows and <[T]>::chunks_exact    (evergreen but underused)
+
+fn main() {
+    let scores = vec![82, 91, 88, 75, 94, 68];
+
+    // ── is_some_and: replace \`.map().unwrap_or(false)\` for boolean checks ──
+    let best = scores.iter().max();
+    if best.is_some_and(|&s| s >= 90) {
+        println!("Great result! Top score: {}", best.unwrap());
+    }
+
+    // ── inspect: peek at a value in a pipeline without breaking it ─────
+    // Old style needed a let-binding to log a value mid-pipeline. inspect()
+    // lets you slot it in without disturbing the chain.
+    let total: i32 = scores
+        .iter()
+        .inspect(|s| println!("  visiting {s}"))
+        .filter(|&&s| s >= 70)
+        .sum();
+    println!("Total of passing scores: {total}");
+
+    // ── windows: slide a fixed-size look at consecutive elements ────────
+    // Great for pairwise diffs, moving averages, or detecting patterns.
+    let series = [3, 7, 4, 9, 2, 6, 8];
+    print!("Differences: ");
+    for w in series.windows(2) {
+        print!("{} ", w[1] - w[0]);
+    }
+    println!();
+
+    // ── chunks_exact: iterate in fixed-size groups, ignoring a partial tail ─
+    let bytes = [0xDE_u8, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE];
+    print!("Hex pairs: ");
+    for pair in bytes.chunks_exact(2) {
+        print!("{:02X}{:02X} ", pair[0], pair[1]);
+    }
+    println!();
+}
+`,
+  },
 ]
 
 // ── Native C templates ────────────────────────────────────────────────────────
