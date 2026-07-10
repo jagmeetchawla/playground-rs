@@ -547,22 +547,25 @@
     // can write rust-toolchain.toml when the user switches toolchain.
     activeProjectPath = await invoke<string>('workspace_path').catch(() => null)
     await refreshProjectTypes()
+    // v0.4+: recompute pill display against THIS project's rust-toolchain.toml.
+    // Without this, switching from a project pinned to nightly → project pinned
+    // to stable leaves the pill on nightly (stale).
+    await refreshToolchainInfo()
   }
 
-  // v0.4+: shared refresh triggered after a toolchain switch (via the picker)
-  // or fix (via ToolchainFixWizard). Re-runs check_toolchain and updates the
-  // fields that drive the pill display so the UI reflects the new state
-  // immediately.
+  // v0.4+: shared refresh triggered after a toolchain switch (via the picker),
+  // a fix (via ToolchainFixWizard), or a project switch (via loadProjectData).
   //
-  // Subtle but important: check_toolchain and get_toolchain_info both invoke
-  // `rustc --version` bare, so they always return the SYSTEM active toolchain
-  // (whatever rustup considers active for the process — typically the rustup
-  // default). That's NOT necessarily the app's tracked active_toolchain when
-  // the user has switched via the picker. To keep the pill honest, we ALSO
-  // query list_rust_toolchains and, if it reports one as `is_active` (i.e.
-  // matches Config.active_toolchain), we prefer THAT toolchain's resolved
-  // version for the display. Falls back to baseInfo.version when nothing is
-  // marked active (fresh install, no picker use yet).
+  // Pill-display resolution matches the backend's resolve_toolchain_for_project:
+  //   1. Project's rust-toolchain.toml pin, IF installed → use pin's version
+  //   2. App's Config.active_toolchain (marked is_active in list),
+  //      IF installed → use its version
+  //   3. Fall back to what get_toolchain_info reports (bare `rustc --version`
+  //      via PATH, i.e. rustup's process default)
+  //
+  // Without step 1, switching between projects that pin different toolchains
+  // leaves the pill stale on whichever toolchain the app last flagged active
+  // — user intuition is "the pill should reflect what THIS project uses".
   async function refreshToolchainInfo() {
     try {
       const tc = await invoke<any>('check_toolchain')
@@ -575,11 +578,28 @@
           version: string | null;
           is_rustup_default: boolean; is_active: boolean;
         }[]>('list_rust_toolchains')
-        const active = list.find(t => t.is_active)
-        if (active?.version) {
+
+        // Step 1: project pin (if any + installed)
+        let matched: (typeof list)[number] | undefined
+        if (activeProjectPath) {
+          const projectPin = await invoke<string | null>('get_project_toolchain', {
+            projectPath: activeProjectPath,
+          }).catch(() => null)
+          if (projectPin) {
+            matched = list.find(t =>
+              t.short_name === projectPin || t.name === projectPin
+            )
+          }
+        }
+        // Step 2: app active
+        if (!matched) {
+          matched = list.find(t => t.is_active)
+        }
+
+        if (matched?.version) {
           // Prefix with "rustc " to match the shape get_toolchain_info returns,
           // so downstream regex extractions (pill "1.90.0" label) still work.
-          effectiveVersion = `rustc ${active.version}`
+          effectiveVersion = `rustc ${matched.version}`
         }
       } catch { /* non-fatal — fall back to baseInfo.version */ }
       toolchainInfo = {
