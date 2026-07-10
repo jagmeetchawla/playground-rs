@@ -35,6 +35,13 @@ pub(crate) struct Config {
     pub(crate) wizard_completed: bool,
     #[serde(default = "default_enabled_languages")]
     pub(crate) enabled_languages: Vec<String>,
+    /// Session-level active Rust toolchain (v0.4+). Persists across launches.
+    /// None until first-launch bootstrap populates it from
+    /// `rustup show active-toolchain`. Used as fallback when a project has no
+    /// rust-toolchain.toml (or when it pins a toolchain that isn't installed),
+    /// and as the default for new projects.
+    #[serde(default)]
+    pub(crate) active_toolchain: Option<String>,
 }
 
 fn default_enabled_languages() -> Vec<String> {
@@ -146,16 +153,35 @@ pub(crate) fn load_config(app: &AppHandle) -> Config {
         active_project: "hello_rust".to_string(),
         wizard_completed: false,
         enabled_languages: default_enabled_languages(),
+        active_toolchain: None,
     }
 }
 
 pub(crate) fn save_config(app: &AppHandle, active_project: &str) -> Result<(), String> {
-    // Preserve wizard_completed and enabled_languages from existing config
+    // Preserve everything else from existing config
     let existing = load_config(app);
     let config = Config {
         active_project: active_project.to_string(),
         wizard_completed: existing.wizard_completed,
         enabled_languages: existing.enabled_languages,
+        active_toolchain: existing.active_toolchain,
+    };
+    let json = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialise config: {}", e))?;
+    std::fs::write(config_path(app), json)
+        .map_err(|e| format!("Failed to write config.json: {}", e))
+}
+
+/// Update just the active_toolchain field, preserving everything else. Used by
+/// the toolchain picker (v0.4+) when the user switches active toolchain via
+/// the pill dropdown.
+pub(crate) fn save_active_toolchain(app: &AppHandle, toolchain: Option<String>) -> Result<(), String> {
+    let existing = load_config(app);
+    let config = Config {
+        active_project: existing.active_project,
+        wizard_completed: existing.wizard_completed,
+        enabled_languages: existing.enabled_languages,
+        active_toolchain: toolchain,
     };
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialise config: {}", e))?;
@@ -455,6 +481,7 @@ fn set_enabled_languages(languages: Vec<String>, app: AppHandle) -> Result<(), S
         active_project: existing.active_project,
         wizard_completed: existing.wizard_completed,
         enabled_languages: langs,
+        active_toolchain: existing.active_toolchain,
     };
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialise config: {}", e))?;
@@ -901,6 +928,9 @@ pub fn run() {
             cargo_commands::get_toolchain_info,
             cargo_commands::check_toolchain,
             cargo_commands::complete_wizard,
+            // Multi-version toolchain picker (v0.4+)
+            cargo_commands::list_rust_toolchains,
+            cargo_commands::set_active_toolchain,
             // Content files
             content_commands::list_content_files,
             content_commands::create_content_file,
@@ -1232,12 +1262,24 @@ mod tests {
             active_project: "my_project".to_string(),
             wizard_completed: true,
             enabled_languages: vec!["rust".to_string(), "clang".to_string()],
+            active_toolchain: Some("stable".to_string()),
         };
         let json = serde_json::to_string(&c).unwrap();
         let c2: Config = serde_json::from_str(&json).unwrap();
         assert_eq!(c2.active_project, "my_project");
         assert!(c2.wizard_completed);
         assert_eq!(c2.enabled_languages, vec!["rust", "clang"]);
+        assert_eq!(c2.active_toolchain.as_deref(), Some("stable"));
+    }
+
+    #[test]
+    fn config_backward_compat_missing_active_toolchain() {
+        // Old configs (pre-v0.4) don't have active_toolchain — must still parse
+        let old_json = r#"{"active_project":"hello","wizard_completed":true,"enabled_languages":["rust"]}"#;
+        let c: Config = serde_json::from_str(old_json).unwrap();
+        assert_eq!(c.active_project, "hello");
+        assert!(c.wizard_completed);
+        assert_eq!(c.active_toolchain, None);
     }
 
     #[test]

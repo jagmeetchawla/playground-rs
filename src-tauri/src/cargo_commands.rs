@@ -1,6 +1,6 @@
 use tauri::AppHandle;
 
-use crate::{cargo_path, config_path, load_config, settings_path, workspace_dir, Config, Settings};
+use crate::{cargo_path, config_path, load_config, save_active_toolchain, settings_path, workspace_dir, Config, Settings};
 
 /// Minimum rustc version required for edition = "2024" (stabilized in 1.85,
 /// Feb 2025). Generated Cargo.toml files pin this edition, so a toolchain
@@ -504,6 +504,148 @@ pub fn check_toolchain(app: AppHandle) -> serde_json::Value {
     })
 }
 
+// ── Multi-version toolchain support (v0.4+) ──────────────────────────────────
+
+/// Resolve a rustup-managed tool (rustup, cargo, rustc, rustfmt, cargo-clippy)
+/// to an absolute path via the cargo bin dir, with PATH fallback.
+///
+/// Same logic as the `tool_path` closure inside `check_toolchain`, extracted
+/// here so multiple commands can share it. check_toolchain keeps its closure
+/// for the cargo_dir-once optimisation across many tools; new commands should
+/// use this helper for clarity.
+fn resolve_tool(name: &str) -> String {
+    let cargo = cargo_path();
+    let abs = std::path::Path::new(&cargo)
+        .parent()
+        .unwrap_or(std::path::Path::new(""))
+        .join(name);
+    if abs.exists() {
+        abs.to_string_lossy().to_string()
+    } else {
+        name.to_string()
+    }
+}
+
+/// Summary of one installed Rust toolchain, used by the pill dropdown.
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct ToolchainInfo {
+    /// Full rustup-registered name, e.g. "stable-aarch64-apple-darwin".
+    pub name: String,
+    /// Human-friendly short form: channel ("stable", "beta", "nightly") or
+    /// pinned version ("1.90.0"). Derived from `name` by stripping the host triple.
+    pub short_name: String,
+    /// True when rustup's `list` marks this as "(default)". This is rustup's
+    /// fallback when no rust-toolchain.toml or override is present.
+    pub is_rustup_default: bool,
+    /// True when this toolchain matches Config.active_toolchain — the app's
+    /// session-level default used for new-project scaffolding and as fallback
+    /// when a project's pinned toolchain isn't installed.
+    pub is_active: bool,
+}
+
+/// Strip the host triple from a toolchain name to get the channel/version alone.
+///
+/// Examples:
+///   "stable-aarch64-apple-darwin"        → "stable"
+///   "1.85.0-x86_64-apple-darwin"         → "1.85.0"
+///   "nightly-2024-01-01-x86_64-apple-darwin" → "nightly-2024-01-01"
+///
+/// Host triples always begin with one of a known set of architecture strings
+/// (x86_64, aarch64, i686, armv7, riscv*). Anything preceding the first
+/// occurrence of "-<arch>" is the short name.
+fn short_name_from_full(full: &str) -> String {
+    const ARCH_MARKERS: &[&str] = &["x86_64", "aarch64", "i686", "armv7", "riscv64", "riscv32"];
+    for marker in ARCH_MARKERS {
+        if let Some(idx) = full.find(&format!("-{}", marker)) {
+            return full[..idx].to_string();
+        }
+    }
+    // Fallback: no known arch marker → return as-is. Better than losing info.
+    full.to_string()
+}
+
+/// List all Rust toolchains rustup knows about, plus which is rustup's default
+/// and which matches the app's active toolchain.
+///
+/// Runs `rustup toolchain list`. Format is one toolchain per line, e.g.:
+///     stable-aarch64-apple-darwin (default) (active)
+///     nightly-aarch64-apple-darwin
+///     1.85.0-aarch64-apple-darwin
+///
+/// The parenthesised markers can appear in any order. We look for "(default)"
+/// to identify rustup's default. We deliberately ignore "(active)" — that's
+/// rustup's view of "active for the current shell / directory", which isn't
+/// the same concept as our app's tracked active toolchain.
+#[tauri::command]
+pub fn list_rust_toolchains(app: AppHandle) -> Result<Vec<ToolchainInfo>, String> {
+    let rustup_bin = resolve_tool("rustup");
+    let output = std::process::Command::new(&rustup_bin)
+        .env("RUSTUP_AUTO_INSTALL", "0")
+        .args(["toolchain", "list"])
+        .output()
+        .map_err(|e| format!("Failed to run rustup: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "rustup toolchain list failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|e| format!("rustup output was not UTF-8: {}", e))?;
+
+    let active_name = load_config(&app).active_toolchain;
+
+    // Special-case: "no installed toolchains" is a stderr message, but success
+    // exit + empty stdout is possible on very clean systems.
+    let toolchains: Vec<ToolchainInfo> = stdout
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            // The name is the first whitespace-separated token. Everything else
+            // (parenthesised markers) is metadata we inspect on the raw line.
+            let name = trimmed.split_whitespace().next()?.to_string();
+            let is_default = trimmed.contains("(default)");
+            let short_name = short_name_from_full(&name);
+            let is_active = active_name
+                .as_deref()
+                .map(|a| a == name || a == short_name)
+                .unwrap_or(false);
+            Some(ToolchainInfo {
+                name,
+                short_name,
+                is_rustup_default: is_default,
+                is_active,
+            })
+        })
+        .collect();
+
+    Ok(toolchains)
+}
+
+/// Set the app's session-level active toolchain. Pass None to clear (so we
+/// fall back to rustup's default). Persisted to config.json.
+///
+/// Also written to the currently-active project's rust-toolchain.toml if
+/// `apply_to_active_project` is true — this is what happens when the user
+/// clicks a toolchain in the pill dropdown while inside a project.
+#[tauri::command]
+pub fn set_active_toolchain(
+    toolchain: Option<String>,
+    _apply_to_active_project: bool,
+    app: AppHandle,
+) -> Result<(), String> {
+    // v0.4 minimum: persist the app-level active. Per-project write-through
+    // is implemented in the rust-toolchain.toml helper task. For now, this
+    // command only updates config; the frontend can invoke the project-write
+    // command separately if needed.
+    save_active_toolchain(&app, toolchain)
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -718,6 +860,67 @@ mod tests {
         assert!(!((1, 84, 999) >= MIN_RUST)); // just below floor
         assert!(!((1, 0, 0) >= MIN_RUST)); // clearly below
     }
+
+    // ── short_name_from_full ─────────────────────────────────────────────
+
+    #[test]
+    fn short_name_strips_apple_darwin_arm() {
+        assert_eq!(short_name_from_full("stable-aarch64-apple-darwin"), "stable");
+    }
+
+    #[test]
+    fn short_name_strips_apple_darwin_intel() {
+        assert_eq!(short_name_from_full("stable-x86_64-apple-darwin"), "stable");
+    }
+
+    #[test]
+    fn short_name_pinned_version() {
+        assert_eq!(
+            short_name_from_full("1.85.0-aarch64-apple-darwin"),
+            "1.85.0"
+        );
+        assert_eq!(
+            short_name_from_full("1.90.0-x86_64-apple-darwin"),
+            "1.90.0"
+        );
+    }
+
+    #[test]
+    fn short_name_nightly_channel() {
+        assert_eq!(short_name_from_full("nightly-aarch64-apple-darwin"), "nightly");
+        assert_eq!(short_name_from_full("beta-x86_64-apple-darwin"), "beta");
+    }
+
+    #[test]
+    fn short_name_dated_nightly() {
+        // Dated nightlies keep the date in the short name
+        assert_eq!(
+            short_name_from_full("nightly-2026-06-01-aarch64-apple-darwin"),
+            "nightly-2026-06-01"
+        );
+    }
+
+    #[test]
+    fn short_name_linux_hosts() {
+        // Should also work on Linux even though the app is Mac-only —
+        // rust-toolchain.toml files created elsewhere might be opened.
+        assert_eq!(
+            short_name_from_full("stable-x86_64-unknown-linux-gnu"),
+            "stable"
+        );
+        assert_eq!(
+            short_name_from_full("1.85.0-aarch64-unknown-linux-gnu"),
+            "1.85.0"
+        );
+    }
+
+    #[test]
+    fn short_name_unrecognised_falls_back_intact() {
+        // If we don't recognise the arch marker, return the input intact rather
+        // than truncating something meaningful.
+        assert_eq!(short_name_from_full("weird-name"), "weird-name");
+        assert_eq!(short_name_from_full(""), "");
+    }
 }
 
 /// Mark the toolchain wizard as completed and persist enabled languages.
@@ -728,6 +931,7 @@ pub fn complete_wizard(enabled_languages: Vec<String>, app: AppHandle) -> Result
         active_project: existing.active_project,
         wizard_completed: true,
         enabled_languages,
+        active_toolchain: existing.active_toolchain,
     };
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialise config: {}", e))?;
