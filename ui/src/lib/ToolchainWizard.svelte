@@ -54,6 +54,18 @@
   let selectedLangs: string[] = $state([...new Set(enabledLanguages)])
   let status = $state<ToolchainStatus | null>(null)
   let checking = $state(false)
+  // v0.4+: full list of rustup-managed toolchains so the Wizard can show a
+  // read-only overview when more than one is installed. Switching still
+  // happens in the picker (the pill dropdown) — this section is
+  // informational only.
+  type WizToolchain = {
+    name: string
+    short_name: string
+    version: string | null
+    is_rustup_default: boolean
+    is_active: boolean
+  }
+  let installedToolchains: WizToolchain[] = $state([])
   let draftSettings: Settings = $state({ ...settings })
   const originalTheme = settings.theme
   let applied = $state(false)
@@ -176,6 +188,14 @@
     if (!silent) checking = true
     try {
       status = await invoke<ToolchainStatus>('check_toolchain')
+      // v0.4+: also fetch installed Rust toolchains for the read-only
+      // "Installed toolchains" list in the Toolchains panel. Failures are
+      // non-fatal — if rustup isn't installed yet, the list stays empty and
+      // the section just doesn't render. The user still sees the standard
+      // "Rust not installed" state above.
+      try {
+        installedToolchains = await invoke<WizToolchain[]>('list_rust_toolchains')
+      } catch { installedToolchains = [] }
     } catch (_) { /* ignore */ }
     finally { if (!silent) checking = false }
   }
@@ -469,6 +489,22 @@
                       </div>
                     {/if}
                   </div>
+                  {#if installedToolchains.length > 1}
+                    <div class="tc-subhead">Installed toolchains</div>
+                    <div class="detail-grid">
+                      {#each installedToolchains as t (t.name)}
+                        <div class="detail-row">
+                          <span class="detail-icon" class:ok={t.is_active}>{t.is_active ? '●' : '·'}</span>
+                          <span class="detail-label">{t.short_name}</span>
+                          <span class="detail-value">
+                            {t.version ?? ''}{t.is_rustup_default ? ' · rustup default' : ''}{t.is_active ? ' · active in app' : ''}
+                          </span>
+                        </div>
+                      {/each}
+                    </div>
+                    <p class="tc-switch-hint">Switch active toolchain from the pill in the toolbar.</p>
+                  {/if}
+
                   {#if status.rust_state !== 'healthy'}
                     <div class="install-section">
                       <button class="btn btn-primary" onclick={() => onrepair?.()}>
@@ -980,6 +1016,20 @@
   .tc-status.ok { color: var(--green); }
   .tc-status.warn { color: #e8a820; }
   .tc-status.missing { color: var(--red, #d42020); }
+
+  /* v0.4+: multi-toolchain overview when >1 rustup toolchain is installed. */
+  .tc-subhead {
+    margin: 12px 0 6px;
+    font-size: 10px; font-weight: 600;
+    color: var(--text-tertiary, #888);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .tc-switch-hint {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: var(--text-tertiary, #888);
+    font-style: italic;
+  }
 
   .status-card {
     padding: 10px 12px;
