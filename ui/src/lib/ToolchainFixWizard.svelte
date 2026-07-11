@@ -27,7 +27,22 @@
     | { type: 'AddComponent'; name: string }
     | { type: 'UpdateRust' }
 
+  // Row shape returned by `list_rust_toolchains` — used to render the
+  // "Installed toolchains" section when the user has ≥2 installed. Same
+  // fields as the picker's ToolchainInfo, but v0.4 kept `is_active` from
+  // when config.active_toolchain was in the resolution chain; we still
+  // surface it as a subtle "active in app" annotation to match the
+  // ToolchainWizard (settings) rendering exactly.
+  type WizToolchain = {
+    name: string
+    short_name: string
+    version: string | null
+    is_rustup_default: boolean
+    is_active: boolean
+  }
+
   let status = $state<ToolchainStatus | null>(null)
+  let installedToolchains = $state<WizToolchain[]>([])
   let checking = $state(false)
   let fixState = $state<'idle' | 'running' | 'success' | 'error'>('idle')
   let fixOutput = $state<string[]>([])
@@ -151,6 +166,11 @@
     checking = true
     try {
       status = await invoke<ToolchainStatus>('check_toolchain')
+      // Refresh the installed toolchains list alongside status. Failures
+      // are non-fatal — the section just hides. Matches ToolchainWizard.
+      try {
+        installedToolchains = await invoke<WizToolchain[]>('list_rust_toolchains')
+      } catch { installedToolchains = [] }
     } catch { /* ignore */ }
     finally { checking = false }
   }
@@ -312,6 +332,26 @@
           <span class="detail-value">{status.components.clippy ? 'installed' : 'not found'}</span>
         </div>
       </div>
+      {#if installedToolchains.length > 1}
+        <!-- Same section that ToolchainWizard (Settings) shows — kept in
+             sync so users reaching the toolchain modal from either the pill,
+             Settings, or Help → Rust Help see the same list of toolchains
+             rustup has installed. Only surfaces when ≥2 exist, since the
+             detail-grid above already covers the single-toolchain case. -->
+        <div class="tc-subhead">Installed toolchains</div>
+        <div class="detail-grid">
+          {#each installedToolchains as t (t.name)}
+            <div class="detail-row">
+              <span class="detail-icon" class:ok={t.is_rustup_default}>{t.is_rustup_default ? '●' : '·'}</span>
+              <span class="detail-label">{t.short_name}</span>
+              <span class="detail-value">
+                {t.version ?? ''}{t.is_rustup_default ? ' · rustup default' : ''}{t.is_active ? ' · active in app' : ''}
+              </span>
+            </div>
+          {/each}
+        </div>
+        <p class="tc-switch-hint">Switch active toolchain from the pill in the toolbar.</p>
+      {/if}
       {@render helpLinks()}
     {:else if status}
       <!-- Split layout: left sidebar (path chooser), right content (status + mode) -->
@@ -846,6 +886,22 @@
     font-family: var(--font-mono);
     color: var(--accent);
     font-weight: 600;
+  }
+
+  /* v0.4+: multi-toolchain overview when >1 rustup toolchain is installed.
+     Copies the exact tokens from ToolchainWizard so the two surfaces render
+     the same list identically. */
+  .tc-subhead {
+    margin: 12px 0 6px;
+    font-size: 10px; font-weight: 600;
+    color: var(--text-tertiary, #888);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .tc-switch-hint {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: var(--text-tertiary, #888);
+    font-style: italic;
   }
 
   /* External help links footer — rendered in every FixWizard state
