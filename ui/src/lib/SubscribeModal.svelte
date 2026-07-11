@@ -75,6 +75,14 @@
       onerror={() => { loadError = true; loading = false }}
     ></iframe>
   </div>
+
+  <!-- Honest attribution: one Buttondown list serves all of Jagmeet's apps,
+       so subscribing here also gets updates for any other apps he ships.
+       Users should know they're joining a wider newsletter, not an app-
+       specific list, before they hand over their email. -->
+  <div class="modal-footnote">
+    An app by <strong>Jagmeet Chawla</strong> — this list covers updates for all of his apps, not just this one.
+  </div>
 </div>
 
 <style>
@@ -163,4 +171,22 @@
     transition: filter 0.1s;
   }
   .fallback-btn:hover { filter: brightness(1.1); }
+
+  /* Attribution footnote — small print acknowledging one Buttondown list
+     serves all of Jagmeet's apps. Sits below the iframe, styled quietly so
+     it doesn't compete with the site's own signup form. */
+  .modal-footnote {
+    flex-shrink: 0;
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-elevated);
+    font-size: 11px;
+    color: var(--text-tertiary);
+    text-align: center;
+    line-height: 1.5;
+  }
+  .modal-footnote strong {
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
 </style>
