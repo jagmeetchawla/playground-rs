@@ -39,7 +39,7 @@
     "macOS": {
       "entitlements": "./entitlements.plist",
       "exceptionDomain": "",
-      "signingIdentity": "Developer ID Application: ONE STEP AHEAD APPS, LLC (CW985P4WQJ)",
+      "signingIdentity": "Developer ID Application: CloudCraft AI Labs, LLC (223CB55S3S)",
       "minimumSystemVersion": "12.0"
     }
   }
