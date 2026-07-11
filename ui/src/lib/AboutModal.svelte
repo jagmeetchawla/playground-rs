@@ -84,7 +84,7 @@
         <span class="support-icon" aria-hidden="true">⭐</span>
         <span class="support-label">Star on GitHub</span>
       </button>
-      <button class="support-btn" onclick={() => shellOpen('https://rusticplayground.dev/subscribe')}>
+      <button class="support-btn" onclick={() => shellOpen('mailto:hello@rusticplayground.dev?subject=Subscribe%20to%20Rustic%20Playground%20updates&body=Hi%20%E2%80%94%20I%27d%20like%20to%20get%20email%20updates%20about%20Rustic%20Playground%20releases.%20Thanks!')}>
         <span class="support-icon" aria-hidden="true">📬</span>
         <span class="support-label">Get email updates</span>
       </button>
