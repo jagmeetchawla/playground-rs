@@ -2,6 +2,7 @@
 /ui/node_modules
 /ui/dist
 /target/playground-runs
+/.pnpm-store
 
 # Dev-mode content folder (user files — not source code)
 /content
