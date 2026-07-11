@@ -861,7 +861,7 @@ pub fn run() {
                 }
                 "open_website" => {
                     let _ = std::process::Command::new("open")
-                        .arg("https://rustic-playground.app")
+                        .arg("https://rusticplayground.dev")
                         .spawn();
                     None
                 }

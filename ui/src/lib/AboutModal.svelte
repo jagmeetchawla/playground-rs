@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { getVersion } from '@tauri-apps/api/app'
+  import { open as shellOpen } from '@tauri-apps/plugin-shell'
   import appIcon from './app-icon.png'
   import type { EditionConfig } from './editions'
 
@@ -61,8 +62,8 @@
       </div>
       <div class="stack-row">
         <span class="stack-label">Website</span>
-        <a class="stack-link" href="https://rustic-playground.app" target="_blank" rel="noreferrer">
-          rustic-playground.app
+        <a class="stack-link" href="https://rusticplayground.dev" target="_blank" rel="noreferrer">
+          rusticplayground.dev
         </a>
       </div>
       <div class="stack-row">
@@ -71,6 +72,22 @@
           github.com/jagmeetchawla/rustic-playground
         </a>
       </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Support the project — both actions open the system browser via
+         Tauri's shell plugin. Zero backend, zero auth: starring happens
+         in GitHub's UI, subscribe lands on the site's signup page. -->
+    <div class="support-actions">
+      <button class="support-btn" onclick={() => shellOpen('https://github.com/jagmeetchawla/rustic-playground')}>
+        <span class="support-icon" aria-hidden="true">⭐</span>
+        <span class="support-label">Star on GitHub</span>
+      </button>
+      <button class="support-btn" onclick={() => shellOpen('https://rusticplayground.dev/subscribe')}>
+        <span class="support-icon" aria-hidden="true">📬</span>
+        <span class="support-label">Get email updates</span>
+      </button>
     </div>
 
     <div class="divider"></div>
@@ -161,6 +178,34 @@
     text-decoration: none; word-break: break-all;
   }
   .stack-link:hover { text-decoration: underline; }
+
+  /* Support the project — Star + Subscribe. Two equal-width buttons in a
+     row on wide viewports; the container gracefully wraps to a stack when
+     the modal shrinks. Icon + label centered; hover raises contrast
+     without a color swap so it works across all 8 themes. */
+  .support-actions {
+    width: 100%;
+    display: flex; gap: 8px;
+    margin-bottom: 16px;
+  }
+  .support-btn {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px; font-weight: 500;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .support-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-strong);
+  }
+  .support-icon { font-size: 13px; line-height: 1; }
+  .support-label { line-height: 1; }
 
   .disclaimer {
     font-size: 11px; color: var(--text-tertiary);
