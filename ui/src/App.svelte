@@ -13,6 +13,7 @@
   import ProjectSwitcher from './lib/ProjectSwitcher.svelte'
   import HelpModal from './lib/HelpModal.svelte'
   import AboutModal from './lib/AboutModal.svelte'
+  import SubscribeModal from './lib/SubscribeModal.svelte'
   // SettingsModal.svelte is now type-only; ToolchainWizard handles settings UI
   import NewPlaygroundModal from './lib/NewPlaygroundModal.svelte'
   import ToolchainWizard from './lib/ToolchainWizard.svelte'
@@ -183,6 +184,7 @@
   // ── Modal state ───────────────────────────────────────────────────────────────
   let showHelp:        boolean       = $state(false)
   let showAbout:       boolean       = $state(false)
+  let showSubscribe:   boolean       = $state(false)
   let showWizard:      boolean       = $state(false)
   let wizardMode:      'wizard' | 'settings' = $state('wizard')
   let showFixWizard:   boolean       = $state(false)
@@ -1731,7 +1733,15 @@
 {/if}
 
 {#if showAbout}
-  <AboutModal onclose={() => showAbout = false} edition={currentEdition()} />
+  <AboutModal
+    onclose={() => showAbout = false}
+    edition={currentEdition()}
+    onopensubscribe={() => { showAbout = false; showSubscribe = true }}
+  />
+{/if}
+
+{#if showSubscribe}
+  <SubscribeModal onclose={() => showSubscribe = false} theme={resolvedTheme} />
 {/if}
 
 {#if showFixWizard}

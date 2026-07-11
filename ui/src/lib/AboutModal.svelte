@@ -5,7 +5,18 @@
   import appIcon from './app-icon.png'
   import type { EditionConfig } from './editions'
 
-  let { onclose, edition }: { onclose: () => void; edition: EditionConfig } = $props()
+  let {
+    onclose,
+    edition,
+    onopensubscribe,
+  }: {
+    onclose: () => void
+    edition: EditionConfig
+    /** Called when the user clicks "Get email updates" — parent opens the
+        embedded SubscribeModal in place of AboutModal. Kept as a callback so
+        AboutModal doesn't need to know about SubscribeModal directly. */
+    onopensubscribe: () => void
+  } = $props()
   let version = $state('')
 
   onMount(async () => {
@@ -84,7 +95,7 @@
         <span class="support-icon" aria-hidden="true">⭐</span>
         <span class="support-label">Star on GitHub</span>
       </button>
-      <button class="support-btn" onclick={() => shellOpen('mailto:hello@rusticplayground.dev?subject=Subscribe%20to%20Rustic%20Playground%20updates&body=Hi%20%E2%80%94%20I%27d%20like%20to%20get%20email%20updates%20about%20Rustic%20Playground%20releases.%20Thanks!')}>
+      <button class="support-btn" onclick={onopensubscribe}>
         <span class="support-icon" aria-hidden="true">📬</span>
         <span class="support-label">Get email updates</span>
       </button>
