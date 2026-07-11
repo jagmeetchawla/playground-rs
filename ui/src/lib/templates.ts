@@ -439,6 +439,109 @@ fn main() {
 }
 `,
   },
+  {
+    id: 'system_info',
+    name: 'System Info',
+    description: 'Print Rust version, target, and environment — quick diagnostic',
+    code: `//! A quick "what am I running on?" diagnostic. Prints the Rust toolchain,
+//! the compilation target, and the environment vars a playground can see.
+//! Handy when a build/run behaves unexpectedly — pin mismatch, missing env,
+//! stale PATH, or a cross-compiled target you didn't intend.
+//!
+//! rustc/cargo/rustup versions come from actually running the tools, so what
+//! you see here is what your playground *just* used to build itself.
+use std::env;
+use std::process::Command;
+
+/// Run \`program\` with \`args\` and return its first stdout line, or a helpful
+/// stand-in on failure. Kept small so the diagnostic itself doesn't panic on
+/// a missing tool (rustup can be absent on some standalone installs).
+fn cmd_first_line(program: &str, args: &[&str]) -> String {
+    match Command::new(program).args(args).output() {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .next()
+            .unwrap_or("")
+            .to_string(),
+        Ok(out) => format!(
+            "(exit {}: {})",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        Err(e) => format!("(not available: {e})"),
+    }
+}
+
+fn row(label: &str, value: impl AsRef<str>) {
+    println!("  {label:<22} {}", value.as_ref());
+}
+
+fn main() {
+    println!("── Rust toolchain ──────────────────────────────");
+    row("rustc",          cmd_first_line("rustc",  &["--version"]));
+    row("cargo",          cmd_first_line("cargo",  &["--version"]));
+    row("rustup default", cmd_first_line("rustup", &["default"]));
+
+    println!();
+    println!("── Build profile ───────────────────────────────");
+    row("debug assertions", if cfg!(debug_assertions) { "on" } else { "off" });
+    row("optimisation",     if cfg!(debug_assertions) { "unoptimised (debug)" } else { "optimised (release)" });
+
+    println!();
+    println!("── Target ──────────────────────────────────────");
+    row("os",     env::consts::OS);
+    row("family", env::consts::FAMILY);
+    row("arch",   env::consts::ARCH);
+    row("pointer width",
+        if cfg!(target_pointer_width = "64") { "64-bit" }
+        else if cfg!(target_pointer_width = "32") { "32-bit" }
+        else { "?" });
+    row("endianness",
+        if cfg!(target_endian = "little") { "little" } else { "big" });
+    row("cpu cores available",
+        std::thread::available_parallelism()
+            .map(|n| n.to_string())
+            .unwrap_or_else(|_| "?".into()));
+
+    println!();
+    println!("── Environment ─────────────────────────────────");
+    // Vars worth surfacing: user identity, shell/locale, cargo/rustup dirs,
+    // the toolchain rustup selected for this run, and the playground content
+    // folder if the runner set it.
+    for key in [
+        "USER", "HOME", "SHELL", "LANG", "TERM",
+        "CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN",
+        "PLAYGROUND_CONTENT",
+    ] {
+        match env::var(key) {
+            Ok(v)  => row(key, v),
+            Err(_) => row(key, "(unset)"),
+        }
+    }
+
+    // PATH is long — show entry count + first few components rather than
+    // dumping the whole thing. env::split_paths handles the OS-appropriate
+    // separator (':' on Unix, ';' on Windows).
+    if let Some(path) = env::var_os("PATH") {
+        let parts: Vec<_> = env::split_paths(&path).collect();
+        row("PATH entries", parts.len().to_string());
+        for (i, p) in parts.iter().take(3).enumerate() {
+            row(&format!("PATH[{i}]"), p.display().to_string());
+        }
+        if parts.len() > 3 {
+            row("...", format!("+{} more entries", parts.len() - 3));
+        }
+    }
+
+    println!();
+    println!("── Working directory ───────────────────────────");
+    row("cwd",
+        env::current_dir()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|e| format!("(err: {e})")));
+}
+`,
+  },
   // ── Modern Rust showcase (v0.4+) ────────────────────────────────────────
   // These templates highlight features that stabilised in relatively recent
   // Rust versions. They compile on Rust 1.85+ (edition 2024, our MIN_RUST),
