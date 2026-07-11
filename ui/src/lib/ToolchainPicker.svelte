@@ -194,6 +194,21 @@
     // rustup would pick if we ran `cargo` bare.
     return t.is_rustup_default
   }
+
+  // The "Default" row is the effective one iff no pin is set (or the pin is
+  // missing so we're using the fallback). This is what drives the ✓ on the
+  // Default row and lets us skip the individual-row ✓ from doubling up.
+  let defaultRowIsEffective = $derived(!projectPinnedName || !!missingProjectPin)
+
+  async function chooseDefault() {
+    // If a pin is set on the current project, unpin — that IS the "choose
+    // default" action. If no pin, this is a no-op close (the row is already
+    // ✓ and clicking it shouldn't do anything destructive).
+    close()
+    if (projectPinnedName && projectPath) {
+      await onRemovePin()
+    }
+  }
 </script>
 
 <div class="toolchain-picker">
@@ -212,6 +227,9 @@
     <LanguageLogo type={projectType === 'rust' ? 'cargo' : projectType} size={16} />
     <span class="pill-dot">{pillIcon}</span>
     <span class="toolchain-text">{pillText}</span>
+    {#if projectPinnedName}
+      <span class="pill-pin" title={`Pinned to ${projectPinnedName} via rust-toolchain.toml`}>📌</span>
+    {/if}
     <svg class="pill-caret" width="9" height="6" viewBox="0 0 10 6">
       <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5"
             stroke-linecap="round" fill="none"/>
@@ -238,7 +256,7 @@
           Set it up in Settings first.
         </div>
         <button class="menu-item" onclick={() => { close(); onOpenFixWizard() }}>
-          Manage in Settings…
+          Rust Toolchain…
         </button>
 
       {:else if loading}
@@ -247,7 +265,7 @@
       {:else if error}
         <div class="error" role="alert">{error}</div>
         <button class="menu-item" onclick={() => { close(); onOpenFixWizard() }}>
-          Manage in Settings…
+          Rust Toolchain…
         </button>
 
       {:else}
@@ -273,17 +291,31 @@
           <div class="separator"></div>
         {/if}
 
+        <button
+          class="menu-item toolchain-row default-row"
+          class:active={defaultRowIsEffective}
+          onclick={chooseDefault}
+          title={projectPinnedName && projectPath
+            ? 'Unpin this project — fall back to rustup default'
+            : 'Currently using rustup default (no pin)'}
+        >
+          <span class="checkmark">{defaultRowIsEffective ? '✓' : ''}</span>
+          <span class="tc-name">default</span>
+          <span class="tc-version">latest</span>
+          <span class="tag-spacer"></span>
+        </button>
+
         <div class="section-label">Installed toolchains</div>
         <ul class="toolchain-list">
           {#each toolchains as t (t.name)}
             <li>
               <button
                 class="menu-item toolchain-row"
-                class:active={isEffectiveToolchain(t)}
+                class:active={isEffectiveToolchain(t) && !defaultRowIsEffective}
                 onclick={() => selectToolchain(t)}
                 title={t.name}
               >
-                <span class="checkmark">{isEffectiveToolchain(t) ? '✓' : ''}</span>
+                <span class="checkmark">{isEffectiveToolchain(t) && !defaultRowIsEffective ? '✓' : ''}</span>
                 <span class="tc-name">
                   {t.short_name}{#if isPinnedForProject(t)}<span class="pin-marker" title="Pinned to this project via rust-toolchain.toml">📌</span>{/if}
                 </span>
@@ -303,20 +335,11 @@
         </ul>
 
         <div class="separator"></div>
-        {#if projectPinnedName && projectPath}
-          <button
-            class="menu-item subtle"
-            onclick={async () => { close(); await onRemovePin() }}
-            title="Delete rust-toolchain.toml from this project"
-          >
-            Remove pin ({projectPinnedName})
-          </button>
-        {/if}
         <button class="menu-item" onclick={() => { close(); onOpenInstallDialog() }}>
           Install Toolchain…
         </button>
-        <button class="menu-item subtle" onclick={() => { close(); onOpenFixWizard() }}>
-          Manage in Settings…
+        <button class="menu-item" onclick={() => { close(); onOpenFixWizard() }}>
+          Rust Toolchain…
         </button>
       {/if}
 
@@ -356,6 +379,17 @@
   .toolchain-info.pill-yellow .pill-dot { color: #e8a820; }
   .pill-caret { opacity: 0.5; margin-left: 2px; transition: transform 0.12s; }
   .toolchain-info.open .pill-caret { transform: rotate(180deg); }
+
+  /* Small pushpin inside the pill — matches the marker in the dropdown row
+     so the two states read as "the same signal". Slightly desaturated so it
+     doesn't out-shout the version text next to it. */
+  .pill-pin {
+    font-size: 9px;
+    line-height: 1;
+    margin-left: 2px;
+    filter: saturate(0.8);
+    display: inline-block;
+  }
 
   /* Backdrop for click-outside-to-close */
   .backdrop {
