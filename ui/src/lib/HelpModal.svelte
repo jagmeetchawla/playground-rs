@@ -227,7 +227,7 @@
       <ul>
         <li><strong>Xcode Command Line Tools</strong> — required prerequisite. Rust uses Apple's <code>cc</code> linker and SDK to build executables on macOS. Without CLT, even a perfectly installed Rust toolchain can't link.</li>
         <li><strong>rustup</strong> — the official Rust toolchain manager.</li>
-        <li><strong>cargo</strong> + <strong>rustc</strong> — the build tool and compiler.</li>
+        <li><strong>cargo</strong> + <strong>rustc</strong> — the build tool and compiler. Playgrounds target <code>edition = "2024"</code>, which needs <strong>Rust 1.85 or newer</strong>. Anything older triggers the toolchain modal with an <em>Update Rust</em> action.</li>
         <li><strong>rustfmt</strong> — auto-formatter (used when you save).</li>
         <li><strong>clippy</strong> — linter that powers live error checking in the editor.</li>
       </ul>
