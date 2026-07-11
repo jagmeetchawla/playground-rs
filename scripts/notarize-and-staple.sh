@@ -3,8 +3,9 @@
 # ticket so Gatekeeper can verify it offline. Without stapling, users on
 # air-gapped/slow-network first launches hit Gatekeeper warnings or hangs.
 #
-# Requires a notarytool keychain profile named 'rustic-playground-notarytool'
-# (see reference_apple_developer.md memory for how to create it).
+# Requires a notarytool keychain profile named 'cloud-craft-ai-notarytool'
+# (team-scoped so future CloudCraft apps reuse the same profile). Override
+# via the NOTARY_PROFILE env var if a different name is needed.
 #
 # Usage: ./scripts/notarize-and-staple.sh <path-to-dmg>
 
@@ -16,7 +17,7 @@ if [ $# -ne 1 ]; then
 fi
 
 DMG="$1"
-PROFILE="rustic-playground-notarytool"
+PROFILE="${NOTARY_PROFILE:-cloud-craft-ai-notarytool}"
 
 if [ ! -f "$DMG" ]; then
   echo "ERROR: DMG not found: $DMG" >&2
