@@ -47,6 +47,7 @@
 - **Multi-language** — Rust, C/C++ (Clang), Zig, and Swift project types
 - **Welcome Wizard** — 5-step first-launch setup: choose languages, check toolchains, set theme, load books
 - **Guided toolchain install & repair** — detects Xcode CLT + Rust toolchain state on launch; two paths: "Help Me Install" (guided, in-app) or "I'll Do It Myself" (Terminal commands with copy-to-clipboard). No terminal needed for a complete Rust setup from scratch.
+- **Multi-version toolchain picker** — switch between installed Rust toolchains straight from the toolbar pill (stable, beta, nightly, or specific versions); per-project pins via `rust-toolchain.toml`; install new toolchains in-app via streaming `rustup install`.
 - **Language gating** — only enabled languages appear in menus, project switcher, and settings
 - **Live execution** — ⌘R compiles and runs; stdout/stderr streams in real time
 - **Interactive console** — playgrounds that use `stdin` get a live input field in the Console panel
@@ -202,6 +203,7 @@ See the warning at the top of this file. Additionally:
 
 | Version | Highlights |
 |---|---|
+| v0.4 | Multi-version Rust toolchain picker — pill dropdown lists every installed rustup toolchain with `✓` on the effective one and `📌` on the project's pinned one. Per-project pins via `rust-toolchain.toml` with a warning row when the pinned toolchain isn't installed. "Install newer stable?" hint compares the latest known stable against toolchains on _any_ channel, so users on nightly aren't nagged. In-app Install Toolchain dialog streams `rustup install` for stable/beta/nightly/specific versions. New Rust templates: **let-chains** (1.88+), **let-else**, **modern std tour** (`is_some_and`, `inspect`, `windows`), and **System Info** diagnostic (dumps rustc/cargo/target/env). The Rust Toolchain modal now lists all installed toolchains regardless of entry point (pill, Help menu, Settings) |
 | v0.3.6 | New app icon (richer illustrated artwork across app, website, in-app modals). DMG polish — mounted volume shows macOS's default disk icon instead of duplicating the app icon, making drag-to-Applications clearer. Code-signing certificate re-issued (Team ID unchanged). Notarize + staple automated in the build pipeline via `NOTARIZE=1` |
 | v0.3.5 | Rust toolchain version gate — enforces rustc ≥ 1.85 (edition 2024 floor), yellow toolchain pill when outdated, in-app "Update Rust" button runs `rustup update stable && rustup default stable` with streamed output, manual-mode copy-paste command for Terminal users |
 | v0.3.4 | In-app Rust toolchain installer & repair with guided + manual install paths, Xcode CLT detection as prerequisite, FixWizard split layout with auto-polling, Help menu restructure (Website, GitHub, Rust Help, Rust Book top-level), Rust Toolchain help section, toolchain step skip indicator, code-signed + notarized DMG distribution |
