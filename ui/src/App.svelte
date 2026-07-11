@@ -614,9 +614,15 @@
         }
         missingProjectPin = observedMissingPin
         projectPinnedName = observedPinnedName
-        // Step 2: app active
+        // Step 2: rustup's default toolchain (mirrors the backend's
+        // resolve_toolchain_for_project, which now falls back to bare
+        // cargo when no pin is present — bare cargo picks rustup's
+        // default). We intentionally do NOT fall back to is_active
+        // (Config.active_toolchain) any more; that field became
+        // vestigial when the picker was decoupled from setting the
+        // app-wide default.
         if (!matched) {
-          matched = list.find(t => t.is_active)
+          matched = list.find(t => t.is_rustup_default)
         }
 
         if (matched?.version) {

@@ -1221,13 +1221,19 @@ pub(crate) fn is_toolchain_installed(name: &str, app: &AppHandle) -> bool {
 
 /// Resolve which Rust toolchain to use for a given project directory.
 ///
-/// Fallback chain (matches the user's spec — see specifications.md v0.4):
+/// Resolution:
 ///   1. Project's rust-toolchain.toml pin, IF that toolchain is installed
-///   2. App's config.active_toolchain, IF that toolchain is installed
-///   3. None → caller should fall back to bare `cargo` (respects rustup default)
+///   2. None → caller falls back to bare `cargo`, which uses rustup's default
 ///
-/// Returning None is a valid, healthy state — many projects have no pin and
-/// the app just hasn't tracked an explicit active yet on first launch.
+/// The v0.4-original design had a step 2 that fell back to
+/// Config.active_toolchain (updated by every picker click). That coupling
+/// meant "pick nightly in project A" leaked into "new project B silently
+/// runs on nightly", which was surprising. Removing step 2 makes the model
+/// intuitive: the pin is either present-and-honored, or absent-and-let-rustup-decide.
+///
+/// Returning None is a valid, healthy state — projects without a pin should
+/// use rustup's default, same as if you ran `cargo` from the project directory
+/// in a terminal.
 pub(crate) fn resolve_toolchain_for_project(
     project_path: &std::path::Path,
     app: &AppHandle,
@@ -1237,12 +1243,7 @@ pub(crate) fn resolve_toolchain_for_project(
             return Some(pinned);
         }
     }
-    let active = load_config(app).active_toolchain?;
-    if is_toolchain_installed(&active, app) {
-        Some(active)
-    } else {
-        None
-    }
+    None
 }
 
 /// Wrap a cargo/rustc command invocation with `rustup run <toolchain>` if a

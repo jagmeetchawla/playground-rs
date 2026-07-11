@@ -47,20 +47,22 @@ pub fn new_project(
     let lang = Lang::from_str(ptype);
     lang.scaffold_project(&project_path, &name)?;
 
-    // v0.4+: for new Rust projects, seed rust-toolchain.toml with the app's
-    // active toolchain so this project inherits the current session default.
-    // If there's no active_toolchain configured yet (first launch, or user
-    // hasn't touched the picker), skip the seed — project runs bare cargo
-    // and picks up rustup's default, which is the pre-v0.4 behaviour.
+    // v0.4+: new Rust projects are NOT auto-pinned via rust-toolchain.toml.
+    // Bug from local testing (2026-07): when the picker updated config's
+    // active_toolchain to whatever the user last chose (say, nightly for
+    // some MSRV testing), every subsequent "New Project" silently inherited
+    // that pin, which the user experienced as "why did my fresh project
+    // suddenly start running on nightly?".
     //
-    // Best-effort: a failed write here shouldn't fail project creation. If
-    // it fails, the user still has a working project; they just don't get
-    // an explicit pin. They can add one via the picker.
-    if matches!(lang, Lang::Rust) {
-        if let Some(active) = crate::load_config(&app).active_toolchain {
-            let _ = crate::cargo_commands::write_project_toolchain(&project_path, &active);
-        }
-    }
+    // Cleaner design: new projects start unpinned. They inherit rustup's
+    // default toolchain (usually stable) via the natural resolve fallback.
+    // If the user wants a specific toolchain for THIS project, one click
+    // in the picker writes rust-toolchain.toml. Explicit > implicit.
+    //
+    // No effect on user code: the empty-pin state was already possible
+    // (opened a project without a pin, or user removed the pin manually).
+
+    let _ = &app; // silence unused warning; app is no longer needed here
 
     Ok(())
 }

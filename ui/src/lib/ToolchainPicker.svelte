@@ -175,24 +175,24 @@
   }
 
   // Which toolchain is ACTUALLY in use for run/check RIGHT NOW? This is what
-  // drives the ✓ checkmark in the dropdown. It mirrors the backend's
-  // resolve_toolchain_for_project resolution order:
+  // drives the ✓ checkmark in the dropdown. Mirrors the backend's
+  // resolve_toolchain_for_project (which was itself simplified in the same
+  // patch that added this comment):
   //   1. Project pin, IF that pin is installed (not in missingProjectPin state)
-  //   2. Config.active_toolchain (backend's is_active flag)
+  //   2. rustup's default toolchain (t.is_rustup_default)
   //
-  // Without this, opening the picker in a project pinned to nightly (with
-  // config.active_toolchain still set to stable) would show ✓ next to stable
-  // even though nightly is what's actually running — a visible inconsistency
-  // with the pill display, which already resolves the pin correctly.
+  // Note: intentionally NOT using t.is_active (which reflects
+  // Config.active_toolchain). Config.active_toolchain became vestigial when
+  // we decoupled the picker from setting the app-wide default — it's no
+  // longer part of resolution.
   function isEffectiveToolchain(t: ToolchainInfo): boolean {
     if (projectPinnedName && !missingProjectPin) {
       // Pin is set AND installed → the pin is what run/check will use.
       return t.short_name === projectPinnedName || t.name === projectPinnedName
     }
-    // Otherwise (no pin, or pinned toolchain not installed) → fall back to
-    // Config.active_toolchain, which is what the backend's is_active flag
-    // already reports.
-    return t.is_active
+    // Otherwise (no pin, or pinned toolchain not installed) → whatever
+    // rustup would pick if we ran `cargo` bare.
+    return t.is_rustup_default
   }
 </script>
 
