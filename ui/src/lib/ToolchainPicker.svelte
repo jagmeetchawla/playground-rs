@@ -203,19 +203,28 @@
   // we decoupled the picker from setting the app-wide default — it's no
   // longer part of resolution.
   function isEffectiveToolchain(t: ToolchainInfo): boolean {
-    if (projectPinnedName && !missingProjectPin) {
-      // Pin is set AND installed → the pin is what run/check will use.
+    if (projectPinnedName) {
+      // Pin exists — ✓ only on the matching row, and only if it's installed.
+      // Missing pin: nothing is currently "in use" (RUSTUP_AUTO_INSTALL=0
+      // makes runs error out until the user installs or unpins), so no
+      // row deserves the ✓. defaultRowIsEffective is false in this state
+      // too — the dropdown correctly shows all rows unchecked, signaling
+      // that the project is broken and the user needs to act.
+      if (missingProjectPin) return false
       return t.short_name === projectPinnedName || t.name === projectPinnedName
     }
-    // Otherwise (no pin, or pinned toolchain not installed) → whatever
-    // rustup would pick if we ran `cargo` bare.
+    // No pin → whatever rustup would pick if we ran `cargo` bare.
     return t.is_rustup_default
   }
 
-  // The "Default" row is the effective one iff no pin is set (or the pin is
-  // missing so we're using the fallback). This is what drives the ✓ on the
-  // Default row and lets us skip the individual-row ✓ from doubling up.
-  let defaultRowIsEffective = $derived(!projectPinnedName || !!missingProjectPin)
+  // The "Default" row is the effective one ONLY when the project has no pin.
+  // v0.4 no-auto-install policy: when a pin exists but isn't installed, run
+  // errors out — nothing is actually being used, so nothing should show ✓.
+  // The three states:
+  //   no pin           → ✓ on default row (rustup default is what runs)
+  //   pin + installed  → ✓ on the pinned row (via isEffectiveToolchain)
+  //   pin + missing    → no ✓ anywhere (project is broken until user acts)
+  let defaultRowIsEffective = $derived(!projectPinnedName)
 
   async function chooseDefault() {
     // If a pin is set on the current project, unpin — that IS the "choose
