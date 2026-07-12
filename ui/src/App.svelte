@@ -169,10 +169,18 @@
     if (pillStatus === 'missing') return `${toolchainName} not found`
     if (pillStatus === 'partial' && projectType === 'zig') return `${toolchainName} ${toolchainLabel} · requires 0.15.x`
     if (pillStatus === 'partial' && projectType === 'rust' && rustState === 'outdated') return `${toolchainName} ${toolchainLabel} · update to ${toolchainInfo.min_version}+`
+    // v0.4: missing project pin — show what the project ASKED FOR (the
+    // pin name from rust-toolchain.toml), not the fallback version that
+    // actually resolved. "fallback + pin marker" reads as "1.97 is
+    // pinned" which is a lie; "pin name + not installed" matches intent.
+    if (projectType === 'rust' && missingProjectPin) return `${toolchainName} ${missingProjectPin} · not installed`
     return `${toolchainName} ${toolchainLabel}${lang.experimental ? ' · experimental' : ''}`
   })
   // Status dot — matches the ●/◐/○ vocabulary used in the toolchain status cards
   let pillIcon = $derived.by(() => {
+    // Missing pin flips the icon to ◐ even when overall pillStatus is 'ok',
+    // so the yellow state is visually consistent with other "partial" cases.
+    if (projectType === 'rust' && missingProjectPin) return '◐'
     if (pillStatus === 'ok') return '●'
     if (pillStatus === 'partial') return '◐'
     return '○'
