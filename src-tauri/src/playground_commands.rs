@@ -398,10 +398,19 @@ fn wrap_rust_run_config(config: RunConfig, workspace: &std::path::Path, app: &Ap
         } => {
             let (new_program, new_args) =
                 crate::cargo_commands::wrap_with_rustup(&program, &args, toolchain.as_deref());
+            // v0.4+: RUSTUP_AUTO_INSTALL=0 mirrors the policy check_playground
+            // already uses. When rust-toolchain.toml pins a toolchain that
+            // isn't installed, we want cargo to error out cleanly instead of
+            // silently downloading a big toolchain the user didn't opt into.
+            // The frontend blocks ⌘R before we get here when a pin is
+            // missing (checks missingProjectPin); this env is the belt-and-
+            // suspenders in case that guard is ever bypassed.
+            let mut new_env = env;
+            new_env.push(("RUSTUP_AUTO_INSTALL".to_string(), "0".to_string()));
             RunConfig::Direct {
                 program: new_program,
                 args: new_args,
-                env,
+                env: new_env,
                 cwd,
             }
         }

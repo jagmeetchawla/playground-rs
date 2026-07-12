@@ -501,12 +501,23 @@
 
     const unlistenMove = await getCurrentWindow().onMoved(() => onWindowChange())
 
+    // v0.4: refresh toolchain info on window focus so the pill catches up
+    // with rustup state changes made outside the app (Terminal uninstall,
+    // install, set-default). Safe now that RUSTUP_AUTO_INSTALL=0 on run
+    // means the pill never has to race a concurrent auto-install for the
+    // ~/.rustup/ file locks — the only rustup subprocess touching state
+    // while the app is running is this refresh itself, one at a time.
+    const unlistenFocus = await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) refreshToolchainInfo()
+    })
+
     window.addEventListener('keydown', handleKey)
     window.addEventListener('resize', onWindowChange)
     return () => {
       window.removeEventListener('keydown', handleKey)
       window.removeEventListener('resize', onWindowChange)
       unlistenMove()
+      unlistenFocus()
       unlisteners.forEach(u => u())
     }
   })
@@ -1007,6 +1018,39 @@
     // If another playground is running, ask before killing it
     if (runningPlayground && runningPlayground !== activeTab) {
       stopAndRunPending = activeTab
+      return
+    }
+
+    // v0.4: block ⌘R when this project pins a Rust toolchain that isn't
+    // installed. Rather than silently letting rustup auto-install (which
+    // surprises the user with a large download and hides intent), we drop
+    // a two-line message in the console pointing at the yellow pill where
+    // they can install manually via the picker's "Install Toolchain…" item.
+    // The backend enforces the same via RUSTUP_AUTO_INSTALL=0 in
+    // wrap_rust_run_config — this guard just makes the error path
+    // human-authored rather than raw rustup stderr.
+    if (projectType === 'rust' && missingProjectPin) {
+      const name = activeTab
+      const runNum = (tabRunCount[name] ?? 0) + 1
+      tabRunCount = { ...tabRunCount, [name]: runNum }
+      const now = new Date()
+      const startedAt = now.toLocaleTimeString('en-US', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      })
+      const ts = () => new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any)
+      const existing = tabRuns[name] ?? []
+      const collapsed = existing.map(r => ({ ...r, collapsed: true }))
+      const block: RunBlock = {
+        runNum, command: lang.runCommandDisplay(name), startedAt,
+        status: 'error', exitCode: null,
+        compilerLines: [
+          { stream: 'stderr', line: `error: toolchain '${missingProjectPin}' is pinned by this project but not installed.`, ts: ts() },
+          { stream: 'info',   line: `Click the yellow toolchain pill → Install Toolchain… to install it, or the "default" row to unpin this project.`, ts: ts() },
+        ],
+        programLines: [],
+        collapsed: false, programStarted: false,
+      }
+      tabRuns = { ...tabRuns, [name]: [...collapsed, block] }
       return
     }
 
