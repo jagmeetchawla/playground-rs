@@ -366,7 +366,7 @@
   }
   .toolchain-info:hover,
   .toolchain-info.open {
-    background: rgba(255,255,255,0.05);
+    background: var(--bg-hover);
     border-color: var(--border);
   }
   .toolchain-text { line-height: 1; }
@@ -402,8 +402,8 @@
     position: absolute; top: calc(100% + 4px); left: 0;
     z-index: 101;
     min-width: 300px; max-width: 380px;
-    background: var(--bg-card, #1a1a1a);
-    border: 1px solid var(--border, #333);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 4px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
@@ -419,7 +419,7 @@
     border-radius: 4px; font-size: 13px;
     font-family: inherit;
   }
-  .menu-item:hover { background: rgba(255,255,255,0.06); }
+  .menu-item:hover { background: var(--bg-hover); }
   .menu-item.subtle { color: var(--text-secondary); font-size: 12px; }
 
   .menu-item.hint {
@@ -463,7 +463,7 @@
   .tag {
     font-size: 9px; font-family: var(--font-sans, sans-serif); text-transform: uppercase;
     padding: 2px 6px; border-radius: 3px;
-    color: var(--text-tertiary, #888); background: rgba(255,255,255,0.06);
+    color: var(--text-tertiary, #888); background: var(--bg-input);
     letter-spacing: 0.4px;
     justify-self: end;
   }
