@@ -270,6 +270,49 @@
         menu item, or by clicking the toolbar pill directly.
       </p>
 
+      <h2>Multiple Toolchains</h2>
+      <p>
+        You can install and switch between multiple Rust toolchains — stable, beta, nightly, or
+        specific versions like <code>1.85.0</code>. Clicking the toolbar pill opens the picker with
+        every rustup-installed toolchain listed.
+      </p>
+
+      <h3>Reading the picker</h3>
+      <ul>
+        <li><strong>✓</strong> — the toolchain that's actually in use for the current project</li>
+        <li><strong>📌</strong> — the toolchain the current project is pinned to via <code>rust-toolchain.toml</code></li>
+        <li><strong>default · latest</strong> row at the top — click to unpin the current project and fall back to rustup's default</li>
+        <li><strong>default</strong> tag on a row — that's what rustup would pick if there's no project pin</li>
+      </ul>
+
+      <h3>Installing another toolchain</h3>
+      <p>
+        Click <em>Install Toolchain…</em> at the bottom of the picker. Pick <strong>stable</strong>,
+        <strong>beta</strong>, <strong>nightly</strong>, or type a specific version. The install
+        streams live in a modal — no Terminal needed. Under the hood it runs
+        <code>rustup toolchain install &lt;name&gt;</code> and, on success, switches the current
+        project to it.
+      </p>
+      <p class="hint">
+        If a newer stable exists than anything you have installed, the picker surfaces an
+        <em>Install newer stable?</em> hint so you know without checking rustup manually. The check
+        counts any channel — if you're on nightly 1.99, it won't nag you about stable 1.96.
+      </p>
+
+      <h3>Per-project pinning</h3>
+      <p>
+        Picking a toolchain from the pill writes a <code>rust-toolchain.toml</code> file at the
+        project root, so every run/check uses that toolchain for that project. Other projects keep
+        their own pin (or the default). This matches the standard rustup convention, so pinning
+        works the same when you leave the app (e.g. running <code>cargo build</code> from Terminal
+        against the same project directory).
+      </p>
+      <p class="hint">
+        If a project pins a toolchain that isn't installed on this machine, the picker shows a
+        yellow <strong>◐</strong> pill and offers a one-click prompt to install and use it. Until
+        you install it, runs fall back to rustup's default toolchain so the project stays runnable.
+      </p>
+
       <h2>Manual Installation (Terminal)</h2>
       <p>If you prefer to install everything yourself, here's the full sequence on a fresh Mac:</p>
 
