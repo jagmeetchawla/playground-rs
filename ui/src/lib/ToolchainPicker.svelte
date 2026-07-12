@@ -60,8 +60,25 @@
   let latestKnownStable = $state('')
   let loading = $state(false)
   let error = $state('')
+  // v0.4: refresh button spin state — brief visual feedback that the
+  // refresh call is in-flight. Cleared as soon as the parent's refresh
+  // resolves so the icon doesn't spin forever on network stalls.
+  let refreshing = $state(false)
 
   // ── Actions ──────────────────────────────────────────────────────────────
+  async function handleRefreshClick() {
+    if (refreshing) return
+    refreshing = true
+    try {
+      // Piggy-back on the same callback the parent uses after a switch —
+      // both cases mean "recompute pill state from disk + rustup".
+      await onToolchainSwitched()
+    } finally {
+      // Minimum spin so the animation is perceptible even for cached calls.
+      setTimeout(() => { refreshing = false }, 350)
+    }
+  }
+
   async function toggle() {
     if (open) { close(); return }
     open = true
@@ -212,6 +229,25 @@
 </script>
 
 <div class="toolchain-picker">
+  {#if projectType === 'rust'}
+    <!-- v0.4: manual refresh button. Sidesteps the "stale pill after
+         Terminal uninstall / rustup auto-install" issue without polling
+         or a focus-refresh race. User clicks when they've done something
+         outside the app (Terminal rustup ops) and want the pill to catch
+         up. Spins briefly on click for feedback. -->
+    <button
+      class="refresh-btn"
+      class:spinning={refreshing}
+      title="Refresh toolchain info"
+      aria-label="Refresh toolchain info"
+      onclick={handleRefreshClick}
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M2 6a4 4 0 0 1 7-2.6M10 6a4 4 0 0 1-7 2.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+        <path d="M9 1.4v2h-2M3 10.6v-2h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+    </button>
+  {/if}
   <button
     class="toolchain-info"
     class:pill-red={pillStatus === 'not-enabled' || pillStatus === 'missing'}
@@ -348,7 +384,34 @@
 </div>
 
 <style>
-  .toolchain-picker { position: relative; }
+  .toolchain-picker {
+    position: relative;
+    display: flex; align-items: center; gap: 2px;
+  }
+
+  /* Manual refresh button — sits immediately left of the pill. Spins on
+     click for feedback. Uses the same muted color as pill text so the
+     two read as one unit; brightens on hover. */
+  .refresh-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px;
+    padding: 0; border-radius: 50%;
+    background: none; border: 1px solid transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+  .refresh-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+  .refresh-btn.spinning svg {
+    animation: refresh-spin 0.8s linear;
+  }
+  @keyframes refresh-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
 
   /* Pill styles — copied from App.svelte's .toolchain-info to keep behavior
      identical when the picker is closed. Component ownership: this file now
