@@ -1839,27 +1839,22 @@
   <InstallToolchainDialog
     preferredVersion={showInstallToolchain}
     onclose={() => { showInstallToolchain = null }}
-    oninstalled={async (installedName) => {
-      // Install-and-switch as one motion — matches user mental model
-      // (bug feedback from local testing: pill didn't update because we
-      // installed but didn't activate). Order:
-      //   1. Persist as session-level active in config.json so future
-      //      new projects inherit it.
-      //   2. If a project is open, write rust-toolchain.toml so the
-      //      current project runs against it immediately.
-      //   3. Refresh pill display.
-      try {
-        await invoke('set_active_toolchain', {
-          toolchain: installedName,
-          applyToActiveProject: !!activeProjectPath,
-        })
-        if (activeProjectPath) {
-          await invoke('set_project_toolchain', {
-            projectPath: activeProjectPath,
-            name: installedName,
-          })
-        }
-      } catch {}
+    oninstalled={async (_installedName) => {
+      // v0.4: install NEVER auto-pins the current project. Two entry points,
+      // both correct with a plain refresh:
+      //   • Missing-pin warning ("this project pins nightly — install it"):
+      //     the toml ALREADY pins nightly (that's why it was in the missing
+      //     state). Installing satisfies the existing pin — no rewrite needed.
+      //   • Generic "Install Toolchain…": the user just wants the toolchain
+      //     available on their system. It now shows in the picker list; if
+      //     they want THIS project to use it, that's an explicit pick in the
+      //     picker (selectToolchain), not a side effect of installing.
+      //
+      // Earlier this callback wrote set_project_toolchain unconditionally,
+      // which silently pinned the current project to whatever you installed —
+      // surprising when you were on default and just wanted to add a toolchain.
+      // It also wrote config.active_toolchain, a field nothing reads anymore
+      // since the picker was decoupled from the app-wide default.
       await refreshToolchainInfo()
     }}
   />
