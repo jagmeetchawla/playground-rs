@@ -36,13 +36,16 @@ BASENAME=$(basename "$DMG" .dmg)
 RW_DMG="${TMPDIR:-/tmp}/${BASENAME}-rw-$$.dmg"
 MOUNT_POINT="${TMPDIR:-/tmp}/${BASENAME}-mount-$$"
 
-# Cleanup on exit in case of failure
+# Cleanup on exit in case of failure. Runs on every exit (success or fail).
+# `|| true` on every conditional so set -e doesn't turn a benign "already
+# cleaned up" state into a nonzero exit — that's the bug that made the
+# script exit 1 even after printing its success line.
 cleanup() {
   if mount | grep -q "$MOUNT_POINT"; then
     hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
   fi
   [ -d "$MOUNT_POINT" ] && rmdir "$MOUNT_POINT" 2>/dev/null || true
-  [ -f "$RW_DMG" ] && rm -f "$RW_DMG"
+  [ -f "$RW_DMG" ] && rm -f "$RW_DMG" || true
 }
 trap cleanup EXIT
 
