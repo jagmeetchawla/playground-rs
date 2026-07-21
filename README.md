@@ -36,11 +36,24 @@
 > - A playground that deletes files, exfiltrates data, or forks a bomb will
 >   actually do those things
 >
-> **No binary is distributed.** You must compile this yourself from source.
-> If you received a pre-built binary from an untrusted source, do not run it.
+> **Official builds are code-signed & notarized.** The DMGs on our
+> [Releases](https://github.com/jagmeetchawla/rustic-playground/releases) page
+> and the Homebrew cask are signed by CloudCraft AI Labs and notarized by
+> Apple. **Only install from those sources** — don't run a pre-built binary
+> from anywhere else. Prefer to build it yourself? The source is right here.
 >
 > **You are responsible for the code you run.** This tool is for learning
 > and experimentation in a controlled environment you own.
+
+## Install
+
+Install the latest signed & notarized build with [Homebrew](https://brew.sh) (Apple Silicon):
+
+```sh
+brew install --cask cloudcraft-ai/tap/rustic-rust
+```
+
+Or download the `.dmg` directly from [Releases](https://github.com/jagmeetchawla/rustic-playground/releases).
 
 ## Features
 
