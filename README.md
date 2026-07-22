@@ -3,9 +3,9 @@
   <br><br>
   <strong style="font-size: 1.5em;">Rustic Playground</strong>
   <br><br>
-  A macOS desktop app for running code experiments — inspired by Swift Playgrounds.<br>
-  Supports <b>Rust</b>, <b>C/C++</b>, <b>Zig (v0.15)</b>, and <b>Swift</b>.<br>
-  Write code, press <b>⌘R</b>, see output stream live. No terminal required.
+  A <b>native</b> macOS playground for <b>Rust</b> — write code, press <b>⌘R</b>, watch output stream live.<br>
+  Real <code>cargo</code> projects with real crates, your own <code>rustup</code> toolchains, fully offline. No terminal required.<br>
+  <sub>Also supports C/C++, Zig (0.15), and Swift.</sub>
   <br><br>
   Built with <a href="https://www.rust-lang.org">Rust</a> + <a href="https://tauri.app">Tauri 2</a> + <a href="https://svelte.dev">Svelte 5</a> + <a href="https://microsoft.github.io/monaco-editor/">Monaco Editor</a>.
   <br><br>
@@ -47,13 +47,17 @@
 
 ## Install
 
-Install the latest signed & notarized build with [Homebrew](https://brew.sh) (Apple Silicon):
+Install the latest signed & notarized build with [Homebrew](https://brew.sh):
 
 ```sh
 brew install --cask cloudcraft-ai/tap/rustic-rust
 ```
 
 Or download the `.dmg` directly from [Releases](https://github.com/jagmeetchawla/rustic-playground/releases).
+
+> The prebuilt DMG and Homebrew cask are **Apple Silicon only** (macOS 12+). An Intel build isn't available yet — building [from source](#build--run) on Intel may work but is currently untested.
+
+Runs entirely on your machine against your own toolchains — no analytics or telemetry. The only network request the app makes on its own is a version check against GitHub Releases.
 
 ## Features
 
@@ -234,4 +238,4 @@ See the warning at the top of this file. Additionally:
 
 ## License
 
-MIT
+[MIT](LICENSE) © 2026 Jagmeet Chawla. Feedback and PRs welcome.
