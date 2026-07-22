@@ -81,18 +81,25 @@ Runs entirely on your machine against your own toolchains — no analytics or te
 
 ## Requirements
 
+To **run** the app (it compiles and runs Rust playgrounds locally):
+
 | Tool | Version |
 |---|---|
 | macOS | 12 Monterey or later |
 | Xcode Command Line Tools | Required — Rust needs Apple's `cc` linker and SDK to build on macOS |
 | Rust toolchain | stable **1.85+** (edition 2024 floor) — install via [rustup.rs](https://rustup.rs) |
-| Node.js | 18+ |
-| pnpm | 8+ |
-| Tauri CLI | `cargo install tauri-cli --version "^2.0"` |
 
 > **Note:** On a Mac without developer tools, macOS may show an "Install Command Line Developer Tools" dialog on first launch. This is triggered by macOS (Apple's WebKit framework), not by the app. You can dismiss it — the app will guide you through installation when you're ready.
 
 ## Build & Run
+
+Building from source additionally needs (on top of the [run requirements](#requirements) above):
+
+| Tool | Version |
+|---|---|
+| Node.js | 18+ |
+| pnpm | 8+ |
+| Tauri CLI | `cargo install tauri-cli --version "^2.0"` |
 
 ```sh
 git clone https://github.com/jagmeetchawla/rustic-playground
