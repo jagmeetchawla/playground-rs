@@ -4,8 +4,7 @@
   <strong style="font-size: 1.5em;">Rustic Playground</strong>
   <br><br>
   A <b>native</b> macOS playground for <b>Rust</b> — write code, press <b>⌘R</b>, watch output stream live.<br>
-  Real <code>cargo</code> projects with real crates, your own <code>rustup</code> toolchains, fully offline. No terminal required.<br>
-  <sub>The download is Rust-only. C/C++, Zig (0.15), and Swift are supported when you build from source.</sub>
+  Real <code>cargo</code> projects with real crates, your own <code>rustup</code> toolchains, fully offline. No terminal required.
   <br><br>
   Built with <a href="https://www.rust-lang.org">Rust</a> + <a href="https://tauri.app">Tauri 2</a> + <a href="https://svelte.dev">Svelte 5</a> + <a href="https://microsoft.github.io/monaco-editor/">Monaco Editor</a>.
   <br><br>
@@ -27,7 +26,7 @@
 >
 > Like Xcode, VS Code, and Terminal, it must run outside macOS's App Sandbox
 > because it compiles and executes arbitrary code using your local
-> toolchains (`cargo`, `clang`, `zig`, `swiftc`).
+> Rust toolchain (`cargo`).
 >
 > **This means:**
 > - Any code you write and run has **full access to your filesystem, network,
@@ -47,7 +46,7 @@
 
 ## Install
 
-> **The prebuilt download is the Rust Edition (`rustic-rust`) — Rust only.** It's the single edition distributed as a signed binary. C/C++ (Clang), Zig, and Swift project types exist in the codebase but ship in **no** prebuilt binary — to use them, [build the Power Edition from source](#build--run).
+> **The prebuilt download is the Rust Edition (`rustic-rust`) — Rust only.** It's the only edition distributed as a signed binary. Support for other languages (C/C++, Zig, Swift) is experimental and source-build only — see [Other Languages](#other-languages-experimental).
 
 Install the latest signed & notarized build with [Homebrew](https://brew.sh):
 
@@ -63,25 +62,22 @@ Runs entirely on your machine against your own toolchains — no analytics or te
 
 ## Features
 
-- **Multi-language** — Rust, C/C++ (Clang), Zig, and Swift project types *(only Rust ships as a prebuilt download; the others require building the Power Edition from source)*
-- **Welcome Wizard** — 5-step first-launch setup: choose languages, check toolchains, set theme, load books
-- **Guided toolchain install & repair** — detects Xcode CLT + Rust toolchain state on launch; two paths: "Help Me Install" (guided, in-app) or "I'll Do It Myself" (Terminal commands with copy-to-clipboard). No terminal needed for a complete Rust setup from scratch.
 - **Multi-version toolchain picker** — switch between installed Rust toolchains straight from the toolbar pill (stable, beta, nightly, or specific versions); per-project pins via `rust-toolchain.toml`; install new toolchains in-app via streaming `rustup install`.
-- **Language gating** — only enabled languages appear in menus, project switcher, and settings
+- **Guided toolchain install & repair** — detects Xcode CLT + Rust toolchain state on launch; two paths: "Help Me Install" (guided, in-app) or "I'll Do It Myself" (Terminal commands with copy-to-clipboard). No terminal needed for a complete Rust setup from scratch.
+- **Welcome Wizard** — first-launch setup: checks your toolchain, sets a theme, and loads the Rust Book.
 - **Live execution** — ⌘R compiles and runs; stdout/stderr streams in real time
 - **Interactive console** — playgrounds that use `stdin` get a live input field in the Console panel
-- **Multiple projects** — each project is an isolated workspace with its own config
-- **Multiple playgrounds** — each file is its own runnable binary
+- **Live error checking** — `cargo check` squiggles in the editor
+- **Multiple projects** — each project is an isolated Cargo workspace with its own config
+- **Multiple playgrounds** — each file in `src/bin/` is its own runnable binary
+- **Dependency management** — edit `Cargo.toml` directly or add/remove crates from the toolbar
 - **Content files** — attach any file to a project via the Files panel; access at runtime via the `PLAYGROUND_CONTENT` env var
-- **Dependency management** — edit Cargo.toml directly or add/remove crates from the toolbar
-- **Playground templates** — starter templates per language with auto-deps
-- **8 themes** — System, Light, Dark, Auto (match language), Rust, Clang, Zig, Swift
-- **Settings panel** — font size, font family, tab size, toolchain paths, language management (⌘,)
+- **Playground templates** — starter templates with auto-added dependencies
+- **Book examples** — the Rust Book (20 chapters, 40+ playgrounds) as read-only, copy-to-run projects — load via the **Learn** menu
+- **Themes** — System, Light, Dark, and a dedicated Rust theme, with automatic light/dark matching
+- **Settings panel** — font size, font family, tab size, toolchain paths (⌘,)
 - **Console improvements** — copy button, ANSI color support, timestamps
 - **Window state persistence** — layout, panel sizes, open tabs, and window size survive restarts
-- **Book examples** — Rust Book (20 chapters), K&R C Book (8 chapters), Swift Book (8 chapters) — load via **Learn** menu
-- **Read-only books** — book projects are non-editable reference material; "Copy to Project" to experiment
-- **Live error checking** — cargo check squiggles in the editor for Rust projects
 
 ## Requirements
 
@@ -96,14 +92,6 @@ Runs entirely on your machine against your own toolchains — no analytics or te
 
 > **Note:** On a Mac without developer tools, macOS may show an "Install Command Line Developer Tools" dialog on first launch. This is triggered by macOS (Apple's WebKit framework), not by the app. You can dismiss it — the app will guide you through installation when you're ready.
 
-**Optional language toolchains** (for non-Rust projects):
-
-| Language | Toolchain | Install |
-|---|---|---|
-| C/C++ | Clang (via Xcode CLI Tools) | `xcode-select --install` |
-| Zig | **0.15.x** (other versions may have breaking API changes) | `brew install zig` |
-| Swift | swiftc (via Xcode CLI Tools) | `xcode-select --install` |
-
 ## Build & Run
 
 ```sh
@@ -112,20 +100,13 @@ cd rustic-playground
 cd ui && pnpm install && cd ..
 ```
 
-**Rust Edition** (single-language, focused on Rust learners):
+Build and run the Rust Edition:
 ```sh
 VITE_EDITION=rust cargo tauri dev --config editions/rust.json       # dev mode
 VITE_EDITION=rust cargo tauri build --config editions/rust.json     # release DMG
 ```
 
-**Power Edition** (all 4 languages):
-```sh
-VITE_EDITION=power cargo tauri dev --config editions/power.json     # dev mode
-VITE_EDITION=power cargo tauri build --config editions/power.json   # release DMG
-```
-
-Editions are fully isolated — each has its own app name, bundle ID, and data directory. They can be installed side by side.
-
+> Other languages ship in a separate, experimental build — see [Other Languages](#other-languages-experimental).
 > See [`specs/build-helper.md`](specs/build-helper.md) for the full build guide: version management, edition configs, icon generation, troubleshooting.
 
 ## How It Works
@@ -166,17 +147,17 @@ examples, and security. The same content will be available on the website and wi
 
 Load curated example projects via the **Learn** menu or the Welcome Wizard:
 
-| Book | Chapters | Language | Source |
-|---|---|---|---|
-| **The Rust Book** | 20 chapters, 40+ playgrounds | Rust | Based on [_The Rust Programming Language_](https://doc.rust-lang.org/book/) |
-| **The K&R C Book** | 8 chapters, 16 playgrounds | C/C++ | Based on _The C Programming Language_ by Kernighan & Ritchie |
-| **The Swift Book** | 8 chapters, 14 playgrounds | Swift | Based on [_The Swift Programming Language_](https://docs.swift.org/swift-book/) |
+| Book | Chapters | Source |
+|---|---|---|
+| **The Rust Book** | 20 chapters, 40+ playgrounds | Based on [_The Rust Programming Language_](https://doc.rust-lang.org/book/) |
 
 Book projects are **read-only** — use "Copy to Project" to experiment with any example.
 Each chapter project contains an `attribution.md` in its Files panel.
 
-> **Attribution** — Playground code is original educational material, not verbatim from the books.
-> Rustic Playground is not affiliated with or endorsed by the Rust Project, Apple, or the original authors.
+> **Attribution** — Playground code is original educational material, not verbatim from the book.
+> Rustic Playground is not affiliated with or endorsed by the Rust Project.
+
+_(The experimental Power Edition also bundles K&R C and Swift book examples — see [Other Languages](#other-languages-experimental).)_
 
 ## Project Structure
 
@@ -238,6 +219,27 @@ See the warning at the top of this file. Additionally:
 | v0.1.6 | Help/About modals, window state persistence, resizable panels, stop button |
 | v0.1.5 | Content files, drag-and-drop import, project management |
 | v0.1.0 | Initial release — sidebar, editor, live output streaming |
+
+## Other Languages (Experimental)
+
+Rustic Playground started as a multi-language playground, and the codebase still
+carries **experimental** support for other toolchains. These do **not** ship in
+the Rust Edition download — to try them, build the **Power Edition** from source:
+
+```sh
+VITE_EDITION=power cargo tauri build --config editions/power.json
+```
+
+| Language | Toolchain | Install |
+|---|---|---|
+| C/C++ | Clang (via Xcode Command Line Tools) | `xcode-select --install` |
+| Zig | **0.15.x** (other versions may have breaking API changes) | `brew install zig` |
+| Swift | swiftc (via Xcode Command Line Tools) | `xcode-select --install` |
+
+The Power Edition also bundles the **K&R C** and **Swift** book examples. Each
+edition is fully isolated — its own app name, bundle ID, and data directory — so
+it installs alongside the Rust Edition. These languages are unpolished and
+source-build only; the Rust Edition is the supported product.
 
 ## License
 
