@@ -5,7 +5,7 @@
   <br><br>
   A <b>native</b> macOS playground for <b>Rust</b> — write code, press <b>⌘R</b>, watch output stream live.<br>
   Real <code>cargo</code> projects with real crates, your own <code>rustup</code> toolchains, fully offline. No terminal required.<br>
-  <sub>Also supports C/C++, Zig (0.15), and Swift.</sub>
+  <sub>The download is Rust-only. C/C++, Zig (0.15), and Swift are supported when you build from source.</sub>
   <br><br>
   Built with <a href="https://www.rust-lang.org">Rust</a> + <a href="https://tauri.app">Tauri 2</a> + <a href="https://svelte.dev">Svelte 5</a> + <a href="https://microsoft.github.io/monaco-editor/">Monaco Editor</a>.
   <br><br>
@@ -47,6 +47,8 @@
 
 ## Install
 
+> **The prebuilt download is the Rust Edition (`rustic-rust`) — Rust only.** It's the single edition distributed as a signed binary. C/C++ (Clang), Zig, and Swift project types exist in the codebase but ship in **no** prebuilt binary — to use them, [build the Power Edition from source](#build--run).
+
 Install the latest signed & notarized build with [Homebrew](https://brew.sh):
 
 ```sh
@@ -61,7 +63,7 @@ Runs entirely on your machine against your own toolchains — no analytics or te
 
 ## Features
 
-- **Multi-language** — Rust, C/C++ (Clang), Zig, and Swift project types
+- **Multi-language** — Rust, C/C++ (Clang), Zig, and Swift project types *(only Rust ships as a prebuilt download; the others require building the Power Edition from source)*
 - **Welcome Wizard** — 5-step first-launch setup: choose languages, check toolchains, set theme, load books
 - **Guided toolchain install & repair** — detects Xcode CLT + Rust toolchain state on launch; two paths: "Help Me Install" (guided, in-app) or "I'll Do It Myself" (Terminal commands with copy-to-clipboard). No terminal needed for a complete Rust setup from scratch.
 - **Multi-version toolchain picker** — switch between installed Rust toolchains straight from the toolbar pill (stable, beta, nightly, or specific versions); per-project pins via `rust-toolchain.toml`; install new toolchains in-app via streaming `rustup install`.
