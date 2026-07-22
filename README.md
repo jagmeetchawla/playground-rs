@@ -130,17 +130,18 @@ Editions are fully isolated — each has its own app name, bundle ID, and data d
 
 ## How It Works
 
-Each **project** is stored at:
+Each **project** is a Cargo package, stored at:
 
 ```
-~/Library/Application Support/com.rustic-playground.<edition>/projects/<name>/
-├── Cargo.toml / rustic.toml  ← project config (Rust uses Cargo.toml, others use rustic.toml)
-├── src/bin/ or src/           ← playground files (.rs, .c, .cpp, .zig, .swift)
-└── content/                   ← runtime assets (accessible via PLAYGROUND_CONTENT)
+~/Library/Application Support/com.rustic-playground.rust/projects/<name>/
+├── Cargo.toml     ← dependencies shared by the project's playgrounds
+├── src/bin/       ← each playground is a standalone binary (<name>.rs)
+└── content/       ← runtime assets (accessible via the PLAYGROUND_CONTENT env var)
 ```
 
-Each file is a standalone program with a `main` function.
-The backend compiles and runs it using the appropriate toolchain (cargo, clang, zig, swiftc) and streams output live.
+Each playground is a standalone `fn main()` in `src/bin/`. Press **⌘R** and the
+backend runs it with `cargo run --bin <name>` against your selected toolchain,
+streaming stdout/stderr live.
 
 ## User Guide
 
